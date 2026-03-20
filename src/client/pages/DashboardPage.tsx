@@ -9,6 +9,7 @@ import { ComparisonView } from '../components/dashboard/ComparisonView';
 import { StatsSummary } from '../components/dashboard/StatsSummary';
 import { ThemeInfoPanel } from '../components/dashboard/ThemeInfoPanel';
 import { OverviewGrid } from '../components/dashboard/OverviewGrid';
+import { TrendSummary } from '../components/dashboard/TrendSummary';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/ui/Spinner';
@@ -161,6 +162,11 @@ export function DashboardPage() {
         dataSource={theme.tiles[0]?.dataSource || 'bevolking'}
         title={theme.name}
       />
+
+      {/* Trend Summary (non-overview themes) */}
+      {theme.slug !== 'overzicht' && (
+        <TrendSummary dataSource={theme.tiles[0]?.dataSource || 'bevolking'} />
+      )}
 
       {/* Drilldown */}
       <DrilldownPanel
