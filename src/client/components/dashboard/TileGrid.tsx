@@ -62,9 +62,16 @@ export function TileGrid({ tiles, layout, editable = false, onLayoutChange, onRe
     }
   }, [tiles]);
 
-  // CSS Grid-based layout (simpler than react-grid-layout for initial version)
+  // CSS Grid-based layout with responsive behavior
   return (
-    <div className="grid grid-cols-12 gap-4 auto-rows-[100px]">
+    <div className="grid gap-4 auto-rows-[100px]" style={{
+      gridTemplateColumns: 'repeat(var(--grid-cols, 12), minmax(0, 1fr))',
+    }}>
+      <style>{`
+        :root { --grid-cols: 12; }
+        @media (max-width: 1024px) { :root { --grid-cols: 6; } }
+        @media (max-width: 768px) { :root { --grid-cols: 1; } }
+      `}</style>
       {tiles.map(tile => {
         const item = effectiveLayout.find(l => l.i === tile.id);
         if (!item) return null;
@@ -74,7 +81,7 @@ export function TileGrid({ tiles, layout, editable = false, onLayoutChange, onRe
             key={tile.id}
             className={`${editable ? 'cursor-move' : ''}`}
             style={{
-              gridColumn: `span ${item.w}`,
+              gridColumn: `span ${Math.min(item.w, 12)}`,
               gridRow: `span ${item.h}`,
             }}
             draggable={editable}
