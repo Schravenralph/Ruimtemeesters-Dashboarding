@@ -25,6 +25,7 @@ import themeAdminRoutes from './routes/theme-admin.routes.js';
 import reportRoutes from './routes/report.routes.js';
 import templateRoutes from './routes/template.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
+import preferencesRoutes from './routes/preferences.routes.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
@@ -79,6 +80,7 @@ app.use('/api/admin/themes', themeAdminRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/preferences', preferencesRoutes);
 
 // Error handling (must be last)
 app.use('/api', notFoundHandler);
