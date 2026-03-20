@@ -7,9 +7,11 @@ import { useFilters } from '../../contexts/FilterContext';
 import { listAreas } from '../../services/api/geo';
 import { getAvailableYears } from '../../services/api/data';
 import type { GeoArea, GeoLevel } from '@shared/api/contracts';
+import { SavedFilters } from './SavedFilters';
 
 interface FilterBarProps {
   dataSource?: string;
+  themeSlug?: string;
 }
 
 const GEO_LEVELS: { value: GeoLevel; label: string }[] = [
@@ -18,7 +20,7 @@ const GEO_LEVELS: { value: GeoLevel; label: string }[] = [
   { value: 'gemeente', label: 'Gemeente' },
 ];
 
-export function FilterBar({ dataSource = 'bevolking' }: FilterBarProps) {
+export function FilterBar({ dataSource = 'bevolking', themeSlug }: FilterBarProps) {
   const {
     filters, setGeoLevel, setGeoCode, setYear, setCompareYear,
     setComparisonEnabled, resetFilters,
@@ -50,9 +52,12 @@ export function FilterBar({ dataSource = 'bevolking' }: FilterBarProps) {
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 mb-6">
-      <div className="flex items-center gap-2 mb-3">
-        <Filter className="h-4 w-4 text-gray-500" />
-        <span className="text-sm font-medium text-gray-700">Filters</span>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-gray-500" />
+          <span className="text-sm font-medium text-gray-700">Filters</span>
+        </div>
+        <SavedFilters themeSlug={themeSlug} />
       </div>
 
       <div className="flex flex-wrap items-end gap-4">

@@ -148,7 +148,7 @@ export function DashboardPage() {
       {theme.slug === 'overzicht' && <StatsSummary />}
 
       {/* Filters */}
-      <FilterBar dataSource={theme.tiles[0]?.dataSource || 'bevolking'} />
+      <FilterBar dataSource={theme.tiles[0]?.dataSource || 'bevolking'} themeSlug={theme.slug} />
 
       {/* Comparison View */}
       <ComparisonView
