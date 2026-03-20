@@ -22,6 +22,7 @@ import trendsRoutes from './routes/trends.routes.js';
 import qualityRoutes from './routes/quality.routes.js';
 import searchRoutes from './routes/search.routes.js';
 import themeAdminRoutes from './routes/theme-admin.routes.js';
+import reportRoutes from './routes/report.routes.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
@@ -73,6 +74,7 @@ app.use('/api/trends', trendsRoutes);
 app.use('/api/quality', qualityRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/admin/themes', themeAdminRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Error handling (must be last)
 app.use('/api', notFoundHandler);
