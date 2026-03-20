@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Shield, Users, Database } from 'lucide-react';
+import { Shield, Users, Database, ClipboardList } from 'lucide-react';
 import { Card, CardHeader } from '../components/ui/Card';
 import { useAuth } from '../contexts/AuthContext';
 import { UserManagement } from '../components/admin/UserManagement';
 import { PolicyEditor } from '../components/admin/PolicyEditor';
+import { AuditLog } from '../components/admin/AuditLog';
 
 export function AdminPage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'policies' | 'users' | 'data'>('policies');
+  const [activeTab, setActiveTab] = useState<'policies' | 'users' | 'data' | 'audit'>('policies');
 
   if (user?.role !== 'admin') {
     return (
@@ -21,6 +22,7 @@ export function AdminPage() {
     { key: 'policies' as const, label: 'Toegangsbeleid', icon: Shield },
     { key: 'users' as const, label: 'Gebruikers', icon: Users },
     { key: 'data' as const, label: 'Databronnen', icon: Database },
+    { key: 'audit' as const, label: 'Audit Log', icon: ClipboardList },
   ];
 
   return (
@@ -28,7 +30,7 @@ export function AdminPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Beheer</h1>
         <p className="text-sm text-gray-500 mt-1">
-          RBAC/ABAC beleid, gebruikers en databronnen beheren
+          RBAC/ABAC beleid, gebruikers, databronnen en audit log beheren
         </p>
       </div>
 
@@ -52,6 +54,7 @@ export function AdminPage() {
 
       {activeTab === 'policies' && <PolicyEditor />}
       {activeTab === 'users' && <UserManagement />}
+      {activeTab === 'audit' && <AuditLog />}
       {activeTab === 'data' && (
         <Card>
           <CardHeader title="Databronnen" subtitle="Beheer en configureer de beschikbare databronnen" />
