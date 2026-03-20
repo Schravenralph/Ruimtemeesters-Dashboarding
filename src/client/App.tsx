@@ -19,6 +19,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ defa
 const HelpPage = lazy(() => import('./pages/HelpPage').then(m => ({ default: m.HelpPage })));
 const DataDownloadPage = lazy(() => import('./pages/DataDownloadPage').then(m => ({ default: m.DataDownloadPage })));
 const EmbedPage = lazy(() => import('./pages/EmbedPage').then(m => ({ default: m.EmbedPage })));
+const ReportPage = lazy(() => import('./pages/ReportPage').then(m => ({ default: m.ReportPage })));
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<LoadingOverlay message="Pagina laden..." />}>{children}</Suspense>;
@@ -48,6 +49,7 @@ export default function App() {
                   <Route path="/instellingen" element={<Layout><SettingsPage /></Layout>} />
                   <Route path="/help" element={<Layout><HelpPage /></Layout>} />
                   <Route path="/download" element={<Layout><DataDownloadPage /></Layout>} />
+                  <Route path="/rapport" element={<Layout><ReportPage /></Layout>} />
 
                   {/* Fallback */}
                   <Route path="*" element={<Navigate to="/dashboard/overzicht" replace />} />
