@@ -4,6 +4,7 @@ import { LogIn, LogOut, User, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useThemes } from '../../contexts/ThemeContext';
 import { Button } from './Button';
+import { NotificationBell } from './NotificationBell';
 
 export function Header() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -26,6 +27,7 @@ export function Header() {
 
       {/* Right side */}
       <div className="flex items-center gap-3">
+        <NotificationBell />
         {isAuthenticated ? (
           <div className="relative">
             <button
