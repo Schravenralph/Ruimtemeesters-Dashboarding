@@ -18,7 +18,14 @@
     "migrate": "tsx src/server/db/migrate.ts",
     "seed": "tsx src/server/db/seed.ts"
   },
-  "keywords": ["dashboard", "primos", "demographics", "housing", "rbac", "abac"],
+  "keywords": [
+    "dashboard",
+    "primos",
+    "demographics",
+    "housing",
+    "rbac",
+    "abac"
+  ],
   "author": "Ruimtemeesters",
   "license": "UNLICENSED",
   "dependencies": {
@@ -31,8 +38,8 @@
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "html2canvas": "^1.4.1",
-    "jspdf": "^4.2.0",
     "jsonwebtoken": "^9.0.2",
+    "jspdf": "^4.2.0",
     "lucide-react": "^0.576.0",
     "pg": "^8.19.0",
     "react": "^19.2.4",
@@ -70,6 +77,7 @@
     "eslint": "^10.0.3",
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "jsdom": "^29.0.0",
     "postcss": "^8.5.0",
     "tailwindcss": "^4.2.1",
     "tsx": "^4.21.0",

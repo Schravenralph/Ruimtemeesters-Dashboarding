@@ -6,6 +6,7 @@ import { LoadingOverlay } from '../components/ui/Spinner';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api/client';
 import type { AccessPolicy } from '@shared/api/contracts';
+import { UserManagement } from '../components/admin/UserManagement';
 
 export function AdminPage() {
   const { user } = useAuth();
@@ -119,14 +120,7 @@ export function AdminPage() {
       )}
 
       {/* Users Tab */}
-      {activeTab === 'users' && (
-        <Card>
-          <CardHeader title="Gebruikersbeheer" subtitle="Bekijk en beheer gebruikersaccounts en rollen" />
-          <p className="text-sm text-gray-500">
-            Gebruikersbeheer functionaliteit wordt binnenkort toegevoegd.
-          </p>
-        </Card>
-      )}
+      {activeTab === 'users' && <UserManagement />}
 
       {/* Data Tab */}
       {activeTab === 'data' && (

@@ -9,6 +9,8 @@ import dataRoutes from './routes/data.routes.js';
 import geoRoutes from './routes/geo.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import policyRoutes from './routes/policy.routes.js';
+import userRoutes from './routes/user.routes.js';
+import statsRoutes from './routes/stats.routes.js';
 
 const app = express();
 
@@ -35,5 +37,7 @@ app.use('/api/data', dataRoutes);
 app.use('/api/geo', geoRoutes);
 app.use('/api/dashboards', dashboardRoutes);
 app.use('/api/policies', policyRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/stats', statsRoutes);
 
 export default app;

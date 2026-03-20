@@ -4,6 +4,9 @@ import { Download, Edit3, Save, X } from 'lucide-react';
 import { useThemes } from '../contexts/ThemeContext';
 import { FilterBar } from '../components/filters/FilterBar';
 import { TileGrid } from '../components/dashboard/TileGrid';
+import { DrilldownPanel } from '../components/dashboard/DrilldownPanel';
+import { ComparisonView } from '../components/dashboard/ComparisonView';
+import { StatsSummary } from '../components/dashboard/StatsSummary';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/ui/Spinner';
 import { useAuth } from '../contexts/AuthContext';
@@ -136,8 +139,23 @@ export function DashboardPage() {
         </div>
       </div>
 
+      {/* Overview Stats (only for overzicht theme) */}
+      {theme.slug === 'overzicht' && <StatsSummary />}
+
       {/* Filters */}
       <FilterBar dataSource={theme.tiles[0]?.dataSource || 'bevolking'} />
+
+      {/* Comparison View */}
+      <ComparisonView
+        dataSource={theme.tiles[0]?.dataSource || 'bevolking'}
+        title={theme.name}
+      />
+
+      {/* Drilldown */}
+      <DrilldownPanel
+        dataSource={theme.tiles[0]?.dataSource || 'bevolking'}
+        onDimensionSelect={() => {}}
+      />
 
       {/* Tile Grid */}
       <TileGrid
