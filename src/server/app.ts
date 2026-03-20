@@ -16,6 +16,7 @@ import auditRoutes from './routes/audit.routes.js';
 import datasourceRoutes from './routes/datasource.routes.js';
 import savedFiltersRoutes from './routes/saved-filters.routes.js';
 import importRoutes from './routes/import.routes.js';
+import docsRoutes from './routes/docs.routes.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { rateLimit } from './middleware/rate-limit.js';
 
@@ -58,5 +59,6 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/datasources', datasourceRoutes);
 app.use('/api/saved-filters', savedFiltersRoutes);
 app.use('/api/import', importRoutes);
+app.use('/api/docs', docsRoutes);
 
 export default app;
