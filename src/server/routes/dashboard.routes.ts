@@ -10,6 +10,7 @@ import {
   getLayout,
 } from '../controllers/dashboard.controller.js';
 import { authenticate, optionalAuth } from '../middleware/auth.js';
+import { cloneDashboard, cloneThemeToDashboard } from '../controllers/clone.controller.js';
 
 const router = Router();
 
@@ -19,6 +20,8 @@ router.post('/custom', authenticate, createCustomDashboard);
 router.put('/custom/:id', authenticate, updateCustomDashboard);
 router.delete('/custom/:id', authenticate, deleteCustomDashboard);
 router.post('/custom/:id/share', authenticate, shareDashboard);
+router.post('/custom/:id/clone', authenticate, cloneDashboard);
+router.post('/clone-theme/:slug', authenticate, cloneThemeToDashboard);
 router.get('/shared/:token', getSharedDashboard);
 
 // Layouts
