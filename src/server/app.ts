@@ -11,8 +11,13 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 import policyRoutes from './routes/policy.routes.js';
 import userRoutes from './routes/user.routes.js';
 import statsRoutes from './routes/stats.routes.js';
+import exportRoutes from './routes/export.routes.js';
+import { requestLogger } from './middleware/request-logger.js';
 
 const app = express();
+
+// Logging
+app.use(requestLogger);
 
 // Security middleware
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -39,5 +44,6 @@ app.use('/api/dashboards', dashboardRoutes);
 app.use('/api/policies', policyRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/export', exportRoutes);
 
 export default app;
