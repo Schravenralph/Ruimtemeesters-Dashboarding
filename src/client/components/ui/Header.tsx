@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useThemes } from '../../contexts/ThemeContext';
 import { Button } from './Button';
 import { NotificationBell } from './NotificationBell';
+import { GlobalSearch } from './GlobalSearch';
 
 export function Header() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -27,6 +28,7 @@ export function Header() {
 
       {/* Right side */}
       <div className="flex items-center gap-3">
+        <GlobalSearch />
         <NotificationBell />
         {isAuthenticated ? (
           <div className="relative">
