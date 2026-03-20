@@ -43,10 +43,12 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 
-// Health check
+// Health checks
+import { detailedHealth } from './controllers/health.controller.js';
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+app.get('/api/health/detailed', detailedHealth);
 
 // API routes
 app.use('/api/auth', authRoutes);
