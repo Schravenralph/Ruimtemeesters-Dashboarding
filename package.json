@@ -16,7 +16,10 @@
     "test:e2e": "playwright test",
     "lint": "eslint src",
     "migrate": "tsx src/server/db/migrate.ts",
-    "seed": "tsx src/server/db/seed.ts"
+    "seed": "tsx src/server/db/seed.ts",
+    "sync:cbs": "tsx src/server/db/sync-cbs.ts",
+    "sync:cbs:2024": "tsx src/server/db/sync-cbs.ts -- --year 2024",
+    "sync:cbs:bevolking": "tsx src/server/db/sync-cbs.ts -- --source bevolking"
   },
   "keywords": [
     "dashboard",
