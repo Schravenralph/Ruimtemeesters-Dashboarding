@@ -5,6 +5,7 @@ import { PieChartComponent } from './PieChart';
 import { RadarChartComponent } from './RadarChart';
 import { DataTableComponent } from './DataTable';
 import { ChoroplethMapComponent } from './ChoroplethMap';
+import { PopulationPyramidComponent } from './PopulationPyramid';
 import { LoadingOverlay } from '../ui/Spinner';
 
 interface ChartRendererProps {
@@ -50,6 +51,8 @@ export function ChartRenderer({ chartType, data, isLoading, error }: ChartRender
       return <DataTableComponent data={data} />;
     case 'choropleth':
       return <ChoroplethMapComponent data={data} />;
+    case 'pyramid':
+      return <PopulationPyramidComponent data={data} />;
     default:
       return <p className="text-sm text-gray-500">Onbekend grafiektype: {chartType}</p>;
   }

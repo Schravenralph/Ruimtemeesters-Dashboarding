@@ -10,6 +10,7 @@ export const ChartType = z.enum([
   'radar',
   'table',
   'choropleth',
+  'pyramid',
 ]);
 export type ChartType = z.infer<typeof ChartType>;
 

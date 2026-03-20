@@ -21,6 +21,9 @@ vi.mock('./DataTable', () => ({
 vi.mock('./ChoroplethMap', () => ({
   ChoroplethMapComponent: () => <div data-testid="choropleth-map">Map</div>,
 }));
+vi.mock('./PopulationPyramid', () => ({
+  PopulationPyramidComponent: () => <div data-testid="population-pyramid">Pyramid</div>,
+}));
 
 const testData = [
   { geoCode: 'NL', geoName: 'Nederland', year: 2024, value: 17000000 },
@@ -75,5 +78,10 @@ describe('ChartRenderer', () => {
   it('renders choropleth map', () => {
     render(<ChartRenderer chartType="choropleth" data={testData} />);
     expect(screen.getByTestId('choropleth-map')).toBeDefined();
+  });
+
+  it('renders population pyramid', () => {
+    render(<ChartRenderer chartType="pyramid" data={testData} />);
+    expect(screen.getByTestId('population-pyramid')).toBeDefined();
   });
 });
