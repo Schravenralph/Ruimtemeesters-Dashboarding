@@ -365,7 +365,204 @@ export async function syncWoningen(yearFilter?: number): Promise<SyncResult> {
 }
 
 /**
- * Run full sync of all CBS data sources.
+ * Sync housing mutations (nieuwbouw, sloop) from CBS table 81955NED.
+ *
+ * Measures:
+ * - M003003: Nieuwbouw (new construction)
+ * - D003023: Sloop (demolition)
+ * - D002935: Beginstand voorraad (opening stock)
+ * - D002967: Eindstand voorraad (closing stock)
+ * - D003020: Saldo voorraad (net stock change)
+ */
+export async function syncWoningmutaties(yearFilter?: number): Promise<SyncResult> {
+  const startTime = Date.now();
+  const errors: string[] = [];
+  let rowsFetched = 0;
+  let rowsInserted = 0;
+
+  try {
+    const regioCodes = await getRegioCodes(CBS_TABLES.woningmutaties);
+    const regioMap = new Map(regioCodes.map(c => [c.Identifier, c.Title]));
+
+    // Filter for woonfunctie (residential) only
+    let filter = "Gebruiksfunctie eq 'A045364'"; // Woning
+    if (yearFilter) {
+      filter += ` and Perioden eq '${yearFilter}JJ00'`;
+    }
+
+    const observations = await getObservations(CBS_TABLES.woningmutaties, filter);
+    rowsFetched = observations.length;
+
+    const metricMapping: Record<string, string> = {
+      'M003003': 'nieuwbouw',
+      'D003023': 'sloop',
+      'D002935': 'voorraad_begin',
+      'D002967': 'voorraad_eind',
+      'D003020': 'saldo',
+      'D003027': 'overige_toevoeging',
+      'D003006': 'overige_onttrekking',
+    };
+
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+
+      for (const obs of observations) {
+        if (obs.Value === null) continue;
+
+        const year = parseCbsPeriod(obs.Perioden as string);
+        const region = parseCbsRegion(obs.RegioS as string);
+        const metric = metricMapping[obs.Measure];
+        if (!year || !region || !metric) continue;
+        if (region.level !== 'gemeente' && region.level !== 'land') continue;
+
+        const geoName = regioMap.get((obs.RegioS as string).trim()) || region.code;
+        await client.query(
+          `INSERT INTO geo_areas (code, name, level, parent_code)
+           VALUES ($1, $2, $3, NULL)
+           ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name`,
+          [region.code, geoName.trim(), region.level],
+        );
+
+        await client.query(
+          `INSERT INTO data_woningtekort (geo_code, year, metric, value)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (geo_code, year, metric)
+           DO UPDATE SET value = EXCLUDED.value`,
+          [region.code, year, metric, Math.round(obs.Value)],
+        );
+        rowsInserted++;
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      errors.push(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : 'Failed to fetch CBS data');
+  }
+
+  return {
+    source: 'woningmutaties',
+    cbsTable: CBS_TABLES.woningmutaties,
+    rowsFetched,
+    rowsInserted,
+    errors,
+    duration: Date.now() - startTime,
+    attribution: CBS_ATTRIBUTION,
+  };
+}
+
+/**
+ * Calculate woningtekort (housing shortage) from synced CBS data.
+ *
+ * Simplified calculation based on CBS actuals:
+ *   tekort = huishoudens - woningvoorraad
+ *   tekort_percentage = tekort / woningvoorraad * 100
+ *
+ * This is a simplified version — ABF Primos uses a more complex model
+ * that accounts for vacancy, BAR-households, and market friction.
+ */
+export async function calculateWoningtekort(year: number): Promise<SyncResult> {
+  const startTime = Date.now();
+  const errors: string[] = [];
+  let rowsInserted = 0;
+
+  try {
+    // Get total households per gemeente
+    const hhResult = await query(
+      `SELECT geo_code, SUM(value) as total
+       FROM data_huishoudens WHERE year = $1 AND household_type = 'totaal'
+       GROUP BY geo_code`,
+      [year],
+    );
+
+    // Get total housing stock per gemeente (from woningmutaties eindstand or woningen totaal)
+    const woningResult = await query(
+      `SELECT geo_code, value as total
+       FROM data_woningtekort WHERE year = $1 AND metric = 'voorraad_eind'`,
+      [year],
+    );
+
+    // Fallback: use woningen table if no mutaties data
+    let woningMap = new Map(woningResult.rows.map(r => [r.geo_code, Number(r.total)]));
+    if (woningMap.size === 0) {
+      const fallback = await query(
+        `SELECT geo_code, SUM(value) as total
+         FROM data_woningen WHERE year = $1 AND tenure_type = 'totaal' AND dwelling_type = 'totaal'
+         GROUP BY geo_code`,
+        [year],
+      );
+      woningMap = new Map(fallback.rows.map(r => [r.geo_code, Number(r.total)]));
+    }
+
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+
+      for (const row of hhResult.rows) {
+        const geoCode = row.geo_code;
+        const huishoudens = Number(row.total);
+        const woningen = woningMap.get(geoCode);
+        if (!woningen || woningen === 0) continue;
+
+        const tekort = Math.max(0, huishoudens - woningen);
+        const tekortPct = (tekort / woningen) * 100;
+
+        // Insert absolute tekort
+        await client.query(
+          `INSERT INTO data_woningtekort (geo_code, year, metric, value)
+           VALUES ($1, $2, 'tekort', $3)
+           ON CONFLICT (geo_code, year, metric) DO UPDATE SET value = EXCLUDED.value`,
+          [geoCode, year, tekort],
+        );
+
+        // Insert percentage tekort
+        await client.query(
+          `INSERT INTO data_woningtekort (geo_code, year, metric, value)
+           VALUES ($1, $2, 'tekort_percentage', $3)
+           ON CONFLICT (geo_code, year, metric) DO UPDATE SET value = EXCLUDED.value`,
+          [geoCode, year, Math.round(tekortPct * 100) / 100],
+        );
+
+        // Insert woningbehoefte (= huishoudens)
+        await client.query(
+          `INSERT INTO data_woningtekort (geo_code, year, metric, value)
+           VALUES ($1, $2, 'woningbehoefte', $3)
+           ON CONFLICT (geo_code, year, metric) DO UPDATE SET value = EXCLUDED.value`,
+          [geoCode, year, huishoudens],
+        );
+
+        rowsInserted += 3;
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      errors.push(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : 'Calculation failed');
+  }
+
+  return {
+    source: 'woningtekort (berekend)',
+    cbsTable: 'n.v.t. (berekening op basis van CBS huishoudens en woningvoorraad)',
+    rowsFetched: 0,
+    rowsInserted,
+    errors,
+    duration: Date.now() - startTime,
+    attribution: `${CBS_ATTRIBUTION} Berekening: tekort = huishoudens - woningvoorraad.`,
+  };
+}
+
+/**
+ * Run full sync of all CBS data sources + derived calculations.
  */
 export async function syncAllCbsData(yearFilter?: number): Promise<SyncResult[]> {
   console.log(`[CBS Sync] Starting full sync${yearFilter ? ` for year ${yearFilter}` : ''}...`);
@@ -374,13 +571,21 @@ export async function syncAllCbsData(yearFilter?: number): Promise<SyncResult[]>
   const results: SyncResult[] = [];
 
   results.push(await syncBevolking(yearFilter));
-  console.log(`[CBS Sync] Bevolking: ${results[0].rowsInserted} rows (${results[0].duration}ms)`);
+  console.log(`[CBS Sync] Bevolking: ${results[results.length - 1].rowsInserted} rows (${results[results.length - 1].duration}ms)`);
 
   results.push(await syncHuishoudens(yearFilter));
-  console.log(`[CBS Sync] Huishoudens: ${results[1].rowsInserted} rows (${results[1].duration}ms)`);
+  console.log(`[CBS Sync] Huishoudens: ${results[results.length - 1].rowsInserted} rows (${results[results.length - 1].duration}ms)`);
 
   results.push(await syncWoningen(yearFilter));
-  console.log(`[CBS Sync] Woningen: ${results[2].rowsInserted} rows (${results[2].duration}ms)`);
+  console.log(`[CBS Sync] Woningen: ${results[results.length - 1].rowsInserted} rows (${results[results.length - 1].duration}ms)`);
+
+  results.push(await syncWoningmutaties(yearFilter));
+  console.log(`[CBS Sync] Woningmutaties: ${results[results.length - 1].rowsInserted} rows (${results[results.length - 1].duration}ms)`);
+
+  // Calculate derived woningtekort
+  const calcYear = yearFilter || 2024;
+  results.push(await calculateWoningtekort(calcYear));
+  console.log(`[CBS Sync] Woningtekort (berekend): ${results[results.length - 1].rowsInserted} rows (${results[results.length - 1].duration}ms)`);
 
   const totalInserted = results.reduce((sum, r) => sum + r.rowsInserted, 0);
   const totalErrors = results.reduce((sum, r) => sum + r.errors.length, 0);

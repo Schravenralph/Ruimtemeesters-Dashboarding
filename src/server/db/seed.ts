@@ -186,114 +186,18 @@ async function seed() {
       );
     }
 
-    console.log('Seeding demographic data...');
-    const years = [2020, 2021, 2022, 2023, 2024, 2025, 2030, 2035, 2040];
-    const ageGroups = ['0-14', '15-24', '25-44', '45-64', '65-79', '80+'];
-    const genders = ['man', 'vrouw'];
-    const householdTypes = ['eenpersoons', 'paar_zonder_kinderen', 'paar_met_kinderen', 'eenouder', 'overig'];
-    const tenureTypes = ['eigendom', 'huur_sociaal', 'huur_particulier'];
-    const dwellingTypes = ['eengezins', 'meergezins'];
-    const tekortMetrics = ['tekort', 'vraag', 'aanbod'];
-
-    // Generate data for each gemeente
-    const geoResult = await client.query("SELECT code FROM geo_areas WHERE level = 'gemeente'");
-    const geoCodes = geoResult.rows.map(r => r.code);
-
-    // Use batch inserts for performance
-    for (const geoCode of geoCodes) {
-      // Base population factor based on municipality (simulate realistic sizes)
-      const popFactor = geoCode === 'GM0363' ? 900000 : geoCode === 'GM0599' ? 650000 :
-        geoCode === 'GM0518' ? 550000 : geoCode === 'GM0344' ? 360000 :
-        geoCode === 'GM0772' ? 235000 : Math.floor(20000 + Math.random() * 150000);
-
-      for (const year of years) {
-        const growthFactor = 1 + (year - 2020) * 0.005 + Math.random() * 0.01;
-
-        // Bevolking data
-        for (const ageGroup of ageGroups) {
-          const ageFraction = ageGroup === '0-14' ? 0.16 : ageGroup === '15-24' ? 0.12 :
-            ageGroup === '25-44' ? 0.27 : ageGroup === '45-64' ? 0.26 :
-            ageGroup === '65-79' ? 0.13 : 0.06;
-
-          for (const gender of genders) {
-            const genderFraction = gender === 'man' ? 0.49 : 0.51;
-            const value = Math.round(popFactor * growthFactor * ageFraction * genderFraction * (0.95 + Math.random() * 0.1));
-
-            await client.query(
-              `INSERT INTO data_bevolking (geo_code, year, age_group, gender, value)
-               VALUES ($1, $2, $3, $4, $5)
-               ON CONFLICT (geo_code, year, age_group, gender) DO NOTHING`,
-              [geoCode, year, ageGroup, gender, value],
-            );
-          }
-        }
-
-        // Huishoudens data
-        const hhTotal = Math.round(popFactor * growthFactor * 0.45);
-        for (const hhType of householdTypes) {
-          const hhFraction = hhType === 'eenpersoons' ? 0.38 : hhType === 'paar_zonder_kinderen' ? 0.22 :
-            hhType === 'paar_met_kinderen' ? 0.25 : hhType === 'eenouder' ? 0.10 : 0.05;
-          const value = Math.round(hhTotal * hhFraction * (0.95 + Math.random() * 0.1));
-
-          await client.query(
-            `INSERT INTO data_huishoudens (geo_code, year, household_type, value)
-             VALUES ($1, $2, $3, $4)
-             ON CONFLICT (geo_code, year, household_type) DO NOTHING`,
-            [geoCode, year, hhType, value],
-          );
-        }
-
-        // Woningen data
-        const woningenTotal = Math.round(popFactor * growthFactor * 0.43);
-        for (const tenure of tenureTypes) {
-          const tenureFraction = tenure === 'eigendom' ? 0.57 : tenure === 'huur_sociaal' ? 0.29 : 0.14;
-          for (const dwelling of dwellingTypes) {
-            const dwellingFraction = dwelling === 'eengezins' ? 0.65 : 0.35;
-            const value = Math.round(woningenTotal * tenureFraction * dwellingFraction * (0.95 + Math.random() * 0.1));
-
-            await client.query(
-              `INSERT INTO data_woningen (geo_code, year, tenure_type, dwelling_type, value)
-               VALUES ($1, $2, $3, $4, $5)
-               ON CONFLICT (geo_code, year, tenure_type, dwelling_type) DO NOTHING`,
-              [geoCode, year, tenure, dwelling, value],
-            );
-          }
-        }
-
-        // Woningtekort data
-        for (const metric of tekortMetrics) {
-          const value = metric === 'tekort' ? Math.round((0.02 + Math.random() * 0.05) * woningenTotal) :
-            metric === 'vraag' ? Math.round(woningenTotal * (1.03 + Math.random() * 0.04)) :
-            woningenTotal;
-
-          await client.query(
-            `INSERT INTO data_woningtekort (geo_code, year, metric, value)
-             VALUES ($1, $2, $3, $4)
-             ON CONFLICT (geo_code, year, metric) DO NOTHING`,
-            [geoCode, year, metric, value],
-          );
-        }
-      }
-    }
-
-    // Also seed national-level data
-    for (const year of years) {
-      const nationalPop = 17500000 + (year - 2020) * 50000;
-
-      for (const ageGroup of ageGroups) {
-        const ageFraction = ageGroup === '0-14' ? 0.16 : ageGroup === '15-24' ? 0.12 :
-          ageGroup === '25-44' ? 0.27 : ageGroup === '45-64' ? 0.26 :
-          ageGroup === '65-79' ? 0.13 : 0.06;
-        for (const gender of genders) {
-          const genderFraction = gender === 'man' ? 0.49 : 0.51;
-          await client.query(
-            `INSERT INTO data_bevolking (geo_code, year, age_group, gender, value)
-             VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
-            ['NL', year, ageGroup, gender, Math.round(nationalPop * ageFraction * genderFraction)],
-          );
-        }
-      }
-    }
+    // ──────────────────────────────────────────────────────────────
+    // NO FAKE DATA — All demographic/housing data comes from CBS.
+    // Run `pnpm run sync:cbs` after seeding to load real CBS data.
+    //
+    // Data source: CBS StatLine (opendata.cbs.nl)
+    // License: CC-BY 4.0
+    // Attribution: Bron: CBS, StatLine
+    // ──────────────────────────────────────────────────────────────
+    console.log('');
+    console.log('NOTE: No demographic data seeded — run `pnpm run sync:cbs` to load real CBS data.');
+    console.log('      Bron: CBS, StatLine (opendata.cbs.nl). Licentie: CC-BY 4.0.');
+    console.log('');
 
     console.log('Seeding ABAC policies...');
     await client.query(`

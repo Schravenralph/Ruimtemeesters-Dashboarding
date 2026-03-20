@@ -118,6 +118,10 @@ export const CBS_TABLES = {
   /** Voorraad woningen; eigendom, type verhuurder, bewoning, regio */
   woningen: '82550NED',
 
+  /** Voorraad woningen en niet-woningen; mutaties, gebruiksfunctie, regio
+   *  Contains: nieuwbouw, sloop, overige toevoegingen/onttrekkingen per gemeente */
+  woningmutaties: '81955NED',
+
   /** Kerncijfers wijken en buurten (comprehensive local stats) */
   kerncijfers: '85385NED',
 } as const;
