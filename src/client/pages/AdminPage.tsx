@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Shield, Users, Database, ClipboardList } from 'lucide-react';
-import { Card, CardHeader } from '../components/ui/Card';
 import { useAuth } from '../contexts/AuthContext';
 import { UserManagement } from '../components/admin/UserManagement';
 import { PolicyEditor } from '../components/admin/PolicyEditor';
 import { AuditLog } from '../components/admin/AuditLog';
+import { DataSourceManager } from '../components/admin/DataSourceManager';
 
 export function AdminPage() {
   const { user } = useAuth();
@@ -34,7 +34,6 @@ export function AdminPage() {
         </p>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 mb-6">
         {tabs.map(tab => (
           <button
@@ -54,25 +53,8 @@ export function AdminPage() {
 
       {activeTab === 'policies' && <PolicyEditor />}
       {activeTab === 'users' && <UserManagement />}
+      {activeTab === 'data' && <DataSourceManager />}
       {activeTab === 'audit' && <AuditLog />}
-      {activeTab === 'data' && (
-        <Card>
-          <CardHeader title="Databronnen" subtitle="Beheer en configureer de beschikbare databronnen" />
-          <div className="space-y-3">
-            {['bevolking', 'huishoudens', 'woningen', 'woningtekort'].map(source => (
-              <div key={source} className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
-                <div>
-                  <p className="font-medium text-gray-900 capitalize">{source}</p>
-                  <p className="text-xs text-gray-500">data_{source}</p>
-                </div>
-                <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                  Actief
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
     </div>
   );
 }

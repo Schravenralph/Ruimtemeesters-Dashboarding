@@ -13,6 +13,7 @@ import userRoutes from './routes/user.routes.js';
 import statsRoutes from './routes/stats.routes.js';
 import exportRoutes from './routes/export.routes.js';
 import auditRoutes from './routes/audit.routes.js';
+import datasourceRoutes from './routes/datasource.routes.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { rateLimit } from './middleware/rate-limit.js';
 
@@ -52,5 +53,6 @@ app.use('/api/users', userRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/datasources', datasourceRoutes);
 
 export default app;

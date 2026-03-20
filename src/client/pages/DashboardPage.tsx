@@ -7,6 +7,8 @@ import { TileGrid } from '../components/dashboard/TileGrid';
 import { DrilldownPanel } from '../components/dashboard/DrilldownPanel';
 import { ComparisonView } from '../components/dashboard/ComparisonView';
 import { StatsSummary } from '../components/dashboard/StatsSummary';
+import { ThemeInfoPanel } from '../components/dashboard/ThemeInfoPanel';
+import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/ui/Spinner';
 import { useAuth } from '../contexts/AuthContext';
@@ -138,6 +140,9 @@ export function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Theme info */}
+      <ThemeInfoPanel theme={theme} />
 
       {/* Overview Stats (only for overzicht theme) */}
       {theme.slug === 'overzicht' && <StatsSummary />}
