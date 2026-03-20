@@ -16,6 +16,7 @@ const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m
 const SharedDashboardPage = lazy(() => import('./pages/SharedDashboardPage').then(m => ({ default: m.SharedDashboardPage })));
 const PrintPage = lazy(() => import('./pages/PrintPage').then(m => ({ default: m.PrintPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const HelpPage = lazy(() => import('./pages/HelpPage').then(m => ({ default: m.HelpPage })));
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<LoadingOverlay message="Pagina laden..." />}>{children}</Suspense>;
@@ -42,6 +43,7 @@ export default function App() {
                   <Route path="/mijn-dashboards/:id" element={<Layout><CustomDashboardEditorPage /></Layout>} />
                   <Route path="/admin" element={<Layout><AdminPage /></Layout>} />
                   <Route path="/instellingen" element={<Layout><SettingsPage /></Layout>} />
+                  <Route path="/help" element={<Layout><HelpPage /></Layout>} />
 
                   {/* Fallback */}
                   <Route path="*" element={<Navigate to="/dashboard/overzicht" replace />} />
