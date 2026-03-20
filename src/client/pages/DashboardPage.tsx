@@ -8,6 +8,7 @@ import { DrilldownPanel } from '../components/dashboard/DrilldownPanel';
 import { ComparisonView } from '../components/dashboard/ComparisonView';
 import { StatsSummary } from '../components/dashboard/StatsSummary';
 import { ThemeInfoPanel } from '../components/dashboard/ThemeInfoPanel';
+import { OverviewGrid } from '../components/dashboard/OverviewGrid';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/ui/Spinner';
@@ -145,7 +146,12 @@ export function DashboardPage() {
       <ThemeInfoPanel theme={theme} />
 
       {/* Overview Stats (only for overzicht theme) */}
-      {theme.slug === 'overzicht' && <StatsSummary />}
+      {theme.slug === 'overzicht' && (
+        <>
+          <StatsSummary />
+          <OverviewGrid />
+        </>
+      )}
 
       {/* Filters */}
       <FilterBar dataSource={theme.tiles[0]?.dataSource || 'bevolking'} themeSlug={theme.slug} />
