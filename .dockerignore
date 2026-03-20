@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.env
+*.png
+*.jpg
+.worktrees
+.playwright-auth
+.playwright-mcp
+test-results
+coverage
