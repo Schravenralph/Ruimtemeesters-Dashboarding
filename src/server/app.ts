@@ -18,6 +18,7 @@ import savedFiltersRoutes from './routes/saved-filters.routes.js';
 import importRoutes from './routes/import.routes.js';
 import docsRoutes from './routes/docs.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import trendsRoutes from './routes/trends.routes.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
@@ -63,6 +64,7 @@ app.use('/api/saved-filters', savedFiltersRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/docs', docsRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/trends', trendsRoutes);
 
 // Error handling (must be last)
 app.use('/api', notFoundHandler);
