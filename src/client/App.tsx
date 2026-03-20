@@ -18,6 +18,7 @@ const PrintPage = lazy(() => import('./pages/PrintPage').then(m => ({ default: m
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const HelpPage = lazy(() => import('./pages/HelpPage').then(m => ({ default: m.HelpPage })));
 const DataDownloadPage = lazy(() => import('./pages/DataDownloadPage').then(m => ({ default: m.DataDownloadPage })));
+const EmbedPage = lazy(() => import('./pages/EmbedPage').then(m => ({ default: m.EmbedPage })));
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<LoadingOverlay message="Pagina laden..." />}>{children}</Suspense>;
@@ -36,6 +37,7 @@ export default function App() {
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/shared/:token" element={<SharedDashboardPage />} />
                   <Route path="/print/:slug" element={<PrintPage />} />
+                  <Route path="/embed/:slug" element={<EmbedPage />} />
 
                   {/* App routes with layout */}
                   <Route path="/" element={<Layout><Navigate to="/dashboard/overzicht" replace /></Layout>} />
