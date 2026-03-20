@@ -14,6 +14,8 @@ const CustomDashboardsPage = lazy(() => import('./pages/CustomDashboardsPage').t
 const CustomDashboardEditorPage = lazy(() => import('./pages/CustomDashboardEditorPage').then(m => ({ default: m.CustomDashboardEditorPage })));
 const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
 const SharedDashboardPage = lazy(() => import('./pages/SharedDashboardPage').then(m => ({ default: m.SharedDashboardPage })));
+const PrintPage = lazy(() => import('./pages/PrintPage').then(m => ({ default: m.PrintPage })));
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<LoadingOverlay message="Pagina laden..." />}>{children}</Suspense>;
@@ -31,6 +33,7 @@ export default function App() {
                   {/* Public routes */}
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/shared/:token" element={<SharedDashboardPage />} />
+                  <Route path="/print/:slug" element={<PrintPage />} />
 
                   {/* App routes with layout */}
                   <Route path="/" element={<Layout><Navigate to="/dashboard/overzicht" replace /></Layout>} />
@@ -38,6 +41,7 @@ export default function App() {
                   <Route path="/mijn-dashboards" element={<Layout><CustomDashboardsPage /></Layout>} />
                   <Route path="/mijn-dashboards/:id" element={<Layout><CustomDashboardEditorPage /></Layout>} />
                   <Route path="/admin" element={<Layout><AdminPage /></Layout>} />
+                  <Route path="/instellingen" element={<Layout><SettingsPage /></Layout>} />
 
                   {/* Fallback */}
                   <Route path="*" element={<Navigate to="/dashboard/overzicht" replace />} />
