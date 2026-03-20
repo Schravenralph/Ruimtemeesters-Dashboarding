@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+.playwright-auth/
+.playwright-mcp/
+test-results/
+.worktrees/
+coverage/
+*.png
+*.jpg
