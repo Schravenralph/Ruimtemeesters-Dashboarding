@@ -1,6 +1,24 @@
--- COROP regions (40 statistical regions in the Netherlands)
--- These are used in Primos for regional aggregation
+-- Ensure base geographic hierarchy exists before COROP regions
+INSERT INTO geo_areas (code, name, level, parent_code) VALUES
+  ('NL', 'Nederland', 'land', NULL)
+ON CONFLICT (code) DO NOTHING;
 
+INSERT INTO geo_areas (code, name, level, parent_code) VALUES
+  ('NL-GR', 'Groningen', 'provincie', 'NL'),
+  ('NL-FR', 'Fryslân', 'provincie', 'NL'),
+  ('NL-DR', 'Drenthe', 'provincie', 'NL'),
+  ('NL-OV', 'Overijssel', 'provincie', 'NL'),
+  ('NL-FL', 'Flevoland', 'provincie', 'NL'),
+  ('NL-GE', 'Gelderland', 'provincie', 'NL'),
+  ('NL-UT', 'Utrecht', 'provincie', 'NL'),
+  ('NL-NH', 'Noord-Holland', 'provincie', 'NL'),
+  ('NL-ZH', 'Zuid-Holland', 'provincie', 'NL'),
+  ('NL-ZE', 'Zeeland', 'provincie', 'NL'),
+  ('NL-NB', 'Noord-Brabant', 'provincie', 'NL'),
+  ('NL-LI', 'Limburg', 'provincie', 'NL')
+ON CONFLICT (code) DO NOTHING;
+
+-- COROP regions (40 statistical regions in the Netherlands)
 INSERT INTO geo_areas (code, name, level, parent_code) VALUES
   ('CR01', 'Oost-Groningen', 'corop', 'NL-GR'),
   ('CR02', 'Delfzijl en omgeving', 'corop', 'NL-GR'),
