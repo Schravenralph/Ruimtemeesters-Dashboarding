@@ -17,6 +17,7 @@ interface FilterBarProps {
 const GEO_LEVELS: { value: GeoLevel; label: string }[] = [
   { value: 'land', label: 'Nederland' },
   { value: 'provincie', label: 'Provincie' },
+  { value: 'corop', label: 'COROP-regio' },
   { value: 'gemeente', label: 'Gemeente' },
 ];
 
