@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, Users, Database, ClipboardList, Upload, Palette } from 'lucide-react';
+import { Shield, Users, Database, ClipboardList, Upload, Palette, Key, Webhook, BarChart3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { UserManagement } from '../components/admin/UserManagement';
 import { PolicyEditor } from '../components/admin/PolicyEditor';
@@ -7,8 +7,11 @@ import { AuditLog } from '../components/admin/AuditLog';
 import { DataSourceManager } from '../components/admin/DataSourceManager';
 import { DataImportPanel } from '../components/admin/DataImportPanel';
 import { ThemeManager } from '../components/admin/ThemeManager';
+import { ApiKeyManager } from '../components/admin/ApiKeyManager';
+import { WebhookManager } from '../components/admin/WebhookManager';
+import { AnalyticsDashboard } from '../components/admin/AnalyticsDashboard';
 
-type Tab = 'policies' | 'users' | 'themes' | 'data' | 'import' | 'audit';
+type Tab = 'policies' | 'users' | 'themes' | 'data' | 'import' | 'audit' | 'apikeys' | 'webhooks' | 'analytics';
 
 export function AdminPage() {
   const { user } = useAuth();
@@ -29,6 +32,9 @@ export function AdminPage() {
     { key: 'data', label: 'Databronnen', icon: Database },
     { key: 'import', label: 'Data import', icon: Upload },
     { key: 'audit', label: 'Audit Log', icon: ClipboardList },
+    { key: 'apikeys', label: 'API Sleutels', icon: Key },
+    { key: 'webhooks', label: 'Webhooks', icon: Webhook },
+    { key: 'analytics', label: 'Analytiek', icon: BarChart3 },
   ];
 
   return (
@@ -63,6 +69,9 @@ export function AdminPage() {
       {activeTab === 'data' && <DataSourceManager />}
       {activeTab === 'import' && <DataImportPanel />}
       {activeTab === 'audit' && <AuditLog />}
+      {activeTab === 'apikeys' && <ApiKeyManager />}
+      {activeTab === 'webhooks' && <WebhookManager />}
+      {activeTab === 'analytics' && <AnalyticsDashboard />}
     </div>
   );
 }
