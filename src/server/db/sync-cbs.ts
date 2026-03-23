@@ -10,7 +10,7 @@
  * Attribution: Bron: CBS, StatLine
  */
 
-import { syncAllCbsData, syncBevolking, syncHuishoudens, syncHuishoudensLeeftijd, syncWoningen, syncWoningmutaties, calculateWoningtekort } from '../services/cbs/cbs-sync.js';
+import { syncAllCbsData, syncBevolking, syncHuishoudens, syncHuishoudensLeeftijd, syncWoningen, syncWoningmutaties, calculateWoningtekort, syncPrognose } from '../services/cbs/cbs-sync.js';
 import { pool } from './pool.js';
 
 async function main() {
@@ -53,6 +53,9 @@ async function main() {
           break;
         case 'woningtekort':
           result = await calculateWoningtekort(yearFilter || 2024);
+          break;
+        case 'prognose':
+          result = await syncPrognose();
           break;
         default:
           console.error(`Unknown source: ${sourceFilter}`);

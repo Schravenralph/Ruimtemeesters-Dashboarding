@@ -124,6 +124,12 @@ export const CBS_TABLES = {
 
   /** Kerncijfers wijken en buurten (comprehensive local stats) */
   kerncijfers: '85385NED',
+
+  /** Prognose bevolking; geslacht en leeftijd (national level)
+   *  National population projections to 2060.
+   *  Note: CBS withdrew regional prognoses (85174NED) due to reliability concerns.
+   *  National level only until CBS publishes new regional forecasts. */
+  prognose: '84646NED',
 } as const;
 
 /**

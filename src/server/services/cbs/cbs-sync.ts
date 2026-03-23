@@ -705,6 +705,110 @@ export async function calculateWoningtekort(year: number): Promise<SyncResult> {
 }
 
 /**
+ * Sync national population prognose from CBS table 84646NED.
+ *
+ * Note: CBS withdrew regional prognoses (85174NED) due to reliability concerns.
+ * This syncs national-level only. When CBS publishes new regional forecasts,
+ * or when Ruimtemeesters builds its own TSA model, this can be extended.
+ *
+ * Stores with source = 'cbs_prognose' and geo_code = 'NL'.
+ */
+export async function syncPrognose(): Promise<SyncResult> {
+  const startTime = Date.now();
+  const errors: string[] = [];
+  let rowsFetched = 0;
+  let rowsInserted = 0;
+
+  try {
+    const [geslachtCodes, leeftijdCodes] = await Promise.all([
+      getCodes(CBS_TABLES.prognose, 'GeslachtCodes'),
+      getCodes(CBS_TABLES.prognose, 'LeeftijdCodes'),
+    ]);
+
+    const genderMapping: Record<string, string> = {};
+    for (const gc of geslachtCodes) {
+      const lower = gc.Title.toLowerCase();
+      if (lower.includes('totaal')) genderMapping[gc.Identifier] = 'totaal';
+      else if (lower.includes('mann')) genderMapping[gc.Identifier] = 'man';
+      else if (lower.includes('vrouw')) genderMapping[gc.Identifier] = 'vrouw';
+    }
+
+    // Only fetch future years (2025+)
+    const filter = "Perioden ge '2025JJ00'";
+
+    const observations = await getObservations(CBS_TABLES.prognose, filter);
+    rowsFetched = observations.length;
+
+    // Aggregate individual ages to Primos groups (same as syncBevolking)
+    const aggregated = new Map<string, { year: number; ageGroup: string; gender: string; value: number }>();
+
+    for (const obs of observations) {
+      if (obs.Value === null) continue;
+
+      const year = parseCbsPeriod(obs.Perioden as string);
+      if (!year) continue;
+
+      const leeftijdCode = obs.Leeftijd as string;
+      const age = codeToAge(leeftijdCode);
+      if (age === null) continue;
+      const ageGroup = ageToGroup(age);
+      const gender = genderMapping[obs.Geslacht as string];
+      if (!ageGroup || !gender) continue;
+
+      const key = `${year}|${ageGroup}|${gender}`;
+      const existing = aggregated.get(key);
+      if (existing) {
+        existing.value += obs.Value;
+      } else {
+        aggregated.set(key, { year, ageGroup, gender, value: obs.Value });
+      }
+    }
+
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+
+      // Ensure NL geo area exists
+      await client.query(
+        `INSERT INTO geo_areas (code, name, level, parent_code)
+         VALUES ('NL', 'Nederland', 'land', NULL)
+         ON CONFLICT (code) DO NOTHING`,
+      );
+
+      for (const entry of aggregated.values()) {
+        await client.query(
+          `INSERT INTO data_bevolking (geo_code, year, age_group, gender, value, source)
+           VALUES ('NL', $1, $2, $3, $4, 'cbs_prognose')
+           ON CONFLICT (geo_code, year, age_group, gender, source)
+           DO UPDATE SET value = EXCLUDED.value`,
+          [entry.year, entry.ageGroup, entry.gender, Math.round(entry.value)],
+        );
+        rowsInserted++;
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      errors.push(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : 'Failed to fetch CBS prognose');
+  }
+
+  return {
+    source: 'prognose',
+    cbsTable: CBS_TABLES.prognose,
+    rowsFetched,
+    rowsInserted,
+    errors,
+    duration: Date.now() - startTime,
+    attribution: `${CBS_ATTRIBUTION} Prognose: CBS bevolkingsprognose (nationaal niveau).`,
+  };
+}
+
+/**
  * Run full sync of all CBS data sources + derived calculations.
  */
 export async function syncAllCbsData(yearFilter?: number): Promise<SyncResult[]> {
@@ -727,6 +831,10 @@ export async function syncAllCbsData(yearFilter?: number): Promise<SyncResult[]>
 
   results.push(await syncWoningmutaties(yearFilter));
   console.log(`[CBS Sync] Woningmutaties: ${results[results.length - 1].rowsInserted} rows (${results[results.length - 1].duration}ms)`);
+
+  // National population prognose (2025-2060)
+  results.push(await syncPrognose());
+  console.log(`[CBS Sync] Prognose (nationaal): ${results[results.length - 1].rowsInserted} rows (${results[results.length - 1].duration}ms)`);
 
   // Calculate derived woningtekort
   const calcYear = yearFilter || 2024;
