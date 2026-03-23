@@ -147,10 +147,13 @@ export function DataTableComponent({ data, comparisonRow }: DataTableProps) {
                 </td>
               </tr>
             )}
-            {sortedData.map((row, index) => (
-              <tr key={index} className="hover:bg-gray-50">
+            {sortedData.map((row, index) => {
+              const isPrognose = row.source === 'cbs_prognose';
+              return (
+              <tr key={index} className={isPrognose ? 'bg-yellow-50 hover:bg-yellow-100' : 'hover:bg-gray-50'}>
                 <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
                   {row.geoName || row.geoCode}
+                  {isPrognose && <span className="ml-1 text-xs text-yellow-600">(prognose)</span>}
                 </td>
                 {hasYear && (
                   <td className="px-4 py-2 text-sm text-gray-600 whitespace-nowrap">
@@ -166,7 +169,8 @@ export function DataTableComponent({ data, comparisonRow }: DataTableProps) {
                   {row.value.toLocaleString('nl-NL')}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
