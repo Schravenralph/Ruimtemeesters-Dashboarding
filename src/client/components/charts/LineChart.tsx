@@ -1,12 +1,14 @@
 import {
   LineChart as RechartsLine,
-  Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import type { DataPoint } from '@shared/api/contracts';
 
 interface LineChartProps {
   data: DataPoint[];
   colors?: string[];
+  comparisonData?: DataPoint[];
+  comparisonLabel?: string;
 }
 
 const DEFAULT_COLORS = [
@@ -14,7 +16,7 @@ const DEFAULT_COLORS = [
   '#ec4899', '#06b6d4', '#84cc16',
 ];
 
-export function LineChartComponent({ data, colors = DEFAULT_COLORS }: LineChartProps) {
+export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonData, comparisonLabel }: LineChartProps) {
   const dimensionValues = [...new Set(data.map(d => d.dimensionValue).filter((v): v is string => !!v))];
 
   if (dimensionValues.length === 0) {
@@ -32,6 +34,9 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS }: LineChartP
           <YAxis tick={{ fontSize: 12 }} tickFormatter={formatNumber} />
           <Tooltip formatter={(value: number) => formatNumber(value)} />
           <Line type="monotone" dataKey="value" stroke={colors[0]} strokeWidth={2} dot={{ r: 3 }} />
+          {comparisonData && comparisonData.length > 0 && (
+            <ReferenceLine y={comparisonData.reduce((sum, d) => sum + d.value, 0) / comparisonData.length} stroke="#ef4444" strokeDasharray="8 4" label={{ value: comparisonLabel || 'Vergelijking', position: 'right', fontSize: 11, fill: '#ef4444' }} />
+          )}
         </RechartsLine>
       </ResponsiveContainer>
     );

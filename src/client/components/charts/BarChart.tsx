@@ -1,6 +1,6 @@
 import {
   BarChart as RechartsBar,
-  Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import type { DataPoint } from '@shared/api/contracts';
 
@@ -8,6 +8,8 @@ interface BarChartProps {
   data: DataPoint[];
   title?: string;
   stacked?: boolean;
+  comparisonValue?: number;
+  comparisonLabel?: string;
   colors?: string[];
 }
 
@@ -16,7 +18,7 @@ const DEFAULT_COLORS = [
   '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
 ];
 
-export function BarChartComponent({ data, stacked = false, colors = DEFAULT_COLORS }: BarChartProps) {
+export function BarChartComponent({ data, stacked = false, colors = DEFAULT_COLORS, comparisonValue, comparisonLabel }: BarChartProps) {
   // Group data by dimensionValue to create multi-bar series
   const dimensionValues = [...new Set(data.map(d => d.dimensionValue).filter((v): v is string => !!v))];
 
@@ -35,6 +37,9 @@ export function BarChartComponent({ data, stacked = false, colors = DEFAULT_COLO
           <YAxis tick={{ fontSize: 12 }} tickFormatter={formatNumber} />
           <Tooltip formatter={(value: number) => formatNumber(value)} />
           <Bar dataKey="value" fill={colors[0]} radius={[4, 4, 0, 0]} />
+          {comparisonValue !== undefined && (
+            <ReferenceLine y={comparisonValue} stroke="#ef4444" strokeDasharray="5 5" label={{ value: comparisonLabel || 'Vergelijking', position: 'right', fontSize: 11, fill: '#ef4444' }} />
+          )}
         </RechartsBar>
       </ResponsiveContainer>
     );
@@ -71,6 +76,9 @@ export function BarChartComponent({ data, stacked = false, colors = DEFAULT_COLO
             radius={stacked ? undefined : [4, 4, 0, 0]}
           />
         ))}
+        {comparisonValue !== undefined && (
+          <ReferenceLine y={comparisonValue} stroke="#ef4444" strokeDasharray="5 5" label={{ value: comparisonLabel || 'Vergelijking', position: 'right', fontSize: 11, fill: '#ef4444' }} />
+        )}
       </RechartsBar>
     </ResponsiveContainer>
   );

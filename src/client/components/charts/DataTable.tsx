@@ -5,12 +5,13 @@ import { dimensionValueLabel } from '../../utils/format';
 
 interface DataTableProps {
   data: DataPoint[];
+  comparisonRow?: { label: string; value: number };
 }
 
 type SortField = 'geoName' | 'year' | 'dimensionValue' | 'value';
 type SortDir = 'asc' | 'desc';
 
-export function DataTableComponent({ data }: DataTableProps) {
+export function DataTableComponent({ data, comparisonRow }: DataTableProps) {
   const [sortField, setSortField] = useState<SortField>('value');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
@@ -134,6 +135,18 @@ export function DataTableComponent({ data }: DataTableProps) {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
+            {comparisonRow && (
+              <tr className="bg-blue-50 font-medium">
+                <td className="px-4 py-2 text-sm text-blue-700 whitespace-nowrap">
+                  {comparisonRow.label}
+                </td>
+                {hasYear && <td className="px-4 py-2 text-sm text-blue-600">—</td>}
+                {hasDimension && <td className="px-4 py-2 text-sm text-blue-600">—</td>}
+                <td className="px-4 py-2 text-sm text-blue-700 text-right whitespace-nowrap font-mono font-bold">
+                  {comparisonRow.value.toLocaleString('nl-NL')}
+                </td>
+              </tr>
+            )}
             {sortedData.map((row, index) => (
               <tr key={index} className="hover:bg-gray-50">
                 <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
