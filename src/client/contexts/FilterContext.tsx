@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useCallback, type ReactNode } from 'react';
 import type { FilterState, GeoLevel } from '@shared/api/contracts';
+import { usePresentations } from './PresentationContext';
 
 interface FilterContextValue {
   filters: FilterState;
@@ -26,60 +27,76 @@ const defaultFilters: FilterState = {
 
 const FilterContext = createContext<FilterContextValue | null>(null);
 
+/**
+ * FilterProvider — pass-through to PresentationContext.
+ *
+ * Reads from and writes to the active presentation's filters.
+ * All existing components that call useFilters() continue to work
+ * without any changes — they just transparently operate on the
+ * active tab's filter state.
+ */
 export function FilterProvider({ children }: { children: ReactNode }) {
-  const [filters, setFilters] = useState<FilterState>(defaultFilters);
+  const { activePresentation, activeId, updatePresentation } = usePresentations();
+
+  const filters = activePresentation?.filters ?? defaultFilters;
+
+  const updateFilters = useCallback((updater: (prev: FilterState) => FilterState) => {
+    if (!activeId || !activePresentation) return;
+    const newFilters = updater(activePresentation.filters);
+    updatePresentation(activeId, { filters: newFilters });
+  }, [activeId, activePresentation, updatePresentation]);
 
   const setGeoLevel = useCallback((level: GeoLevel) => {
-    setFilters(prev => ({ ...prev, geoLevel: level }));
-  }, []);
+    updateFilters(prev => ({ ...prev, geoLevel: level }));
+  }, [updateFilters]);
 
   const setGeoCode = useCallback((code: string) => {
-    setFilters(prev => ({ ...prev, geoCode: code }));
-  }, []);
+    updateFilters(prev => ({ ...prev, geoCode: code }));
+  }, [updateFilters]);
 
   const setYear = useCallback((year: number) => {
-    setFilters(prev => ({ ...prev, period: { ...prev.period, year } }));
-  }, []);
+    updateFilters(prev => ({ ...prev, period: { ...prev.period, year } }));
+  }, [updateFilters]);
 
   const setCompareYear = useCallback((compareYear: number | null) => {
-    setFilters(prev => ({
+    updateFilters(prev => ({
       ...prev,
       period: { ...prev.period, compareYear },
       comparisonEnabled: compareYear !== null,
     }));
-  }, []);
+  }, [updateFilters]);
 
   const setComparisonEnabled = useCallback((enabled: boolean) => {
-    setFilters(prev => ({
+    updateFilters(prev => ({
       ...prev,
       comparisonEnabled: enabled,
       period: enabled ? prev.period : { ...prev.period, compareYear: null },
     }));
-  }, []);
+  }, [updateFilters]);
 
   const setDimension = useCallback((key: string, value: string) => {
-    setFilters(prev => ({
+    updateFilters(prev => ({
       ...prev,
       dimensions: { ...prev.dimensions, [key]: value },
     }));
-  }, []);
+  }, [updateFilters]);
 
   const setComparisonLevel = useCallback((level: GeoLevel | null) => {
-    setFilters(prev => ({
+    updateFilters(prev => ({
       ...prev,
       comparisonLevel: level,
-      // Auto-select NL when switching to land level
       comparisonGeoCode: level === 'land' ? 'NL' : prev.comparisonGeoCode,
     }));
-  }, []);
+  }, [updateFilters]);
 
   const setComparisonGeoCode = useCallback((code: string | null) => {
-    setFilters(prev => ({ ...prev, comparisonGeoCode: code }));
-  }, []);
+    updateFilters(prev => ({ ...prev, comparisonGeoCode: code }));
+  }, [updateFilters]);
 
   const resetFilters = useCallback(() => {
-    setFilters(defaultFilters);
-  }, []);
+    if (!activeId) return;
+    updatePresentation(activeId, { filters: { ...defaultFilters } });
+  }, [activeId, updatePresentation]);
 
   return (
     <FilterContext.Provider value={{

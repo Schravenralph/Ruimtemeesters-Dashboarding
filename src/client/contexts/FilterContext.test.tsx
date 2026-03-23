@@ -1,11 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { FilterProvider, useFilters } from './FilterContext';
+import { PresentationProvider } from './PresentationContext';
 import type { ReactNode } from 'react';
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <FilterProvider>{children}</FilterProvider>;
+  return (
+    <PresentationProvider>
+      <FilterProvider>{children}</FilterProvider>
+    </PresentationProvider>
+  );
 }
+
+beforeEach(() => {
+  sessionStorage.clear();
+});
 
 describe('FilterContext', () => {
   it('provides default filters', () => {
