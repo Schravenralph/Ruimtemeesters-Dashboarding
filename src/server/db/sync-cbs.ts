@@ -10,7 +10,7 @@
  * Attribution: Bron: CBS, StatLine
  */
 
-import { syncAllCbsData, syncBevolking, syncHuishoudens, syncWoningen, syncWoningmutaties, calculateWoningtekort } from '../services/cbs/cbs-sync.js';
+import { syncAllCbsData, syncBevolking, syncHuishoudens, syncHuishoudensLeeftijd, syncWoningen, syncWoningmutaties, calculateWoningtekort } from '../services/cbs/cbs-sync.js';
 import { pool } from './pool.js';
 
 async function main() {
@@ -44,6 +44,9 @@ async function main() {
           break;
         case 'woningen':
           result = await syncWoningen(yearFilter);
+          break;
+        case 'huishoudens-leeftijd':
+          result = await syncHuishoudensLeeftijd(yearFilter);
           break;
         case 'woningmutaties':
           result = await syncWoningmutaties(yearFilter);

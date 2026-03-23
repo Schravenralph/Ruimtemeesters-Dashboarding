@@ -268,6 +268,146 @@ export async function syncHuishoudens(yearFilter?: number): Promise<SyncResult> 
 }
 
 /**
+ * CBS LeeftijdReferentiepersoon code → Primos age group mapping.
+ * CBS provides 5-year brackets; we aggregate to Primos groups.
+ */
+const HUISHOUDEN_LEEFTIJD_MAP: Record<string, string> = {
+  '70400': '0-29',  // 15-20 jaar
+  '70500': '0-29',  // 20-25 jaar
+  '70600': '0-29',  // 25-30 jaar
+  '70700': '30-44', // 30-35 jaar
+  '70800': '30-44', // 35-40 jaar
+  '70900': '30-44', // 40-45 jaar
+  '71000': '45-64', // 45-50 jaar
+  '71100': '45-64', // 50-55 jaar
+  '71200': '45-64', // 55-60 jaar
+  '71300': '45-64', // 60-65 jaar
+  '71400': '65-74', // 65-70 jaar
+  '71500': '65-74', // 70-75 jaar
+  '71600': '75+',   // 75-80 jaar
+  '71700': '75+',   // 80-85 jaar
+  '71800': '75+',   // 85-90 jaar
+  '71900': '75+',   // 90-95 jaar
+  '22000': '75+',   // 95+ jaar
+};
+
+/**
+ * Sync households by age of reference person from CBS table 71486ned.
+ * Stores with dimension_type = 'leeftijd_referentiepersoon'.
+ */
+export async function syncHuishoudensLeeftijd(yearFilter?: number): Promise<SyncResult> {
+  const startTime = Date.now();
+  const errors: string[] = [];
+  let rowsFetched = 0;
+  let rowsInserted = 0;
+
+  try {
+    const [measureCodes, regioCodes] = await Promise.all([
+      getMeasureCodes(CBS_TABLES.huishoudens),
+      getRegioCodes(CBS_TABLES.huishoudens),
+    ]);
+
+    const regioMap = new Map(regioCodes.map(c => [c.Identifier, c.Title]));
+
+    // Find the "totaal huishoudens" measure
+    let totalMeasure: string | null = null;
+    for (const mc of measureCodes) {
+      if (mc.Title.toLowerCase().includes('totaal') && mc.Title.toLowerCase().includes('huishouden')) {
+        totalMeasure = mc.Identifier;
+        break;
+      }
+    }
+    if (!totalMeasure) {
+      return { source: 'huishoudens-leeftijd', cbsTable: CBS_TABLES.huishoudens, rowsFetched: 0, rowsInserted: 0, errors: ['Could not find totaal huishoudens measure'], duration: Date.now() - startTime, attribution: CBS_ATTRIBUTION };
+    }
+
+    // Fetch all observations (not filtering by LeeftijdReferentiepersoon = totaal)
+    let filter = `Measure eq '${totalMeasure}'`;
+    if (yearFilter) {
+      filter += ` and Perioden eq '${yearFilter}JJ00'`;
+    }
+
+    const observations = await getObservations(CBS_TABLES.huishoudens, filter);
+    rowsFetched = observations.length;
+
+    // Aggregate CBS 5-year brackets into Primos age groups
+    const aggregated = new Map<string, { geoCode: string; geoName: string; geoLevel: string; year: number; ageGroup: string; value: number }>();
+
+    for (const obs of observations) {
+      if (obs.Value === null) continue;
+
+      const leeftijdCode = obs.LeeftijdReferentiepersoon as string;
+      const ageGroup = HUISHOUDEN_LEEFTIJD_MAP[leeftijdCode];
+      if (!ageGroup) continue; // Skip totaal (10000) and unmapped
+
+      const year = parseCbsPeriod(obs.Perioden as string);
+      const region = parseCbsRegion(obs.RegioS as string);
+      if (!year || !region) continue;
+      if (region.level !== 'gemeente' && region.level !== 'land') continue;
+
+      const geoName = regioMap.get((obs.RegioS as string).trim()) || region.code;
+      const key = `${region.code}|${year}|${ageGroup}`;
+
+      const existing = aggregated.get(key);
+      if (existing) {
+        existing.value += obs.Value;
+      } else {
+        aggregated.set(key, {
+          geoCode: region.code,
+          geoName: geoName.trim(),
+          geoLevel: region.level,
+          year,
+          ageGroup,
+          value: obs.Value,
+        });
+      }
+    }
+
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+
+      for (const entry of aggregated.values()) {
+        await client.query(
+          `INSERT INTO geo_areas (code, name, level, parent_code)
+           VALUES ($1, $2, $3, NULL)
+           ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name`,
+          [entry.geoCode, entry.geoName, entry.geoLevel],
+        );
+
+        await client.query(
+          `INSERT INTO data_huishoudens (geo_code, year, household_type, dimension_type, source, value)
+           VALUES ($1, $2, $3, 'leeftijd_referentiepersoon', 'cbs_actuals', $4)
+           ON CONFLICT (geo_code, year, household_type, dimension_type, source)
+           DO UPDATE SET value = EXCLUDED.value`,
+          [entry.geoCode, entry.year, entry.ageGroup, Math.round(entry.value)],
+        );
+        rowsInserted++;
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      errors.push(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : 'Failed to fetch CBS data');
+  }
+
+  return {
+    source: 'huishoudens-leeftijd',
+    cbsTable: CBS_TABLES.huishoudens,
+    rowsFetched,
+    rowsInserted,
+    errors,
+    duration: Date.now() - startTime,
+    attribution: CBS_ATTRIBUTION,
+  };
+}
+
+/**
  * Sync housing stock data from CBS table 82550NED.
  */
 export async function syncWoningen(yearFilter?: number): Promise<SyncResult> {
@@ -578,6 +718,9 @@ export async function syncAllCbsData(yearFilter?: number): Promise<SyncResult[]>
 
   results.push(await syncHuishoudens(yearFilter));
   console.log(`[CBS Sync] Huishoudens: ${results[results.length - 1].rowsInserted} rows (${results[results.length - 1].duration}ms)`);
+
+  results.push(await syncHuishoudensLeeftijd(yearFilter));
+  console.log(`[CBS Sync] Huishoudens (leeftijd): ${results[results.length - 1].rowsInserted} rows (${results[results.length - 1].duration}ms)`);
 
   results.push(await syncWoningen(yearFilter));
   console.log(`[CBS Sync] Woningen: ${results[results.length - 1].rowsInserted} rows (${results[results.length - 1].duration}ms)`);
