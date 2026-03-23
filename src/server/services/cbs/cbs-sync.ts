@@ -236,9 +236,9 @@ export async function syncHuishoudens(yearFilter?: number): Promise<SyncResult> 
         );
 
         await client.query(
-          `INSERT INTO data_huishoudens (geo_code, year, household_type, value)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (geo_code, year, household_type)
+          `INSERT INTO data_huishoudens (geo_code, year, household_type, dimension_type, source, value)
+           VALUES ($1, $2, $3, 'samenstelling', 'cbs_actuals', $4)
+           ON CONFLICT (geo_code, year, household_type, dimension_type, source)
            DO UPDATE SET value = EXCLUDED.value`,
           [region.code, year, hhType, Math.round(obs.Value)],
         );
