@@ -145,9 +145,9 @@ export async function syncBevolking(yearFilter?: number): Promise<SyncResult> {
         );
 
         await client.query(
-          `INSERT INTO data_bevolking (geo_code, year, age_group, gender, value)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (geo_code, year, age_group, gender)
+          `INSERT INTO data_bevolking (geo_code, year, age_group, gender, value, source)
+           VALUES ($1, $2, $3, $4, $5, 'cbs_actuals')
+           ON CONFLICT (geo_code, year, age_group, gender, source)
            DO UPDATE SET value = EXCLUDED.value`,
           [entry.geoCode, entry.year, entry.ageGroup, entry.gender, Math.round(entry.value)],
         );
@@ -336,9 +336,9 @@ export async function syncWoningen(yearFilter?: number): Promise<SyncResult> {
         );
 
         await client.query(
-          `INSERT INTO data_woningen (geo_code, year, tenure_type, dwelling_type, value)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (geo_code, year, tenure_type, dwelling_type)
+          `INSERT INTO data_woningen (geo_code, year, tenure_type, dwelling_type, value, source)
+           VALUES ($1, $2, $3, $4, $5, 'cbs_actuals')
+           ON CONFLICT (geo_code, year, tenure_type, dwelling_type, source)
            DO UPDATE SET value = EXCLUDED.value`,
           [region.code, year, tenureType, dwellingType, Math.round(obs.Value)],
         );
@@ -428,9 +428,9 @@ export async function syncWoningmutaties(yearFilter?: number): Promise<SyncResul
         );
 
         await client.query(
-          `INSERT INTO data_woningtekort (geo_code, year, metric, value)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (geo_code, year, metric)
+          `INSERT INTO data_woningtekort (geo_code, year, metric, value, source)
+           VALUES ($1, $2, $3, $4, 'cbs_actuals')
+           ON CONFLICT (geo_code, year, metric, source)
            DO UPDATE SET value = EXCLUDED.value`,
           [region.code, year, metric, Math.round(obs.Value)],
         );
@@ -517,25 +517,25 @@ export async function calculateWoningtekort(year: number): Promise<SyncResult> {
 
         // Insert absolute tekort
         await client.query(
-          `INSERT INTO data_woningtekort (geo_code, year, metric, value)
-           VALUES ($1, $2, 'tekort', $3)
-           ON CONFLICT (geo_code, year, metric) DO UPDATE SET value = EXCLUDED.value`,
+          `INSERT INTO data_woningtekort (geo_code, year, metric, value, source)
+           VALUES ($1, $2, 'tekort', $3, 'cbs_actuals')
+           ON CONFLICT (geo_code, year, metric, source) DO UPDATE SET value = EXCLUDED.value`,
           [geoCode, year, tekort],
         );
 
         // Insert percentage tekort
         await client.query(
-          `INSERT INTO data_woningtekort (geo_code, year, metric, value)
-           VALUES ($1, $2, 'tekort_percentage', $3)
-           ON CONFLICT (geo_code, year, metric) DO UPDATE SET value = EXCLUDED.value`,
+          `INSERT INTO data_woningtekort (geo_code, year, metric, value, source)
+           VALUES ($1, $2, 'tekort_percentage', $3, 'cbs_actuals')
+           ON CONFLICT (geo_code, year, metric, source) DO UPDATE SET value = EXCLUDED.value`,
           [geoCode, year, Math.round(tekortPct * 100) / 100],
         );
 
         // Insert woningbehoefte (= huishoudens)
         await client.query(
-          `INSERT INTO data_woningtekort (geo_code, year, metric, value)
-           VALUES ($1, $2, 'woningbehoefte', $3)
-           ON CONFLICT (geo_code, year, metric) DO UPDATE SET value = EXCLUDED.value`,
+          `INSERT INTO data_woningtekort (geo_code, year, metric, value, source)
+           VALUES ($1, $2, 'woningbehoefte', $3, 'cbs_actuals')
+           ON CONFLICT (geo_code, year, metric, source) DO UPDATE SET value = EXCLUDED.value`,
           [geoCode, year, huishoudens],
         );
 
