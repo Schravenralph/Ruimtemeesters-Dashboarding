@@ -106,6 +106,8 @@ export const FilterState = z.object({
   period: PeriodSelection.default({ year: 2024, compareYear: null }),
   dimensions: z.record(z.string()).default({}),
   comparisonEnabled: z.boolean().default(false),
+  comparisonLevel: GeoLevel.nullable().default(null),
+  comparisonGeoCode: z.string().nullable().default(null),
 });
 export type FilterState = z.infer<typeof FilterState>;
 
@@ -119,6 +121,7 @@ export const DataPoint = z.object({
   dimensionValue: z.string().optional(),
   value: z.number(),
   label: z.string().optional(),
+  source: z.string().optional(), // 'cbs_actuals' | 'cbs_prognose' | 'ruimtemeesters_prognose'
 });
 export type DataPoint = z.infer<typeof DataPoint>;
 
@@ -211,6 +214,8 @@ export const DataQueryParams = z.object({
   dimensionValue: z.string().optional(),
   limit: z.coerce.number().optional(),
   offset: z.coerce.number().optional(),
+  dataOrigin: z.string().optional(),    // 'cbs_actuals' | 'cbs_prognose' — filter by source column
+  dimensionType: z.string().optional(), // 'samenstelling' | 'leeftijd_referentiepersoon' — for huishoudens
 });
 export type DataQueryParams = z.infer<typeof DataQueryParams>;
 

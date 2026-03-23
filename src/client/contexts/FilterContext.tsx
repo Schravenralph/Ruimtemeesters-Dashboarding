@@ -18,6 +18,8 @@ const defaultFilters: FilterState = {
   period: { year: 2024, compareYear: null },
   dimensions: {},
   comparisonEnabled: false,
+  comparisonLevel: null,
+  comparisonGeoCode: null,
 };
 
 const FilterContext = createContext<FilterContextValue | null>(null);
