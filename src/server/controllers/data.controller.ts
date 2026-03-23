@@ -36,7 +36,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const { source, geoCode, geoLevel, year, dimension, dimensionValue, limit, offset } = parsed.data;
+  const { source, geoCode, geoLevel, year, dimension, dimensionValue, limit, offset, dataOrigin, dimensionType } = parsed.data;
 
   const sourceDef = DATA_SOURCES[source];
   if (!sourceDef) {
@@ -71,6 +71,24 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     }
   }
 
+  // Filter by data origin (cbs_actuals vs cbs_prognose)
+  if (dataOrigin) {
+    conditions.push(`d.source = $${paramIdx++}`);
+    params.push(dataOrigin);
+  }
+
+  // Filter by dimension_type (huishoudens: samenstelling vs leeftijd_referentiepersoon)
+  if (source === 'huishoudens') {
+    if (dimensionType) {
+      conditions.push(`d.dimension_type = $${paramIdx++}`);
+      params.push(dimensionType);
+    } else {
+      // Default to samenstelling for backward compatibility
+      conditions.push(`d.dimension_type = $${paramIdx++}`);
+      params.push('samenstelling');
+    }
+  }
+
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const limitClause = limit ? `LIMIT ${Math.min(limit, 10000)}` : 'LIMIT 1000';
   const offsetClause = offset ? `OFFSET ${offset}` : '';
@@ -83,7 +101,8 @@ export async function queryData(req: Request, res: Response): Promise<void> {
   const sql = `
     SELECT d.geo_code, g.name as geo_name, d.year,
            ${dimSelects},
-           d.${sourceDef.valueColumn} as value
+           d.${sourceDef.valueColumn} as value,
+           d.source as data_source
     FROM ${sourceDef.table} d
     JOIN geo_areas g ON g.code = d.geo_code
     ${whereClause}
@@ -109,6 +128,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     dimension: dimension || sourceDef.dimensionColumns[0],
     dimensionValue: row[sourceDef.dimensionColumns[0]],
     value: Number(row.value),
+    source: row.data_source || 'cbs_actuals',
   }));
 
   res.json({
