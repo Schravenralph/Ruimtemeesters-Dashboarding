@@ -9,6 +9,8 @@ interface FilterContextValue {
   setCompareYear: (year: number | null) => void;
   setComparisonEnabled: (enabled: boolean) => void;
   setDimension: (key: string, value: string) => void;
+  setComparisonLevel: (level: GeoLevel | null) => void;
+  setComparisonGeoCode: (code: string | null) => void;
   resetFilters: () => void;
 }
 
@@ -62,6 +64,19 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const setComparisonLevel = useCallback((level: GeoLevel | null) => {
+    setFilters(prev => ({
+      ...prev,
+      comparisonLevel: level,
+      // Auto-select NL when switching to land level
+      comparisonGeoCode: level === 'land' ? 'NL' : prev.comparisonGeoCode,
+    }));
+  }, []);
+
+  const setComparisonGeoCode = useCallback((code: string | null) => {
+    setFilters(prev => ({ ...prev, comparisonGeoCode: code }));
+  }, []);
+
   const resetFilters = useCallback(() => {
     setFilters(defaultFilters);
   }, []);
@@ -75,6 +90,8 @@ export function FilterProvider({ children }: { children: ReactNode }) {
       setCompareYear,
       setComparisonEnabled,
       setDimension,
+      setComparisonLevel,
+      setComparisonGeoCode,
       resetFilters,
     }}>
       {children}

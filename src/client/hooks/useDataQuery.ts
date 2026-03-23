@@ -8,6 +8,7 @@ interface UseDataQueryOptions {
   dimension?: string;
   dimensionValue?: string;
   enabled?: boolean;
+  geoCodeOverride?: string; // Override filters.geoCode (for comparison queries)
 }
 
 interface UseDataQueryResult {
@@ -17,11 +18,13 @@ interface UseDataQueryResult {
   refetch: () => void;
 }
 
-export function useDataQuery({ source, dimension, dimensionValue, enabled = true }: UseDataQueryOptions): UseDataQueryResult {
+export function useDataQuery({ source, dimension, dimensionValue, enabled = true, geoCodeOverride }: UseDataQueryOptions): UseDataQueryResult {
   const { filters } = useFilters();
   const [data, setData] = useState<DataPoint[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const effectiveGeoCode = geoCodeOverride ?? filters.geoCode;
 
   const fetchData = useCallback(async () => {
     if (!enabled) return;
@@ -33,7 +36,7 @@ export function useDataQuery({ source, dimension, dimensionValue, enabled = true
       const response = await queryData({
         source,
         geoLevel: filters.geoLevel,
-        geoCode: filters.geoCode,
+        geoCode: effectiveGeoCode,
         year: filters.period.year,
         dimension,
         dimensionValue,
@@ -44,7 +47,7 @@ export function useDataQuery({ source, dimension, dimensionValue, enabled = true
     } finally {
       setIsLoading(false);
     }
-  }, [source, filters.geoLevel, filters.geoCode, filters.period.year, dimension, dimensionValue, enabled]);
+  }, [source, filters.geoLevel, effectiveGeoCode, filters.period.year, dimension, dimensionValue, enabled]);
 
   useEffect(() => {
     fetchData();

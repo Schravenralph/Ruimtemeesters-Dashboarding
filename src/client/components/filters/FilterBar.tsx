@@ -24,10 +24,11 @@ const GEO_LEVELS: { value: GeoLevel; label: string }[] = [
 export function FilterBar({ dataSource = 'bevolking', themeSlug }: FilterBarProps) {
   const {
     filters, setGeoLevel, setGeoCode, setYear, setCompareYear,
-    setComparisonEnabled, resetFilters,
+    setComparisonEnabled, setComparisonLevel, setComparisonGeoCode, resetFilters,
   } = useFilters();
 
   const [areas, setAreas] = useState<GeoArea[]>([]);
+  const [comparisonAreas, setComparisonAreas] = useState<GeoArea[]>([]);
   const [years, setYears] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAreaSearch, setShowAreaSearch] = useState(false);
@@ -45,6 +46,15 @@ export function FilterBar({ dataSource = 'bevolking', themeSlug }: FilterBarProp
     }
     listAreas({ level: filters.geoLevel }).then(({ areas }) => setAreas(areas));
   }, [filters.geoLevel]);
+
+  // Load comparison areas when comparison level changes
+  useEffect(() => {
+    if (!filters.comparisonLevel || filters.comparisonLevel === 'land') {
+      setComparisonAreas([]);
+      return;
+    }
+    listAreas({ level: filters.comparisonLevel }).then(({ areas }) => setComparisonAreas(areas));
+  }, [filters.comparisonLevel]);
 
   // Filter areas by search
   const filteredAreas = searchQuery
@@ -156,6 +166,47 @@ export function FilterBar({ dataSource = 'bevolking', themeSlug }: FilterBarProp
               label: String(y),
             }))}
           />
+        )}
+
+        {/* Vergelijkingsniveau */}
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Vergelijken met</label>
+          <Select
+            value={filters.comparisonLevel || ''}
+            onChange={(e) => {
+              const level = e.target.value as GeoLevel | '';
+              if (level === '') {
+                setComparisonLevel(null);
+                setComparisonGeoCode(null);
+              } else {
+                setComparisonLevel(level);
+                if (level === 'land') setComparisonGeoCode('NL');
+              }
+            }}
+            options={[
+              { value: '', label: 'Geen vergelijking' },
+              { value: 'land', label: 'Nederland' },
+              { value: 'provincie', label: 'Provincie' },
+              { value: 'corop', label: 'COROP-regio' },
+            ]}
+          />
+        </div>
+
+        {/* Comparison area selector (only for provincie/corop) */}
+        {filters.comparisonLevel && filters.comparisonLevel !== 'land' && (
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-700">Vergelijkingsgebied</label>
+            <select
+              value={filters.comparisonGeoCode || ''}
+              onChange={(e) => setComparisonGeoCode(e.target.value || null)}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+            >
+              <option value="">Selecteer...</option>
+              {comparisonAreas.map(a => (
+                <option key={a.code} value={a.code}>{a.name}</option>
+              ))}
+            </select>
+          </div>
         )}
 
         {/* Reset */}
