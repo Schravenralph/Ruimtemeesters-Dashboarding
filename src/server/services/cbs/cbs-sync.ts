@@ -36,6 +36,33 @@ interface SyncResult {
  * Dimensions: Geslacht (gender), Leeftijd (age), BurgerlijkeStaat, RegioS, Perioden
  * Measure: M000352 = "Bevolking op 1 januari (aantal)"
  */
+/**
+ * Map CBS individual age codes (10000=total, 10010=0yr, 10100=1yr, ...) to age number.
+ * CBS codes: 10000=totaal, 10010=0, 10100=1, 10200=2, ... 11400=14, 11500=15, etc.
+ */
+export function codeToAge(code: string): number | null {
+  const num = parseInt(code, 10);
+  if (num === 10000) return -1; // totaal
+  if (num === 10010) return 0;
+  if (num >= 10100 && num <= 20500) return Math.round((num - 10000) / 100);
+  return null;
+}
+
+/**
+ * Map age number to Primos-aligned age group.
+ * Groups: 0-14, 15-29, 30-44, 45-64, 65-74, 75+
+ */
+export function ageToGroup(age: number): string | null {
+  if (age === -1) return 'totaal';
+  if (age >= 0 && age <= 14) return '0-14';
+  if (age >= 15 && age <= 29) return '15-29';
+  if (age >= 30 && age <= 44) return '30-44';
+  if (age >= 45 && age <= 64) return '45-64';
+  if (age >= 65 && age <= 74) return '65-74';
+  if (age >= 75) return '75+';
+  return null;
+}
+
 export async function syncBevolking(yearFilter?: number): Promise<SyncResult> {
   const startTime = Date.now();
   const errors: string[] = [];
@@ -62,30 +89,6 @@ export async function syncBevolking(yearFilter?: number): Promise<SyncResult> {
 
     const observations = await getObservations(CBS_TABLES.bevolking, filter);
     rowsFetched = observations.length;
-
-    /**
-     * Map CBS individual age codes (10000=total, 10010=0yr, 10100=1yr, ...) to age groups.
-     * CBS codes: 10000=totaal, 10010=0, 10100=1, 10200=2, ... 11400=14, 11500=15, etc.
-     * The pattern is: 10000 + (age * 100), except age 0 = 10010.
-     */
-    function codeToAge(code: string): number | null {
-      const num = parseInt(code, 10);
-      if (num === 10000) return -1; // totaal
-      if (num === 10010) return 0;
-      if (num >= 10100 && num <= 20500) return Math.round((num - 10000) / 100);
-      return null;
-    }
-
-    function ageToGroup(age: number): string | null {
-      if (age === -1) return 'totaal';
-      if (age >= 0 && age <= 14) return '0-14';
-      if (age >= 15 && age <= 24) return '15-24';
-      if (age >= 25 && age <= 44) return '25-44';
-      if (age >= 45 && age <= 64) return '45-64';
-      if (age >= 65 && age <= 79) return '65-79';
-      if (age >= 80) return '80+';
-      return null;
-    }
 
     const genderMapping: Record<string, string> = {
       'T001038': 'totaal',
