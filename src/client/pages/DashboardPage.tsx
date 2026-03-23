@@ -14,6 +14,7 @@ import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/ui/Spinner';
 import { useAuth } from '../contexts/AuthContext';
+import { usePresentations } from '../contexts/PresentationContext';
 import { getLayout, saveLayout } from '../services/api/dashboards';
 import { getTheme } from '../services/api/themes';
 import type { ThemeConfig, LayoutItem } from '@shared/api/contracts';
@@ -22,11 +23,28 @@ export function DashboardPage() {
   const { slug } = useParams<{ slug: string }>();
   const { themes, setActiveTheme, isLoading: themesLoading } = useThemes();
   const { user } = useAuth();
+  const { presentations, setActive, addPresentation, updatePresentation } = usePresentations();
 
   const [theme, setTheme] = useState<ThemeConfig | null>(null);
   const [layout, setLayout] = useState<LayoutItem[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Create or activate a presentation tab for this slug
+  useEffect(() => {
+    if (!slug) return;
+
+    const existing = presentations.find(p => p.themeSlug === slug);
+    if (existing) {
+      setActive(existing.id);
+    } else {
+      const themeName = themes.find(t => t.slug === slug)?.name || slug;
+      addPresentation({
+        themeSlug: slug,
+        title: themeName,
+      });
+    }
+  }, [slug]);
 
   useEffect(() => {
     if (!slug) return;

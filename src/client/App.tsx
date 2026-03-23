@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { PresentationProvider } from './contexts/PresentationContext';
 import { FilterProvider } from './contexts/FilterContext';
 import { Layout } from './components/ui/Layout';
 import { ToastProvider } from './components/ui/Toast';
@@ -30,6 +31,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <ThemeProvider>
+          <PresentationProvider>
           <FilterProvider>
             <ToastProvider>
               <SuspenseWrapper>
@@ -57,6 +59,7 @@ export default function App() {
               </SuspenseWrapper>
             </ToastProvider>
           </FilterProvider>
+          </PresentationProvider>
         </ThemeProvider>
       </AuthProvider>
     </BrowserRouter>

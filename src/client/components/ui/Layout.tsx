@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Menu, X } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { PresentationTabBar } from './PresentationTabBar';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -40,6 +41,9 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="hidden md:block">
           <Header />
         </div>
+
+        {/* Presentation tabs */}
+        <PresentationTabBar />
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6 print:p-0 print:overflow-visible">
           {children}
