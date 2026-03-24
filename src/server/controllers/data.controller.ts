@@ -141,6 +141,69 @@ export async function queryData(req: Request, res: Response): Promise<void> {
   });
 }
 
+export async function queryTimeSeries(req: Request, res: Response): Promise<void> {
+  const source = req.query.source as string;
+  const geoCode = req.query.geoCode as string;
+  const dimension = req.query.dimension as string;
+  const dimensionValue = req.query.dimensionValue as string;
+
+  const sourceDef = DATA_SOURCES[source];
+  if (!sourceDef) {
+    res.status(400).json({ error: `Unknown data source: ${source}` });
+    return;
+  }
+
+  if (!geoCode) {
+    res.status(400).json({ error: 'geoCode required for time series' });
+    return;
+  }
+
+  const conditions: string[] = ['d.geo_code = $1'];
+  const params: unknown[] = [geoCode];
+  let paramIdx = 2;
+
+  if (dimension && dimensionValue) {
+    const dimCol = sourceDef.dimensionColumns.find(c =>
+      c.replace(/_/g, '') === dimension.replace(/_/g, ''),
+    );
+    if (dimCol) {
+      conditions.push(`d.${dimCol} = $${paramIdx++}`);
+      params.push(dimensionValue);
+    }
+  }
+
+  if (source === 'huishoudens') {
+    conditions.push(`d.dimension_type = $${paramIdx++}`);
+    params.push((req.query.dimensionType as string) || 'samenstelling');
+  }
+
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+  const sql = `
+    SELECT d.year, d.${sourceDef.valueColumn} as value, d.source as data_source,
+           d.confidence_lower, d.confidence_upper
+    FROM ${sourceDef.table} d
+    ${whereClause}
+    ORDER BY d.year
+    LIMIT 500
+  `;
+
+  const result = await query(sql, params);
+
+  const data = result.rows.map(row => ({
+    geoCode,
+    year: row.year,
+    value: Number(row.value),
+    source: row.data_source || 'cbs_actuals',
+    confidenceLower: row.confidence_lower ? Number(row.confidence_lower) : undefined,
+    confidenceUpper: row.confidence_upper ? Number(row.confidence_upper) : undefined,
+    dimension: dimension || sourceDef.dimensionColumns[0],
+    dimensionValue: dimensionValue || 'totaal',
+  }));
+
+  res.json({ data });
+}
+
 export async function getAvailableYears(req: Request, res: Response): Promise<void> {
   const { source } = req.params;
   const sourceDef = DATA_SOURCES[source];

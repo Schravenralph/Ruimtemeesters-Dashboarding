@@ -21,12 +21,13 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
 
   if (dimensionValues.length === 0) {
     // Simple line chart — split actuals from prognose
-    const hasPrognose = data.some(d => d.source === 'cbs_prognose');
+    const isPrognose = (d: DataPoint) => d.source === 'cbs_prognose' || d.source === 'ruimtemeesters_prognose';
+    const hasPrognose = data.some(isPrognose);
 
     const chartData = data.map(d => ({
       name: String(d.year),
-      actuals: d.source !== 'cbs_prognose' ? d.value : undefined,
-      prognose: d.source === 'cbs_prognose' ? d.value : undefined,
+      actuals: !isPrognose(d) ? d.value : undefined,
+      prognose: isPrognose(d) ? d.value : undefined,
       value: d.value, // fallback for non-source data
     }));
 
@@ -49,7 +50,7 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
           {hasPrognose ? (
             <>
               <Line type="monotone" dataKey="actuals" name="Actueel" stroke={colors[0]} strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
-              <Line type="monotone" dataKey="prognose" name="Prognose (CBS)" stroke={colors[0]} strokeWidth={2} strokeDasharray="6 3" dot={{ r: 2 }} connectNulls={false} />
+              <Line type="monotone" dataKey="prognose" name="Prognose" stroke={colors[0]} strokeWidth={2} strokeDasharray="6 3" dot={{ r: 2 }} connectNulls={false} />
               <Legend />
             </>
           ) : (

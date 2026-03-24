@@ -15,6 +15,16 @@ export async function queryData(params: {
   return api.get('/data/query', params as Record<string, string | number>);
 }
 
+export async function queryTimeSeries(params: {
+  source: string;
+  geoCode: string;
+  dimension?: string;
+  dimensionValue?: string;
+  dimensionType?: string;
+}): Promise<{ data: Array<{ year: number; value: number; source: string; confidenceLower?: number; confidenceUpper?: number }> }> {
+  return api.get('/data/timeseries', params as Record<string, string>);
+}
+
 export async function getAvailableYears(source: string): Promise<{ years: number[] }> {
   return api.get(`/data/years/${source}`);
 }

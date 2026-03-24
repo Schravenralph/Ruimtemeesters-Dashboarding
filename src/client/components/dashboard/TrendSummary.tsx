@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, BarChart3, Activity } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { api } from '../../services/api/client';
 import { useFilters } from '../../contexts/FilterContext';
+import { useTimeSeriesQuery } from '../../hooks/useTimeSeriesQuery';
 import { formatCompact, formatPercent } from '../../utils/format';
-import { MiniChart } from './MiniChart';
+import { LineChartComponent } from '../charts/LineChart';
+import { Spinner } from '../ui/Spinner';
 
 interface TrendData {
   source: string;
@@ -35,6 +37,13 @@ export function TrendSummary({ dataSource }: TrendSummaryProps) {
   const [trend, setTrend] = useState<TrendData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch full time series (actuals + prognose) for the line chart
+  const { data: timeSeriesData, isLoading: tsLoading } = useTimeSeriesQuery({
+    source: dataSource,
+    dimension: 'age_group',
+    dimensionValue: 'totaal',
+  });
+
   useEffect(() => {
     setIsLoading(true);
     api.get<TrendData>(`/trends/${dataSource}`, { geoCode: filters.geoCode })
@@ -46,22 +55,32 @@ export function TrendSummary({ dataSource }: TrendSummaryProps) {
   if (isLoading || !trend || trend.timeSeries.length < 2) return null;
 
   const { summary } = trend;
-  const chartData = trend.timeSeries.map(t => ({
+
+  // Use time series data if available (includes prognose), fallback to trend data
+  const hasPrognose = timeSeriesData.some(d => d.source === 'cbs_prognose' || d.source === 'ruimtemeesters_prognose');
+  const chartData = hasPrognose ? timeSeriesData : trend.timeSeries.map(t => ({
     geoCode: trend.geoCode,
     geoName: '',
     year: t.year,
     value: t.value,
+    source: 'cbs_actuals',
   }));
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 mb-4">
-      <div className="flex items-center gap-2 mb-3">
-        <Activity className="h-4 w-4 text-gray-500" />
-        <h4 className="text-sm font-medium text-gray-700">Trendanalyse</h4>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Activity className="h-4 w-4 text-gray-500" />
+          <h4 className="text-sm font-medium text-gray-700">Trendanalyse</h4>
+        </div>
+        {hasPrognose && (
+          <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+            incl. prognose
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* CAGR */}
         {summary.cagr !== null && (
           <div className="rounded-lg bg-gray-50 p-3">
             <p className="text-xs text-gray-400">Gem. jaarlijkse groei (CAGR)</p>
@@ -71,7 +90,6 @@ export function TrendSummary({ dataSource }: TrendSummaryProps) {
           </div>
         )}
 
-        {/* Total growth */}
         {summary.totalGrowth !== null && (
           <div className="rounded-lg bg-gray-50 p-3">
             <p className="text-xs text-gray-400">Totale groei</p>
@@ -81,7 +99,6 @@ export function TrendSummary({ dataSource }: TrendSummaryProps) {
           </div>
         )}
 
-        {/* Peak growth year */}
         {summary.peakGrowthYear && (
           <div className="rounded-lg bg-gray-50 p-3">
             <div className="flex items-center gap-1">
@@ -95,7 +112,6 @@ export function TrendSummary({ dataSource }: TrendSummaryProps) {
           </div>
         )}
 
-        {/* Lowest growth year */}
         {summary.lowestGrowthYear && (
           <div className="rounded-lg bg-gray-50 p-3">
             <div className="flex items-center gap-1">
@@ -110,9 +126,15 @@ export function TrendSummary({ dataSource }: TrendSummaryProps) {
         )}
       </div>
 
-      {/* Sparkline */}
-      <div className="mt-3 h-12">
-        <MiniChart data={chartData} color="#3b82f6" height={48} />
+      {/* Line chart with actuals + prognose */}
+      <div className="mt-4">
+        {tsLoading ? (
+          <div className="h-[300px] flex items-center justify-center">
+            <Spinner size="md" />
+          </div>
+        ) : (
+          <LineChartComponent data={chartData} />
+        )}
       </div>
     </div>
   );

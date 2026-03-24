@@ -148,7 +148,7 @@ export function DataTableComponent({ data, comparisonRow }: DataTableProps) {
               </tr>
             )}
             {sortedData.map((row, index) => {
-              const isPrognose = row.source === 'cbs_prognose';
+              const isPrognose = row.source === 'cbs_prognose' || row.source === 'ruimtemeesters_prognose';
               return (
               <tr key={index} className={isPrognose ? 'bg-yellow-50 hover:bg-yellow-100' : 'hover:bg-gray-50'}>
                 <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
