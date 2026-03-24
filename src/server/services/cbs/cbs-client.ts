@@ -37,7 +37,7 @@ interface CbsCodeItem {
  * Fetch data from CBS OData API with automatic pagination.
  * CBS returns max 100,000 rows per request; this follows nextLink for full data.
  */
-export async function cbsFetch<T>(url: string, maxPages: number = 10): Promise<T[]> {
+export async function cbsFetch<T>(url: string, maxPages: number = 50): Promise<T[]> {
   const allResults: T[] = [];
   let currentUrl: string | null = url;
   let page = 0;

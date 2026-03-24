@@ -81,8 +81,9 @@ export async function syncBevolking(yearFilter?: number): Promise<SyncResult> {
     const leeftijdMap = new Map(leeftijdCodes.map(c => [c.Identifier, c.Title]));
     const regioMap = new Map(regioCodes.map(c => [c.Identifier, c.Title]));
 
-    // Build filter: only yearly data, total marital status, gemeente + national level
-    let filter = "Measure eq 'M000352' and BurgerlijkeStaat eq 'T001019'";
+    // Build filter: only yearly data, total marital status, totaal gender only
+    // Adding Geslacht filter reduces data 3x (from 1M+ to ~350k), preventing pagination truncation
+    let filter = "Measure eq 'M000352' and BurgerlijkeStaat eq 'T001019' and Geslacht eq 'T001038'";
     if (yearFilter) {
       filter += ` and Perioden eq '${yearFilter}JJ00'`;
     }
