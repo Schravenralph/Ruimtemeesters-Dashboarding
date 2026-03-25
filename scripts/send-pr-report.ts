@@ -221,7 +221,8 @@ const html = `
 
 <div class="meta">
   <p>Gegenereerd door Claude Code</p>
-  <p>Repos: <a href="https://github.com/Schravenralph/Ruimtemeesters-Dashboarding">Dashboarding</a> | <a href="https://github.com/Schravenralph/Ruimtemeesters-TSA/pull/1">TSA PR #1</a></p>
+  <p>Dashboard: <a href="https://dashboards.datameesters.nl">dashboards.datameesters.nl</a></p>
+  <p>Repos: <a href="https://github.com/Schravenralph/Ruimtemeesters-Dashboarding">Dashboarding</a> | <a href="https://github.com/Schravenralph/Ruimtemeesters-TSA">TSA Engine</a></p>
 </div>
 
 </body>
