@@ -5,10 +5,18 @@ import { z } from 'zod';
 export const ChartType = z.enum([
   'bar',
   'stacked-bar',
+  'horizontal-bar',
   'line',
+  'stacked-area',
   'pie',
+  'donut',
   'radar',
   'table',
+  'color-table',
+  'number',
+  'treemap',
+  'heatmap',
+  'waterfall',
   'choropleth',
   'pyramid',
 ]);

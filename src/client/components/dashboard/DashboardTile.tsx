@@ -90,6 +90,7 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
             data={data}
             isLoading={isLoading}
             error={error}
+            config={tile.config as Record<string, unknown>}
           />
         </div>
 
