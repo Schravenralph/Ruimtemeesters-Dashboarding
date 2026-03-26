@@ -1,29 +1,22 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useThemes } from '../contexts/ThemeContext';
 
 /**
  * Global keyboard shortcuts for navigation.
  *
- * Alt+1..5: Navigate to themes
+ * Alt+1..9: Navigate to themes (dynamic, based on loaded themes)
+ * Alt+H: Home (first overview theme)
  * Alt+M: My Dashboards
  * Alt+A: Admin
  * Alt+F: Focus filter bar search
- * Escape: Close modals/menus
  */
 export function useKeyboardShortcuts() {
   const navigate = useNavigate();
+  const { themes } = useThemes();
 
   useEffect(() => {
-    const themeRoutes = [
-      '/dashboard/overzicht',
-      '/dashboard/bevolking',
-      '/dashboard/huishoudens',
-      '/dashboard/woningen',
-      '/dashboard/woningtekort',
-    ];
-
     function handleKeyDown(e: KeyboardEvent) {
-      // Ignore when typing in inputs
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
@@ -34,13 +27,19 @@ export function useKeyboardShortcuts() {
 
       if (e.altKey) {
         const num = parseInt(e.key);
-        if (num >= 1 && num <= 5) {
+        if (num >= 1 && num <= Math.min(9, themes.length)) {
           e.preventDefault();
-          navigate(themeRoutes[num - 1]);
+          navigate(`/dashboard/${themes[num - 1].slug}`);
           return;
         }
 
         switch (e.key.toLowerCase()) {
+          case 'h': {
+            e.preventDefault();
+            const overview = themes.find(t => t.isOverview);
+            navigate(`/dashboard/${overview?.slug || themes[0]?.slug || ''}`);
+            break;
+          }
           case 'm':
             e.preventDefault();
             navigate('/mijn-dashboards');
@@ -49,17 +48,17 @@ export function useKeyboardShortcuts() {
             e.preventDefault();
             navigate('/admin');
             break;
-          case 'f':
+          case 'f': {
             e.preventDefault();
-            // Focus the first search input
             const searchInput = document.querySelector('input[type="search"]') as HTMLInputElement;
             searchInput?.focus();
             break;
+          }
         }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate]);
+  }, [navigate, themes]);
 }

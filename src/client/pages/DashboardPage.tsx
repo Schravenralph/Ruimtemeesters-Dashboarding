@@ -164,8 +164,8 @@ export function DashboardPage() {
       {/* Theme info */}
       <ThemeInfoPanel theme={theme} />
 
-      {/* Overview Stats (only for overzicht theme) */}
-      {theme.slug === 'overzicht' && (
+      {/* Overview Stats (only for overview themes) */}
+      {theme.isOverview && (
         <>
           <StatsSummary />
           <OverviewGrid />
@@ -173,17 +173,17 @@ export function DashboardPage() {
       )}
 
       {/* Filters */}
-      <FilterBar dataSource={theme.tiles[0]?.dataSource || 'bevolking'} themeSlug={theme.slug} />
+      <FilterBar dataSource={theme.tiles[0]?.dataSource || ''} themeSlug={theme.slug} />
 
       {/* Comparison View */}
       <ComparisonView
-        dataSource={theme.tiles[0]?.dataSource || 'bevolking'}
+        dataSource={theme.tiles[0]?.dataSource || ''}
         title={theme.name}
       />
 
       {/* Trend Summary (non-overview themes) */}
-      {theme.slug !== 'overzicht' && (
-        <TrendSummary dataSource={theme.tiles[0]?.dataSource || 'bevolking'} />
+      {!theme.isOverview && theme.tiles[0]?.dataSource && (
+        <TrendSummary dataSource={theme.tiles[0]?.dataSource} />
       )}
 
       {/* Drilldown */}
