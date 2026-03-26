@@ -1,33 +1,7 @@
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
 import { DataQueryParams } from '../../shared/api/contracts.js';
-
-const DATA_SOURCES: Record<string, {
-  table: string;
-  dimensionColumns: string[];
-  valueColumn: string;
-}> = {
-  bevolking: {
-    table: 'data_bevolking',
-    dimensionColumns: ['age_group', 'gender'],
-    valueColumn: 'value',
-  },
-  huishoudens: {
-    table: 'data_huishoudens',
-    dimensionColumns: ['household_type'],
-    valueColumn: 'value',
-  },
-  woningen: {
-    table: 'data_woningen',
-    dimensionColumns: ['tenure_type', 'dwelling_type'],
-    valueColumn: 'value',
-  },
-  woningtekort: {
-    table: 'data_woningtekort',
-    dimensionColumns: ['metric'],
-    valueColumn: 'value',
-  },
-};
+import { getDataSource } from '../services/data-source-registry.js';
 
 export async function queryData(req: Request, res: Response): Promise<void> {
   const parsed = DataQueryParams.safeParse(req.query);
@@ -38,7 +12,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
 
   const { source, geoCode, geoLevel, year, dimension, dimensionValue, limit, offset, dataOrigin, dimensionType } = parsed.data;
 
-  const sourceDef = DATA_SOURCES[source];
+  const sourceDef = await getDataSource(source);
   if (!sourceDef) {
     res.status(400).json({ error: `Unknown data source: ${source}` });
     return;
@@ -77,15 +51,12 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     params.push(dataOrigin);
   }
 
-  // Filter by dimension_type (huishoudens: samenstelling vs leeftijd_referentiepersoon)
-  if (source === 'huishoudens') {
-    if (dimensionType) {
-      conditions.push(`d.dimension_type = $${paramIdx++}`);
-      params.push(dimensionType);
-    } else {
-      // Default to samenstelling for backward compatibility
-      conditions.push(`d.dimension_type = $${paramIdx++}`);
-      params.push('samenstelling');
+  // Apply source-specific default filters from registry (replaces hardcoded huishoudens logic)
+  if (sourceDef.defaultFilters) {
+    for (const [col, defaultVal] of Object.entries(sourceDef.defaultFilters)) {
+      const queryVal = req.query[col] as string;
+      conditions.push(`d.${col} = $${paramIdx++}`);
+      params.push(queryVal || defaultVal);
     }
   }
 
@@ -93,7 +64,6 @@ export async function queryData(req: Request, res: Response): Promise<void> {
   const limitClause = limit ? `LIMIT ${Math.min(limit, 10000)}` : 'LIMIT 1000';
   const offsetClause = offset ? `OFFSET ${offset}` : '';
 
-  // Build dimension select columns
   const dimSelects = sourceDef.dimensionColumns
     .map(c => `d.${c}`)
     .join(', ');
@@ -103,7 +73,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
            ${dimSelects},
            d.${sourceDef.valueColumn} as value,
            d.source as data_source
-    FROM ${sourceDef.table} d
+    FROM ${sourceDef.tableName} d
     JOIN geo_areas g ON g.code = d.geo_code
     ${whereClause}
     ORDER BY d.year, g.name
@@ -112,10 +82,9 @@ export async function queryData(req: Request, res: Response): Promise<void> {
 
   const result = await query(sql, params);
 
-  // Count total
   const countSql = `
     SELECT COUNT(*) as total
-    FROM ${sourceDef.table} d
+    FROM ${sourceDef.tableName} d
     JOIN geo_areas g ON g.code = d.geo_code
     ${whereClause}
   `;
@@ -136,7 +105,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     metadata: {
       source,
       totalRecords: parseInt(countResult.rows[0].total, 10),
-      unit: source === 'woningtekort' ? 'percentage' : 'aantal',
+      unit: sourceDef.unit,
     },
   });
 }
@@ -147,7 +116,7 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
   const dimension = req.query.dimension as string;
   const dimensionValue = req.query.dimensionValue as string;
 
-  const sourceDef = DATA_SOURCES[source];
+  const sourceDef = await getDataSource(source);
   if (!sourceDef) {
     res.status(400).json({ error: `Unknown data source: ${source}` });
     return;
@@ -172,9 +141,13 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
     }
   }
 
-  if (source === 'huishoudens') {
-    conditions.push(`d.dimension_type = $${paramIdx++}`);
-    params.push((req.query.dimensionType as string) || 'samenstelling');
+  // Apply default filters from registry
+  if (sourceDef.defaultFilters) {
+    for (const [col, defaultVal] of Object.entries(sourceDef.defaultFilters)) {
+      const queryVal = req.query[col] as string;
+      conditions.push(`d.${col} = $${paramIdx++}`);
+      params.push(queryVal || defaultVal);
+    }
   }
 
   const whereClause = `WHERE ${conditions.join(' AND ')}`;
@@ -182,7 +155,7 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
   const sql = `
     SELECT d.year, d.${sourceDef.valueColumn} as value, d.source as data_source,
            d.confidence_lower, d.confidence_upper
-    FROM ${sourceDef.table} d
+    FROM ${sourceDef.tableName} d
     ${whereClause}
     ORDER BY d.year
     LIMIT 500
@@ -206,14 +179,14 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
 
 export async function getAvailableYears(req: Request, res: Response): Promise<void> {
   const { source } = req.params;
-  const sourceDef = DATA_SOURCES[source];
+  const sourceDef = await getDataSource(source);
   if (!sourceDef) {
     res.status(400).json({ error: `Unknown data source: ${source}` });
     return;
   }
 
   const result = await query(
-    `SELECT DISTINCT year FROM ${sourceDef.table} ORDER BY year`,
+    `SELECT DISTINCT year FROM ${sourceDef.tableName} ORDER BY year`,
   );
 
   res.json({ years: result.rows.map(r => r.year) });
@@ -221,7 +194,7 @@ export async function getAvailableYears(req: Request, res: Response): Promise<vo
 
 export async function getDimensions(req: Request, res: Response): Promise<void> {
   const { source } = req.params;
-  const sourceDef = DATA_SOURCES[source];
+  const sourceDef = await getDataSource(source);
   if (!sourceDef) {
     res.status(400).json({ error: `Unknown data source: ${source}` });
     return;
@@ -230,7 +203,7 @@ export async function getDimensions(req: Request, res: Response): Promise<void> 
   const dimensions = await Promise.all(
     sourceDef.dimensionColumns.map(async col => {
       const result = await query(
-        `SELECT DISTINCT ${col} as value FROM ${sourceDef.table} WHERE ${col} IS NOT NULL ORDER BY ${col}`,
+        `SELECT DISTINCT ${col} as value FROM ${sourceDef.tableName} WHERE ${col} IS NOT NULL ORDER BY ${col}`,
       );
       return {
         id: col,

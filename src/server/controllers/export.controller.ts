@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
 import { z } from 'zod';
+import { getDataSource } from '../services/data-source-registry.js';
 
 const ExportParams = z.object({
   source: z.string(),
@@ -10,25 +11,6 @@ const ExportParams = z.object({
   year: z.coerce.number().optional(),
 });
 
-const DATA_SOURCES: Record<string, { table: string; columns: string[] }> = {
-  bevolking: {
-    table: 'data_bevolking',
-    columns: ['geo_code', 'year', 'age_group', 'gender', 'value'],
-  },
-  huishoudens: {
-    table: 'data_huishoudens',
-    columns: ['geo_code', 'year', 'household_type', 'value'],
-  },
-  woningen: {
-    table: 'data_woningen',
-    columns: ['geo_code', 'year', 'tenure_type', 'dwelling_type', 'value'],
-  },
-  woningtekort: {
-    table: 'data_woningtekort',
-    columns: ['geo_code', 'year', 'metric', 'value'],
-  },
-};
-
 export async function exportData(req: Request, res: Response): Promise<void> {
   const parsed = ExportParams.safeParse(req.query);
   if (!parsed.success) {
@@ -37,12 +19,16 @@ export async function exportData(req: Request, res: Response): Promise<void> {
   }
 
   const { source, format, geoCode, geoLevel, year } = parsed.data;
-  const sourceDef = DATA_SOURCES[source];
+  const sourceDef = await getDataSource(source);
 
   if (!sourceDef) {
     res.status(400).json({ error: `Unknown source: ${source}` });
     return;
   }
+
+  // Derive export columns from registry
+  const columns = sourceDef.exportColumns
+    || ['geo_code', 'year', ...sourceDef.dimensionColumns, sourceDef.valueColumn, 'source'];
 
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -63,10 +49,10 @@ export async function exportData(req: Request, res: Response): Promise<void> {
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const columnSelects = sourceDef.columns.map(c => `d.${c}`).join(', ');
+  const columnSelects = columns.map(c => `d.${c}`).join(', ');
   const sql = `
     SELECT ${columnSelects}, g.name as geo_name
-    FROM ${sourceDef.table} d
+    FROM ${sourceDef.tableName} d
     JOIN geo_areas g ON g.code = d.geo_code
     ${whereClause}
     ORDER BY d.year, g.name
@@ -76,7 +62,7 @@ export async function exportData(req: Request, res: Response): Promise<void> {
   const result = await query(sql, params);
 
   if (format === 'csv') {
-    const headers = ['geo_name', ...sourceDef.columns];
+    const headers = ['geo_name', ...columns];
     const csvRows = [
       headers.join(','),
       ...result.rows.map(row =>
