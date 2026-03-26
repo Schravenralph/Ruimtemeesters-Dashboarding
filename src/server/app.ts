@@ -28,6 +28,7 @@ import analyticsRoutes from './routes/analytics.routes.js';
 import preferencesRoutes from './routes/preferences.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
 import apiKeyRoutes from './routes/api-key.routes.js';
+import supercategoryRoutes from './routes/supercategory.routes.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
@@ -85,6 +86,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/preferences', preferencesRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
+app.use('/api/supercategories', supercategoryRoutes);
 
 // Error handling (must be last)
 app.use('/api', notFoundHandler);
