@@ -65,9 +65,28 @@ export const ThemeConfig = z.object({
   icon: z.string().optional(),
   tiles: z.array(TileConfig),
   order: z.number().default(0),
-  isSystem: z.boolean().default(true), // false = user-created
+  isSystem: z.boolean().default(true),
+  supercategory: z.string().optional(),
+  isOverview: z.boolean().optional(),
 });
 export type ThemeConfig = z.infer<typeof ThemeConfig>;
+
+// ── Supercategory ─────────────────────────────────────────────────────────────
+
+export const Supercategory = z.object({
+  key: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  icon: z.string().nullable(),
+  color: z.string().nullable(),
+  sortOrder: z.number(),
+  themes: z.array(z.object({
+    slug: z.string(),
+    name: z.string(),
+    isOverview: z.boolean().optional(),
+  })).optional(),
+});
+export type Supercategory = z.infer<typeof Supercategory>;
 
 // ── Dashboard Layout ─────────────────────────────────────────────────────────
 
