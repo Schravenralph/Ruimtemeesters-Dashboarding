@@ -3,6 +3,12 @@ import { query } from '../db/pool.js';
 import { z } from 'zod';
 import { getDataSource } from '../services/data-source-registry.js';
 
+const IDENT_RE = /^[a-z_][a-z0-9_]*$/i;
+function safeIdent(name: string): string {
+  if (!IDENT_RE.test(name)) throw new Error(`Invalid SQL identifier: ${name}`);
+  return `"${name}"`;
+}
+
 const ExportParams = z.object({
   source: z.string(),
   format: z.enum(['csv', 'json']),
@@ -49,10 +55,10 @@ export async function exportData(req: Request, res: Response): Promise<void> {
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const columnSelects = columns.map(c => `d.${c}`).join(', ');
+  const columnSelects = columns.map(c => `d.${safeIdent(c)}`).join(', ');
   const sql = `
     SELECT ${columnSelects}, g.name as geo_name
-    FROM ${sourceDef.tableName} d
+    FROM ${safeIdent(sourceDef.tableName)} d
     JOIN geo_areas g ON g.code = d.geo_code
     ${whereClause}
     ORDER BY d.year, g.name

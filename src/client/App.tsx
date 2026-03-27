@@ -27,7 +27,10 @@ function SuspenseWrapper({ children }: { children: React.ReactNode }) {
 }
 
 function DashboardRedirect() {
-  const { themes } = useThemes();
+  const { themes, isLoading } = useThemes();
+
+  if (isLoading) return <LoadingOverlay message="Laden..." />;
+
   const overview = themes.find(t => t.isOverview);
   const fallback = overview?.slug || themes[0]?.slug || 'overzicht';
   return <Navigate to={`/dashboard/${fallback}`} replace />;

@@ -17,6 +17,8 @@ export function PeriodBar({ dataSource }: PeriodBarProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const yearsRef = useRef(years);
+  yearsRef.current = years; // Keep ref in sync for interval closure
 
   useEffect(() => {
     if (!dataSource) return;
@@ -43,8 +45,9 @@ export function PeriodBar({ dataSource }: PeriodBarProps) {
 
     intervalRef.current = setInterval(() => {
       idx++;
-      if (idx >= years.length) idx = 0;
-      setYear(years[idx]);
+      const currentYears = yearsRef.current;
+      if (idx >= currentYears.length) idx = 0;
+      setYear(currentYears[idx]);
     }, 1200);
   }
 

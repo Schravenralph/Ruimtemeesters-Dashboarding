@@ -3,6 +3,13 @@ import { query } from '../db/pool.js';
 import { DataQueryParams } from '../../shared/api/contracts.js';
 import { getDataSource } from '../services/data-source-registry.js';
 
+/** Sanitize SQL identifiers from DB-sourced values (table/column names). */
+const IDENT_RE = /^[a-z_][a-z0-9_]*$/i;
+function safeIdent(name: string): string {
+  if (!IDENT_RE.test(name)) throw new Error(`Invalid SQL identifier: ${name}`);
+  return `"${name}"`;
+}
+
 export async function queryData(req: Request, res: Response): Promise<void> {
   const parsed = DataQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -40,7 +47,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
       c.replace(/_/g, '') === dimension.replace(/_/g, ''),
     );
     if (dimCol) {
-      conditions.push(`d.${dimCol} = $${paramIdx++}`);
+      conditions.push(`d.${safeIdent(dimCol)} = $${paramIdx++}`);
       params.push(dimensionValue);
     }
   }
@@ -51,11 +58,13 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     params.push(dataOrigin);
   }
 
-  // Apply source-specific default filters from registry (replaces hardcoded huishoudens logic)
+  // Apply source-specific default filters from registry
   if (sourceDef.defaultFilters) {
     for (const [col, defaultVal] of Object.entries(sourceDef.defaultFilters)) {
-      const queryVal = req.query[col] as string;
-      conditions.push(`d.${col} = $${paramIdx++}`);
+      // Check both snake_case (DB column) and camelCase (query param) forms
+      const camelCol = col.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      const queryVal = (req.query[col] as string) || (req.query[camelCol] as string);
+      conditions.push(`d.${safeIdent(col)} = $${paramIdx++}`);
       params.push(queryVal || defaultVal);
     }
   }
@@ -65,15 +74,15 @@ export async function queryData(req: Request, res: Response): Promise<void> {
   const offsetClause = offset ? `OFFSET ${offset}` : '';
 
   const dimSelects = sourceDef.dimensionColumns
-    .map(c => `d.${c}`)
+    .map(c => `d.${safeIdent(c)}`)
     .join(', ');
 
   const sql = `
     SELECT d.geo_code, g.name as geo_name, d.year,
            ${dimSelects},
-           d.${sourceDef.valueColumn} as value,
+           d.${safeIdent(sourceDef.valueColumn)} as value,
            d.source as data_source
-    FROM ${sourceDef.tableName} d
+    FROM ${safeIdent(sourceDef.tableName)} d
     JOIN geo_areas g ON g.code = d.geo_code
     ${whereClause}
     ORDER BY d.year, g.name
@@ -84,7 +93,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
 
   const countSql = `
     SELECT COUNT(*) as total
-    FROM ${sourceDef.tableName} d
+    FROM ${safeIdent(sourceDef.tableName)} d
     JOIN geo_areas g ON g.code = d.geo_code
     ${whereClause}
   `;
@@ -136,7 +145,7 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
       c.replace(/_/g, '') === dimension.replace(/_/g, ''),
     );
     if (dimCol) {
-      conditions.push(`d.${dimCol} = $${paramIdx++}`);
+      conditions.push(`d.${safeIdent(dimCol)} = $${paramIdx++}`);
       params.push(dimensionValue);
     }
   }
@@ -144,8 +153,9 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
   // Apply default filters from registry
   if (sourceDef.defaultFilters) {
     for (const [col, defaultVal] of Object.entries(sourceDef.defaultFilters)) {
-      const queryVal = req.query[col] as string;
-      conditions.push(`d.${col} = $${paramIdx++}`);
+      const camelCol = col.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      const queryVal = (req.query[col] as string) || (req.query[camelCol] as string);
+      conditions.push(`d.${safeIdent(col)} = $${paramIdx++}`);
       params.push(queryVal || defaultVal);
     }
   }
@@ -153,9 +163,9 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
   const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
   const sql = `
-    SELECT d.year, d.${sourceDef.valueColumn} as value, d.source as data_source,
+    SELECT d.year, d.${safeIdent(sourceDef.valueColumn)} as value, d.source as data_source,
            d.confidence_lower, d.confidence_upper
-    FROM ${sourceDef.tableName} d
+    FROM ${safeIdent(sourceDef.tableName)} d
     ${whereClause}
     ORDER BY d.year
     LIMIT 500
@@ -186,7 +196,7 @@ export async function getAvailableYears(req: Request, res: Response): Promise<vo
   }
 
   const result = await query(
-    `SELECT DISTINCT year FROM ${sourceDef.tableName} ORDER BY year`,
+    `SELECT DISTINCT year FROM ${safeIdent(sourceDef.tableName)} ORDER BY year`,
   );
 
   res.json({ years: result.rows.map(r => r.year) });
@@ -203,7 +213,7 @@ export async function getDimensions(req: Request, res: Response): Promise<void> 
   const dimensions = await Promise.all(
     sourceDef.dimensionColumns.map(async col => {
       const result = await query(
-        `SELECT DISTINCT ${col} as value FROM ${sourceDef.tableName} WHERE ${col} IS NOT NULL ORDER BY ${col}`,
+        `SELECT DISTINCT ${safeIdent(col)} as value FROM ${safeIdent(sourceDef.tableName)} WHERE ${safeIdent(col)} IS NOT NULL ORDER BY ${safeIdent(col)}`,
       );
       return {
         id: col,
