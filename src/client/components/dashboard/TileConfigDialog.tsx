@@ -263,6 +263,16 @@ export function TileConfigDialog({ tile, isOpen, onClose, onUpdate }: TileConfig
                 />
               </div>
             </div>
+
+            {/* Klassenindeling button (for choropleth/color-table) */}
+            {(chartType === 'choropleth' || chartType === 'color-table' || chartType === 'heatmap') && (
+              <div className="pt-2 border-t border-gray-100">
+                <p className="text-xs text-gray-500 mb-2">
+                  Gebruik de Klassenindeling editor (beschikbaar in het kaart/tabel menu) voor geavanceerde kleurklasse-instellingen:
+                  aantal klassen, methode, kleurenschema, handmatige grenzen.
+                </p>
+              </div>
+            )}
           </>
         )}
 
