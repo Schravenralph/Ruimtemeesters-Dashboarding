@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Menu, X } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { SupercategoryNav } from './SupercategoryNav';
 import { PresentationTabBar } from './PresentationTabBar';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
@@ -41,6 +42,9 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="hidden md:block">
           <Header />
         </div>
+
+        {/* Supercategory navigation */}
+        <SupercategoryNav />
 
         {/* Presentation tabs */}
         <PresentationTabBar />

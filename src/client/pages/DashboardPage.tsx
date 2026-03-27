@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Download, Edit3, Save, X } from 'lucide-react';
+import { Download, Edit3, Save, X, FolderOpen, Table2 } from 'lucide-react';
 import { useThemes } from '../contexts/ThemeContext';
 import { FilterBar } from '../components/filters/FilterBar';
 import { TileGrid } from '../components/dashboard/TileGrid';
@@ -10,6 +10,9 @@ import { StatsSummary } from '../components/dashboard/StatsSummary';
 import { ThemeInfoPanel } from '../components/dashboard/ThemeInfoPanel';
 import { OverviewGrid } from '../components/dashboard/OverviewGrid';
 import { TrendSummary } from '../components/dashboard/TrendSummary';
+import { PeriodBar } from '../components/dashboard/PeriodBar';
+import { MultiAreaTable } from '../components/dashboard/MultiAreaTable';
+import { WorkspaceManager } from '../components/dashboard/WorkspaceManager';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/ui/Spinner';
@@ -29,6 +32,8 @@ export function DashboardPage() {
   const [layout, setLayout] = useState<LayoutItem[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showComparisonTable, setShowComparisonTable] = useState(false);
+  const [showWorkspace, setShowWorkspace] = useState(false);
 
   // Create or activate a presentation tab for this slug
   useEffect(() => {
@@ -124,6 +129,8 @@ export function DashboardPage() {
     );
   }
 
+  const mainDataSource = theme.tiles[0]?.dataSource || '';
+
   return (
     <div>
       {/* Theme Header */}
@@ -135,9 +142,17 @@ export function DashboardPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setShowComparisonTable(!showComparisonTable)}>
+            <Table2 className="h-4 w-4" />
+            {showComparisonTable ? 'Verberg' : 'Vergelijk gebieden'}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setShowWorkspace(true)}>
+            <FolderOpen className="h-4 w-4" />
+            Werkruimte
+          </Button>
           <Button variant="secondary" size="sm" onClick={handleExportAll}>
             <Download className="h-4 w-4" />
-            Alles downloaden (PDF)
+            PDF
           </Button>
           {user && (
             isEditing ? (
@@ -164,8 +179,8 @@ export function DashboardPage() {
       {/* Theme info */}
       <ThemeInfoPanel theme={theme} />
 
-      {/* Overview Stats (only for overzicht theme) */}
-      {theme.slug === 'overzicht' && (
+      {/* Overview Stats (only for overview themes) */}
+      {theme.isOverview && (
         <>
           <StatsSummary />
           <OverviewGrid />
@@ -173,22 +188,29 @@ export function DashboardPage() {
       )}
 
       {/* Filters */}
-      <FilterBar dataSource={theme.tiles[0]?.dataSource || 'bevolking'} themeSlug={theme.slug} />
+      <FilterBar dataSource={mainDataSource} themeSlug={theme.slug} />
+
+      {/* Multi-Area Comparison Table (toggle) */}
+      {showComparisonTable && mainDataSource && (
+        <div className="mb-4">
+          <MultiAreaTable dataSource={mainDataSource} />
+        </div>
+      )}
 
       {/* Comparison View */}
       <ComparisonView
-        dataSource={theme.tiles[0]?.dataSource || 'bevolking'}
+        dataSource={mainDataSource}
         title={theme.name}
       />
 
       {/* Trend Summary (non-overview themes) */}
-      {theme.slug !== 'overzicht' && (
-        <TrendSummary dataSource={theme.tiles[0]?.dataSource || 'bevolking'} />
+      {!theme.isOverview && mainDataSource && (
+        <TrendSummary dataSource={mainDataSource} />
       )}
 
       {/* Drilldown */}
       <DrilldownPanel
-        dataSource={theme.tiles[0]?.dataSource || 'bevolking'}
+        dataSource={mainDataSource}
         onDimensionSelect={() => {}}
       />
 
@@ -199,6 +221,12 @@ export function DashboardPage() {
         editable={isEditing}
         onLayoutChange={setLayout}
       />
+
+      {/* Period Animation Bar */}
+      {mainDataSource && <PeriodBar dataSource={mainDataSource} />}
+
+      {/* Workspace Manager Modal */}
+      <WorkspaceManager isOpen={showWorkspace} onClose={() => setShowWorkspace(false)} />
     </div>
   );
 }

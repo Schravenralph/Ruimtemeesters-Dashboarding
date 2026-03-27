@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
-import { ThemeProvider } from './contexts/ThemeContext';
+import { ThemeProvider, useThemes } from './contexts/ThemeContext';
 import { PresentationProvider } from './contexts/PresentationContext';
 import { FilterProvider } from './contexts/FilterContext';
 import { Layout } from './components/ui/Layout';
@@ -26,6 +26,16 @@ function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<LoadingOverlay message="Pagina laden..." />}>{children}</Suspense>;
 }
 
+function DashboardRedirect() {
+  const { themes, isLoading } = useThemes();
+
+  if (isLoading) return <LoadingOverlay message="Laden..." />;
+
+  const overview = themes.find(t => t.isOverview);
+  const fallback = overview?.slug || themes[0]?.slug || 'overzicht';
+  return <Navigate to={`/dashboard/${fallback}`} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -43,7 +53,8 @@ export default function App() {
                   <Route path="/embed/:slug" element={<EmbedPage />} />
 
                   {/* App routes with layout */}
-                  <Route path="/" element={<Layout><Navigate to="/dashboard/overzicht" replace /></Layout>} />
+                  <Route path="/" element={<Layout><Navigate to="/dashboard" replace /></Layout>} />
+                  <Route path="/dashboard" element={<Layout><DashboardRedirect /></Layout>} />
                   <Route path="/dashboard/:slug" element={<Layout><DashboardPage /></Layout>} />
                   <Route path="/mijn-dashboards" element={<Layout><CustomDashboardsPage /></Layout>} />
                   <Route path="/mijn-dashboards/:id" element={<Layout><CustomDashboardEditorPage /></Layout>} />
@@ -54,7 +65,7 @@ export default function App() {
                   <Route path="/rapport" element={<Layout><ReportPage /></Layout>} />
 
                   {/* Fallback */}
-                  <Route path="*" element={<Navigate to="/dashboard/overzicht" replace />} />
+                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </SuspenseWrapper>
             </ToastProvider>

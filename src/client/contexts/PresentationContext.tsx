@@ -46,8 +46,8 @@ const defaultFilters: FilterState = {
 function createDefaultPresentation(): Presentation {
   return {
     id: `pres-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    title: 'Overzicht',
-    themeSlug: 'overzicht',
+    title: 'Dashboard',
+    themeSlug: '',
     filters: { ...defaultFilters },
     chartType: 'table',
     transformation: 'none',

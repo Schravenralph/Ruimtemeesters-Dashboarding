@@ -3,6 +3,7 @@ import { Save, Globe, Palette, Bell } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { Card, CardHeader } from '../components/ui/Card';
+import { useThemes } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/ui/Toast';
 import { useLocalStorage } from '../hooks/useLocalStorage';
@@ -11,9 +12,10 @@ import { setLocale, getLocale, getSupportedLocales } from '../utils/i18n';
 export function SettingsPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { themes } = useThemes();
 
   const [locale, setLocaleState] = useLocalStorage<string>('locale', getLocale());
-  const [defaultTheme, setDefaultTheme] = useLocalStorage('defaultTheme', 'overzicht');
+  const [defaultTheme, setDefaultTheme] = useLocalStorage('defaultTheme', '');
   const [defaultYear, setDefaultYear] = useLocalStorage('defaultYear', '2024');
   const [autoRefresh, setAutoRefresh] = useLocalStorage('autoRefresh', false);
   const [compactNumbers, setCompactNumbers] = useLocalStorage('compactNumbers', true);
@@ -77,13 +79,7 @@ export function SettingsPage() {
               label="Standaard thema"
               value={defaultTheme}
               onChange={(e) => setDefaultTheme(e.target.value)}
-              options={[
-                { value: 'overzicht', label: 'Overzicht' },
-                { value: 'bevolking', label: 'Bevolking' },
-                { value: 'huishoudens', label: 'Huishoudens' },
-                { value: 'woningen', label: 'Woningen' },
-                { value: 'woningtekort', label: 'Woningtekort' },
-              ]}
+              options={themes.map(t => ({ value: t.slug, label: t.name }))}
             />
             <Select
               label="Standaard jaar"

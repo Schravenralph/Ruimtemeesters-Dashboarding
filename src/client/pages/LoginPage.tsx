@@ -27,7 +27,7 @@ export function LoginPage() {
       } else {
         await login(email, password);
       }
-      navigate('/dashboard/overzicht');
+      navigate('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Inloggen mislukt');
     } finally {

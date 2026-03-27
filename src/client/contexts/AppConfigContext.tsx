@@ -16,7 +16,7 @@ interface AppConfig {
 
 const defaultConfig: AppConfig = {
   locale: 'nl',
-  defaultTheme: 'overzicht',
+  defaultTheme: '',
   defaultYear: 2024,
   compactNumbers: true,
   chartAnimations: true,

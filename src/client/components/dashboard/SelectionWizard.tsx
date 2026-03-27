@@ -95,7 +95,7 @@ export function SelectionWizard({ isOpen, onClose, onComplete }: SelectionWizard
         {step === 0 && (
           <div className="space-y-2">
             <h3 className="text-lg font-semibold mb-3">Kies een onderwerp</h3>
-            {themes.filter(t => t.slug !== 'overzicht').map(theme => (
+            {themes.filter(t => !t.isOverview).map(theme => (
               <button
                 key={theme.id}
                 onClick={() => setSelectedTheme(theme.slug)}

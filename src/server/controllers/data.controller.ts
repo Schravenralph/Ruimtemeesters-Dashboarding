@@ -1,33 +1,14 @@
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
 import { DataQueryParams } from '../../shared/api/contracts.js';
+import { getDataSource } from '../services/data-source-registry.js';
 
-const DATA_SOURCES: Record<string, {
-  table: string;
-  dimensionColumns: string[];
-  valueColumn: string;
-}> = {
-  bevolking: {
-    table: 'data_bevolking',
-    dimensionColumns: ['age_group', 'gender'],
-    valueColumn: 'value',
-  },
-  huishoudens: {
-    table: 'data_huishoudens',
-    dimensionColumns: ['household_type'],
-    valueColumn: 'value',
-  },
-  woningen: {
-    table: 'data_woningen',
-    dimensionColumns: ['tenure_type', 'dwelling_type'],
-    valueColumn: 'value',
-  },
-  woningtekort: {
-    table: 'data_woningtekort',
-    dimensionColumns: ['metric'],
-    valueColumn: 'value',
-  },
-};
+/** Sanitize SQL identifiers from DB-sourced values (table/column names). */
+const IDENT_RE = /^[a-z_][a-z0-9_]*$/i;
+function safeIdent(name: string): string {
+  if (!IDENT_RE.test(name)) throw new Error(`Invalid SQL identifier: ${name}`);
+  return `"${name}"`;
+}
 
 export async function queryData(req: Request, res: Response): Promise<void> {
   const parsed = DataQueryParams.safeParse(req.query);
@@ -38,7 +19,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
 
   const { source, geoCode, geoLevel, year, dimension, dimensionValue, limit, offset, dataOrigin, dimensionType } = parsed.data;
 
-  const sourceDef = DATA_SOURCES[source];
+  const sourceDef = await getDataSource(source);
   if (!sourceDef) {
     res.status(400).json({ error: `Unknown data source: ${source}` });
     return;
@@ -66,7 +47,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
       c.replace(/_/g, '') === dimension.replace(/_/g, ''),
     );
     if (dimCol) {
-      conditions.push(`d.${dimCol} = $${paramIdx++}`);
+      conditions.push(`d.${safeIdent(dimCol)} = $${paramIdx++}`);
       params.push(dimensionValue);
     }
   }
@@ -77,15 +58,14 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     params.push(dataOrigin);
   }
 
-  // Filter by dimension_type (huishoudens: samenstelling vs leeftijd_referentiepersoon)
-  if (source === 'huishoudens') {
-    if (dimensionType) {
-      conditions.push(`d.dimension_type = $${paramIdx++}`);
-      params.push(dimensionType);
-    } else {
-      // Default to samenstelling for backward compatibility
-      conditions.push(`d.dimension_type = $${paramIdx++}`);
-      params.push('samenstelling');
+  // Apply source-specific default filters from registry
+  if (sourceDef.defaultFilters) {
+    for (const [col, defaultVal] of Object.entries(sourceDef.defaultFilters)) {
+      // Check both snake_case (DB column) and camelCase (query param) forms
+      const camelCol = col.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      const queryVal = (req.query[col] as string) || (req.query[camelCol] as string);
+      conditions.push(`d.${safeIdent(col)} = $${paramIdx++}`);
+      params.push(queryVal || defaultVal);
     }
   }
 
@@ -93,17 +73,16 @@ export async function queryData(req: Request, res: Response): Promise<void> {
   const limitClause = limit ? `LIMIT ${Math.min(limit, 10000)}` : 'LIMIT 1000';
   const offsetClause = offset ? `OFFSET ${offset}` : '';
 
-  // Build dimension select columns
   const dimSelects = sourceDef.dimensionColumns
-    .map(c => `d.${c}`)
+    .map(c => `d.${safeIdent(c)}`)
     .join(', ');
 
   const sql = `
     SELECT d.geo_code, g.name as geo_name, d.year,
            ${dimSelects},
-           d.${sourceDef.valueColumn} as value,
+           d.${safeIdent(sourceDef.valueColumn)} as value,
            d.source as data_source
-    FROM ${sourceDef.table} d
+    FROM ${safeIdent(sourceDef.tableName)} d
     JOIN geo_areas g ON g.code = d.geo_code
     ${whereClause}
     ORDER BY d.year, g.name
@@ -112,10 +91,9 @@ export async function queryData(req: Request, res: Response): Promise<void> {
 
   const result = await query(sql, params);
 
-  // Count total
   const countSql = `
     SELECT COUNT(*) as total
-    FROM ${sourceDef.table} d
+    FROM ${safeIdent(sourceDef.tableName)} d
     JOIN geo_areas g ON g.code = d.geo_code
     ${whereClause}
   `;
@@ -136,7 +114,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     metadata: {
       source,
       totalRecords: parseInt(countResult.rows[0].total, 10),
-      unit: source === 'woningtekort' ? 'percentage' : 'aantal',
+      unit: sourceDef.unit,
     },
   });
 }
@@ -147,7 +125,7 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
   const dimension = req.query.dimension as string;
   const dimensionValue = req.query.dimensionValue as string;
 
-  const sourceDef = DATA_SOURCES[source];
+  const sourceDef = await getDataSource(source);
   if (!sourceDef) {
     res.status(400).json({ error: `Unknown data source: ${source}` });
     return;
@@ -167,22 +145,27 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
       c.replace(/_/g, '') === dimension.replace(/_/g, ''),
     );
     if (dimCol) {
-      conditions.push(`d.${dimCol} = $${paramIdx++}`);
+      conditions.push(`d.${safeIdent(dimCol)} = $${paramIdx++}`);
       params.push(dimensionValue);
     }
   }
 
-  if (source === 'huishoudens') {
-    conditions.push(`d.dimension_type = $${paramIdx++}`);
-    params.push((req.query.dimensionType as string) || 'samenstelling');
+  // Apply default filters from registry
+  if (sourceDef.defaultFilters) {
+    for (const [col, defaultVal] of Object.entries(sourceDef.defaultFilters)) {
+      const camelCol = col.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      const queryVal = (req.query[col] as string) || (req.query[camelCol] as string);
+      conditions.push(`d.${safeIdent(col)} = $${paramIdx++}`);
+      params.push(queryVal || defaultVal);
+    }
   }
 
   const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
   const sql = `
-    SELECT d.year, d.${sourceDef.valueColumn} as value, d.source as data_source,
+    SELECT d.year, d.${safeIdent(sourceDef.valueColumn)} as value, d.source as data_source,
            d.confidence_lower, d.confidence_upper
-    FROM ${sourceDef.table} d
+    FROM ${safeIdent(sourceDef.tableName)} d
     ${whereClause}
     ORDER BY d.year
     LIMIT 500
@@ -206,14 +189,14 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
 
 export async function getAvailableYears(req: Request, res: Response): Promise<void> {
   const { source } = req.params;
-  const sourceDef = DATA_SOURCES[source];
+  const sourceDef = await getDataSource(source);
   if (!sourceDef) {
     res.status(400).json({ error: `Unknown data source: ${source}` });
     return;
   }
 
   const result = await query(
-    `SELECT DISTINCT year FROM ${sourceDef.table} ORDER BY year`,
+    `SELECT DISTINCT year FROM ${safeIdent(sourceDef.tableName)} ORDER BY year`,
   );
 
   res.json({ years: result.rows.map(r => r.year) });
@@ -221,7 +204,7 @@ export async function getAvailableYears(req: Request, res: Response): Promise<vo
 
 export async function getDimensions(req: Request, res: Response): Promise<void> {
   const { source } = req.params;
-  const sourceDef = DATA_SOURCES[source];
+  const sourceDef = await getDataSource(source);
   if (!sourceDef) {
     res.status(400).json({ error: `Unknown data source: ${source}` });
     return;
@@ -230,7 +213,7 @@ export async function getDimensions(req: Request, res: Response): Promise<void> 
   const dimensions = await Promise.all(
     sourceDef.dimensionColumns.map(async col => {
       const result = await query(
-        `SELECT DISTINCT ${col} as value FROM ${sourceDef.table} WHERE ${col} IS NOT NULL ORDER BY ${col}`,
+        `SELECT DISTINCT ${safeIdent(col)} as value FROM ${safeIdent(sourceDef.tableName)} WHERE ${safeIdent(col)} IS NOT NULL ORDER BY ${safeIdent(col)}`,
       );
       return {
         id: col,
