@@ -2,8 +2,6 @@ import type { Request, Response } from 'express';
 import { query, getClient } from '../db/pool.js';
 import { z } from 'zod';
 
-const VALID_SOURCES = ['bevolking', 'huishoudens', 'woningen', 'woningtekort'];
-
 const ImportSchema = z.object({
   source: z.enum(['bevolking', 'huishoudens', 'woningen', 'woningtekort']),
   data: z.array(z.record(z.union([z.string(), z.number(), z.null()]))),
@@ -33,19 +31,20 @@ export async function importData(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Track the import
-  const importResult = await query(
-    `INSERT INTO data_imports (user_id, source, filename, row_count, status)
-     VALUES ($1, $2, $3, $4, 'processing')
-     RETURNING id`,
-    [req.user.id, source, `api-import-${Date.now()}`, data.length],
-  );
-  const importId = importResult.rows[0].id;
-
+  // Acquire client first so a pool-exhaustion failure doesn't leave a stuck 'processing' row
   const client = await getClient();
+  let importId: string | null = null;
 
   try {
     await client.query('BEGIN');
+
+    const importResult = await client.query(
+      `INSERT INTO data_imports (user_id, source, filename, row_count, status)
+       VALUES ($1, $2, $3, $4, 'processing')
+       RETURNING id`,
+      [req.user.id, source, `api-import-${Date.now()}`, data.length],
+    );
+    importId = importResult.rows[0].id;
 
     let inserted = 0;
 
@@ -130,8 +129,7 @@ export async function importData(req: Request, res: Response): Promise<void> {
 
     await client.query('COMMIT');
 
-    // Update import record
-    await query(
+    await client.query(
       `UPDATE data_imports SET status = 'completed', row_count = $1, completed_at = NOW() WHERE id = $2`,
       [inserted, importId],
     );
@@ -146,10 +144,12 @@ export async function importData(req: Request, res: Response): Promise<void> {
   } catch (err) {
     await client.query('ROLLBACK');
 
-    await query(
-      `UPDATE data_imports SET status = 'failed', error_message = $1 WHERE id = $2`,
-      [err instanceof Error ? err.message : 'Unknown error', importId],
-    );
+    if (importId) {
+      await query(
+        `UPDATE data_imports SET status = 'failed', error_message = $1 WHERE id = $2`,
+        [err instanceof Error ? err.message : 'Unknown error', importId],
+      );
+    }
 
     res.status(500).json({ error: 'Import failed', importId });
   } finally {

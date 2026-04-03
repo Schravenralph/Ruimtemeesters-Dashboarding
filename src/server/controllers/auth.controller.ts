@@ -1,8 +1,13 @@
 import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { signToken } from '../auth/jwt.js';
 import { LoginRequest } from '../../shared/api/contracts.js';
+
+const RegisterRequest = LoginRequest.extend({
+  name: z.string().min(1),
+});
 
 export async function login(req: Request, res: Response): Promise<void> {
   const parsed = LoginRequest.safeParse(req.body);
@@ -57,9 +62,7 @@ export async function me(req: Request, res: Response): Promise<void> {
 }
 
 export async function register(req: Request, res: Response): Promise<void> {
-  const parsed = LoginRequest.extend({
-    name: (await import('zod')).z.string().min(1),
-  }).safeParse(req.body);
+  const parsed = RegisterRequest.safeParse(req.body);
 
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });

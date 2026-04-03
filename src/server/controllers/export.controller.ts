@@ -1,13 +1,8 @@
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
+import { safeIdent } from '../db/sql-utils.js';
 import { z } from 'zod';
 import { getDataSource } from '../services/data-source-registry.js';
-
-const IDENT_RE = /^[a-z_][a-z0-9_]*$/i;
-function safeIdent(name: string): string {
-  if (!IDENT_RE.test(name)) throw new Error(`Invalid SQL identifier: ${name}`);
-  return `"${name}"`;
-}
 
 const ExportParams = z.object({
   source: z.string(),
@@ -75,8 +70,10 @@ export async function exportData(req: Request, res: Response): Promise<void> {
         headers.map(h => {
           const value = row[h];
           if (value === null || value === undefined) return '';
-          if (typeof value === 'string' && value.includes(',')) return `"${value}"`;
-          return String(value);
+          const str = String(value);
+          const escaped = str.replace(/"/g, '""');
+          if (escaped.includes(',') || escaped.includes('"') || escaped.includes('\n')) return `"${escaped}"`;
+          return escaped;
         }).join(',')
       ),
     ];

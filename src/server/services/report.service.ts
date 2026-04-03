@@ -63,15 +63,25 @@ export async function generateReport(config: ReportConfig): Promise<{
     }
   }
 
-  // Get total
+  // Get totals
   const totalResult = await query(
     `SELECT SUM(value) as total
      FROM ${tableConfig.table}
      WHERE geo_code = $1 AND year = $2`,
     [config.geoCode, config.year],
   );
-
   const grandTotal = Number(totalResult.rows[0]?.total || 0);
+
+  let compareGrandTotal: number | undefined;
+  if (config.includeComparison && config.compareYear) {
+    const compareTotalResult = await query(
+      `SELECT SUM(value) as total
+       FROM ${tableConfig.table}
+       WHERE geo_code = $1 AND year = $2`,
+      [config.geoCode, config.compareYear],
+    );
+    compareGrandTotal = Number(compareTotalResult.rows[0]?.total || 0);
+  }
 
   // Build sections
   const sections: ReportSection[] = [
@@ -80,9 +90,7 @@ export async function generateReport(config: ReportConfig): Promise<{
       data: [{
         label: 'Totaal',
         value: grandTotal,
-        change: compareMap.size > 0
-          ? grandTotal - [...compareMap.values()].reduce((a, b) => a + b, 0)
-          : undefined,
+        change: compareGrandTotal !== undefined ? grandTotal - compareGrandTotal : undefined,
       }],
     },
     {

@@ -45,19 +45,31 @@ export async function cbsFetch<T>(url: string, maxPages: number = 50): Promise<T
   while (currentUrl && page < maxPages) {
     console.log(`[CBS] Fetching page ${page + 1}: ${currentUrl.substring(0, 120)}...`);
 
-    const response = await fetch(currentUrl, {
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(30000),
-    });
+    let data: ODataResponse<T> | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const response = await fetch(currentUrl, {
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(30000),
+        });
 
-    if (!response.ok) {
-      throw new Error(`CBS API error: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+          throw new Error(`CBS API error: ${response.status} ${response.statusText}`);
+        }
+
+        data = await response.json();
+        break;
+      } catch (err) {
+        if (attempt >= 2) throw err;
+        const delay = 1000 * 2 ** attempt; // 1s, 2s
+        console.warn(`[CBS] Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
     }
 
-    const data: ODataResponse<T> = await response.json();
-    allResults.push(...data.value);
+    allResults.push(...data!.value);
 
-    currentUrl = data['@odata.nextLink'] || null;
+    currentUrl = data!['@odata.nextLink'] || null;
     page++;
   }
 

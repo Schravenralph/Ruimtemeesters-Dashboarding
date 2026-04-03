@@ -134,14 +134,21 @@ export function ChartRenderer({ chartType, data, isLoading, error, config }: Cha
       return <DataTableComponent data={processedData} />;
     case 'color-table':
       return <ColorTableComponent data={processedData} />;
-    case 'number':
-      return <NumberDisplay data={processedData} />;
+    case 'number': {
+      const point = processedData[0];
+      return (
+        <NumberDisplay
+          value={point?.value ?? 0}
+          label={point?.dimensionValue || point?.geoName || point?.label || String(point?.year ?? '')}
+        />
+      );
+    }
     case 'treemap':
       return <TreemapChartComponent data={processedData} colors={colors} />;
     case 'heatmap':
       return <HeatmapComponent data={processedData} />;
     case 'waterfall':
-      return <WaterfallChartComponent data={processedData} colors={colors} />;
+      return <WaterfallChartComponent data={processedData} />;
     case 'choropleth':
       return <ChoroplethMapComponent data={processedData} />;
     case 'pyramid':

@@ -1,14 +1,8 @@
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
+import { safeIdent } from '../db/sql-utils.js';
 import { DataQueryParams } from '../../shared/api/contracts.js';
 import { getDataSource } from '../services/data-source-registry.js';
-
-/** Sanitize SQL identifiers from DB-sourced values (table/column names). */
-const IDENT_RE = /^[a-z_][a-z0-9_]*$/i;
-function safeIdent(name: string): string {
-  if (!IDENT_RE.test(name)) throw new Error(`Invalid SQL identifier: ${name}`);
-  return `"${name}"`;
-}
 
 export async function queryData(req: Request, res: Response): Promise<void> {
   const parsed = DataQueryParams.safeParse(req.query);
@@ -81,7 +75,8 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     SELECT d.geo_code, g.name as geo_name, d.year,
            ${dimSelects},
            d.${safeIdent(sourceDef.valueColumn)} as value,
-           d.source as data_source
+           d.source as data_source,
+           d.confidence_lower, d.confidence_upper
     FROM ${safeIdent(sourceDef.tableName)} d
     JOIN geo_areas g ON g.code = d.geo_code
     ${whereClause}
@@ -107,6 +102,8 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     dimensionValue: row[sourceDef.dimensionColumns[0]],
     value: Number(row.value),
     source: row.data_source || 'cbs_actuals',
+    ...(row.confidence_lower != null ? { confidenceLower: Number(row.confidence_lower) } : {}),
+    ...(row.confidence_upper != null ? { confidenceUpper: Number(row.confidence_upper) } : {}),
   }));
 
   res.json({
