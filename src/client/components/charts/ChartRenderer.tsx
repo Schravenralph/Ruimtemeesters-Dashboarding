@@ -42,6 +42,7 @@ export interface ChartConfig {
   tileSize?: string;
   filterDimension?: string;
   filterValue?: string;
+  comparedDimensionValues?: string[];
 }
 
 interface ChartRendererProps {
@@ -74,6 +75,11 @@ function applyFilters(data: DataPoint[], config?: ChartConfig): DataPoint[] {
   // Apply dimension filter
   if (config?.filterDimension && config?.filterValue) {
     filtered = filtered.filter(d => d.dimensionValue === config.filterValue);
+  }
+
+  // Filter to compared dimension values if dimension comparison is active
+  if (config?.comparedDimensionValues && config.comparedDimensionValues.length >= 2) {
+    filtered = filtered.filter(d => d.dimensionValue && config.comparedDimensionValues!.includes(d.dimensionValue));
   }
 
   // Filter prognose if disabled

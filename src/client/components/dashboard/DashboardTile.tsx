@@ -3,6 +3,7 @@ import { Download, Maximize2, MoreVertical, X } from 'lucide-react';
 import type { TileConfig, ChartType } from '@shared/api/contracts';
 import { ChartRenderer } from '../charts/ChartRenderer';
 import { useDataQuery } from '../../hooks/useDataQuery';
+import { useFilters } from '../../contexts/FilterContext';
 
 interface DashboardTileProps {
   tile: TileConfig;
@@ -13,11 +14,20 @@ interface DashboardTileProps {
 export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const { filters } = useFilters();
+
+  const isDimensionComparison = filters.comparedDimensionValues.length >= 2;
 
   const { data, isLoading, error } = useDataQuery({
     source: tile.dataSource,
-    dimension: tile.dimensions[0],
+    // When dimension comparison is active, don't filter by dimension value — fetch all
+    dimension: isDimensionComparison ? undefined : tile.dimensions[0],
   });
+
+  // Merge dimension comparison values into tile config
+  const mergedConfig = isDimensionComparison
+    ? { ...tile.config, comparedDimensionValues: filters.comparedDimensionValues }
+    : tile.config;
 
   return (
     <>
@@ -90,7 +100,7 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
             data={data}
             isLoading={isLoading}
             error={error}
-            config={tile.config as Record<string, unknown>}
+            config={mergedConfig as Record<string, unknown>}
           />
         </div>
 

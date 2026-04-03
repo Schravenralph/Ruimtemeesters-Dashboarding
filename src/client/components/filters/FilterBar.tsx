@@ -8,6 +8,7 @@ import { listAreas } from '../../services/api/geo';
 import { getAvailableYears } from '../../services/api/data';
 import type { GeoArea, GeoLevel } from '@shared/api/contracts';
 import { SavedFilters } from './SavedFilters';
+import { DimensionComparisonSelector } from './DimensionComparisonSelector';
 
 interface FilterBarProps {
   dataSource?: string;
@@ -207,6 +208,11 @@ export function FilterBar({ dataSource = 'bevolking', themeSlug }: FilterBarProp
               ))}
             </select>
           </div>
+        )}
+
+        {/* Dimension comparison */}
+        {dataSource && (
+          <DimensionComparisonSelector dataSource={dataSource} />
         )}
 
         {/* Reset */}
