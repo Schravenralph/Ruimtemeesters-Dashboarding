@@ -9,7 +9,7 @@ import {
   saveLayout,
   getLayout,
 } from '../controllers/dashboard.controller.js';
-import { authenticate, optionalAuth } from '../middleware/auth.js';
+import { authenticate } from '../middleware/auth.js';
 import { cloneDashboard, cloneThemeToDashboard } from '../controllers/clone.controller.js';
 
 const router = Router();
@@ -25,7 +25,7 @@ router.post('/clone-theme/:slug', authenticate, cloneThemeToDashboard);
 router.get('/shared/:token', getSharedDashboard);
 
 // Layouts
-router.get('/layout/:themeId', optionalAuth, getLayout);
+router.get('/layout/:themeId', authenticate, getLayout);
 router.put('/layout/:themeId', authenticate, saveLayout);
 
 export default router;

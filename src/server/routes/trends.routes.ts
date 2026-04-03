@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { getTrends, compareTrends } from '../controllers/trends.controller.js';
-import { optionalAuth } from '../middleware/auth.js';
+import { authenticate } from '../middleware/auth.js';
+import { checkDataAccess } from '../middleware/abac-data.js';
 
 const router = Router();
 
-router.get('/:source', optionalAuth, getTrends);
-router.get('/:source/compare', optionalAuth, compareTrends);
+router.get('/:source', authenticate, checkDataAccess, getTrends);
+router.get('/:source/compare', authenticate, checkDataAccess, compareTrends);
 
 export default router;

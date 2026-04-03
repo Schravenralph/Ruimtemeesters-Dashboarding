@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { timingSafeEqual } from 'crypto';
 import { verifyToken, type JwtPayload } from '../auth/jwt.js';
 import { query } from '../db/pool.js';
 
@@ -20,12 +21,37 @@ declare global {
 
 const SERVICE_API_KEY = process.env.SERVICE_API_KEY || '';
 
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
 export function authenticate(req: Request, res: Response, next: NextFunction): void {
-  // Service API key for internal chatbot/MCP access
+  // Service API key for internal chatbot/MCP access.
+  // When x-user-email is provided, load that user so the chatbot operates
+  // with the requesting user's actual role (intersection model).
   const apiKey = req.headers['x-api-key'] as string | undefined;
-  if (SERVICE_API_KEY && apiKey === SERVICE_API_KEY) {
-    req.user = { id: 'service:chatbot', email: 'chatbot@ruimtemeesters.nl', name: 'Ruimtemeesters AI', role: 'admin', organizationId: null, attributes: {} };
-    next();
+  if (SERVICE_API_KEY && apiKey && safeCompare(apiKey, SERVICE_API_KEY)) {
+    const onBehalfOf = req.headers['x-user-email'] as string | undefined;
+    if (onBehalfOf) {
+      query('SELECT id, email, name, role, organization_id, attributes FROM users WHERE email = $1', [onBehalfOf])
+        .then(result => {
+          if (result.rows.length === 0) {
+            res.status(401).json({ error: 'User not found for service request' });
+            return;
+          }
+          const row = result.rows[0];
+          req.user = { id: row.id, email: row.email, name: row.name, role: row.role, organizationId: row.organization_id, attributes: row.attributes || {} };
+          next();
+        })
+        .catch(() => {
+          res.status(500).json({ error: 'Internal server error' });
+        });
+    } else {
+      // No user context — grant read-only viewer access
+      req.user = { id: 'service:chatbot', email: 'chatbot@ruimtemeesters.nl', name: 'Ruimtemeesters AI', role: 'viewer', organizationId: null, attributes: {} };
+      next();
+    }
     return;
   }
 
