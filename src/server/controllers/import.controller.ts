@@ -31,20 +31,20 @@ export async function importData(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Acquire client first so a pool-exhaustion failure doesn't leave a stuck 'processing' row
+  // Track the import outside the transaction so it survives ROLLBACK for audit purposes.
+  // Acquire the client after the tracking INSERT so pool exhaustion doesn't leave a stuck row.
+  const importResult = await query(
+    `INSERT INTO data_imports (user_id, source, filename, row_count, status)
+     VALUES ($1, $2, $3, $4, 'processing')
+     RETURNING id`,
+    [req.user.id, source, `api-import-${Date.now()}`, data.length],
+  );
+  const importId = importResult.rows[0].id;
+
   const client = await getClient();
-  let importId: string | null = null;
 
   try {
     await client.query('BEGIN');
-
-    const importResult = await client.query(
-      `INSERT INTO data_imports (user_id, source, filename, row_count, status)
-       VALUES ($1, $2, $3, $4, 'processing')
-       RETURNING id`,
-      [req.user.id, source, `api-import-${Date.now()}`, data.length],
-    );
-    importId = importResult.rows[0].id;
 
     let inserted = 0;
 
@@ -144,12 +144,10 @@ export async function importData(req: Request, res: Response): Promise<void> {
   } catch (err) {
     await client.query('ROLLBACK');
 
-    if (importId) {
-      await query(
-        `UPDATE data_imports SET status = 'failed', error_message = $1 WHERE id = $2`,
-        [err instanceof Error ? err.message : 'Unknown error', importId],
-      );
-    }
+    await query(
+      `UPDATE data_imports SET status = 'failed', error_message = $1 WHERE id = $2`,
+      [err instanceof Error ? err.message : 'Unknown error', importId],
+    );
 
     res.status(500).json({ error: 'Import failed', importId });
   } finally {
