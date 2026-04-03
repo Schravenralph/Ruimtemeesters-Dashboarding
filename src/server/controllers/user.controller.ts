@@ -101,16 +101,19 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
   res.status(204).send();
 }
 
+const ResetPasswordSchema = z.object({
+  password: z.string().min(8),
+});
+
 export async function resetUserPassword(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
-  const { password } = req.body;
-
-  if (!password || password.length < 8) {
+  const parsed = ResetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
     res.status(400).json({ error: 'Password must be at least 8 characters' });
     return;
   }
 
-  const hash = await bcrypt.hash(password, 12);
+  const hash = await bcrypt.hash(parsed.data.password, 12);
   const result = await query(
     'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 RETURNING id',
     [hash, id],

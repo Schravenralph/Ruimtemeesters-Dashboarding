@@ -56,8 +56,7 @@ router.put('/:id', authenticate, requireRole('admin'), async (req: Request, res:
 
   for (const [key, value] of Object.entries(parsed.data)) {
     if (value !== undefined) {
-      const dbKey = key === 'conditions' ? key : key;
-      updates.push(`${dbKey} = $${idx++}`);
+      updates.push(`${key} = $${idx++}`);
       params.push(key === 'conditions' ? JSON.stringify(value) : value);
     }
   }

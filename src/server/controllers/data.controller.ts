@@ -1,14 +1,11 @@
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
+import { safeIdent } from '../db/sql-utils.js';
 import { DataQueryParams } from '../../shared/api/contracts.js';
 import { getDataSource } from '../services/data-source-registry.js';
 
-/** Sanitize SQL identifiers from DB-sourced values (table/column names). */
-const IDENT_RE = /^[a-z_][a-z0-9_]*$/i;
-function safeIdent(name: string): string {
-  if (!IDENT_RE.test(name)) throw new Error(`Invalid SQL identifier: ${name}`);
-  return `"${name}"`;
-}
+// Tables that have confidence_lower/confidence_upper columns (migration 011)
+const TABLES_WITH_CONFIDENCE = ['data_bevolking', 'data_huishoudens', 'data_woningen', 'data_woningtekort'];
 
 export async function queryData(req: Request, res: Response): Promise<void> {
   const parsed = DataQueryParams.safeParse(req.query);
@@ -77,11 +74,14 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     .map(c => `d.${safeIdent(c)}`)
     .join(', ');
 
+  const hasConfidence = TABLES_WITH_CONFIDENCE.includes(sourceDef.tableName);
+  const confidenceSelect = hasConfidence ? ', d.confidence_lower, d.confidence_upper' : '';
+
   const sql = `
     SELECT d.geo_code, g.name as geo_name, d.year,
            ${dimSelects},
            d.${safeIdent(sourceDef.valueColumn)} as value,
-           d.source as data_source
+           d.source as data_source${confidenceSelect}
     FROM ${safeIdent(sourceDef.tableName)} d
     JOIN geo_areas g ON g.code = d.geo_code
     ${whereClause}
@@ -107,6 +107,8 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     dimensionValue: row[sourceDef.dimensionColumns[0]],
     value: Number(row.value),
     source: row.data_source || 'cbs_actuals',
+    ...(row.confidence_lower != null ? { confidenceLower: Number(row.confidence_lower) } : {}),
+    ...(row.confidence_upper != null ? { confidenceUpper: Number(row.confidence_upper) } : {}),
   }));
 
   res.json({
@@ -162,9 +164,11 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
 
   const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
+  const tsHasConfidence = TABLES_WITH_CONFIDENCE.includes(sourceDef.tableName);
+  const tsConfidenceSelect = tsHasConfidence ? ', d.confidence_lower, d.confidence_upper' : '';
+
   const sql = `
-    SELECT d.year, d.${safeIdent(sourceDef.valueColumn)} as value, d.source as data_source,
-           d.confidence_lower, d.confidence_upper
+    SELECT d.year, d.${safeIdent(sourceDef.valueColumn)} as value, d.source as data_source${tsConfidenceSelect}
     FROM ${safeIdent(sourceDef.tableName)} d
     ${whereClause}
     ORDER BY d.year

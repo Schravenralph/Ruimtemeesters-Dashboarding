@@ -111,14 +111,18 @@ export async function triggerWebhooks(event: string, payload: Record<string, unk
           `UPDATE webhooks SET failure_count = failure_count + 1 WHERE id = $1`,
           [webhook.id],
         );
+        if (webhook.failure_count >= 9) {
+          await query(
+            `UPDATE webhooks SET is_active = false WHERE id = $1`,
+            [webhook.id],
+          );
+        }
       }
     } catch {
       await query(
         `UPDATE webhooks SET failure_count = failure_count + 1 WHERE id = $1`,
         [webhook.id],
       );
-
-      // Disable after 10 consecutive failures
       if (webhook.failure_count >= 9) {
         await query(
           `UPDATE webhooks SET is_active = false WHERE id = $1`,

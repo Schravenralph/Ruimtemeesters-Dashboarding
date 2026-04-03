@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
+import { safeIdent } from '../db/sql-utils.js';
 
 export async function getOverviewStats(req: Request, res: Response): Promise<void> {
   const year = parseInt(req.query.year as string) || 2024;
@@ -87,7 +88,7 @@ export async function getTimeSeriesAgg(req: Request, res: Response): Promise<voi
 
   const result = await query(
     `SELECT year, SUM(value) as total
-     FROM ${table}
+     FROM ${safeIdent(table)}
      WHERE geo_code = $1
      GROUP BY year
      ORDER BY year`,

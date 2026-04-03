@@ -6,6 +6,7 @@
  */
 
 import { getClient } from '../../db/pool.js';
+import { safeIdent } from '../../db/sql-utils.js';
 import { getObservations, parseCbsPeriod, parseCbsRegion, CBS_ATTRIBUTION } from './cbs-client.js';
 
 interface DimensionMapping {
@@ -74,7 +75,9 @@ export async function syncGeneric(key: string, config: GenericSyncConfig, yearFi
       for (const mapping of config.dimensionMappings) {
         const cbsVal = obs[mapping.cbsDimension] as string;
         if (!cbsVal) { skip = true; break; }
-        const mapped = mapping.valueMap[cbsVal.trim()];
+        const trimmed = cbsVal.trim();
+        const hasExplicitMap = Object.keys(mapping.valueMap).length > 0;
+        const mapped = hasExplicitMap ? mapping.valueMap[trimmed] : trimmed;
         if (!mapped) { skip = true; break; }
         dims[mapping.targetColumn] = mapped;
       }
@@ -101,6 +104,9 @@ export async function syncGeneric(key: string, config: GenericSyncConfig, yearFi
 
     const sampleRow = aggregated.values().next().value as Record<string, unknown>;
     const columns = Object.keys(sampleRow);
+    const safeTargetTable = safeIdent(config.targetTable);
+    const safeColumns = columns.map(safeIdent);
+    const safeConflictCols = columns.filter(c => c !== 'value').map(safeIdent).join(', ');
 
     const client = await getClient();
     try {
@@ -109,12 +115,11 @@ export async function syncGeneric(key: string, config: GenericSyncConfig, yearFi
       for (const row of aggregated.values()) {
         const vals = columns.map(c => row[c]);
         const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
-        const conflictCols = columns.filter(c => c !== 'value').join(', ');
 
         await client.query(
-          `INSERT INTO ${config.targetTable} (${columns.join(', ')}, source)
+          `INSERT INTO ${safeTargetTable} (${safeColumns.join(', ')}, source)
            VALUES (${placeholders}, 'cbs_actuals')
-           ON CONFLICT (${conflictCols}, source) DO UPDATE SET value = EXCLUDED.value`,
+           ON CONFLICT (${safeConflictCols}, source) DO UPDATE SET value = EXCLUDED.value`,
           vals,
         );
         rowsInserted++;

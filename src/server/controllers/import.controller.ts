@@ -2,8 +2,6 @@ import type { Request, Response } from 'express';
 import { query, getClient } from '../db/pool.js';
 import { z } from 'zod';
 
-const VALID_SOURCES = ['bevolking', 'huishoudens', 'woningen', 'woningtekort'];
-
 const ImportSchema = z.object({
   source: z.enum(['bevolking', 'huishoudens', 'woningen', 'woningtekort']),
   data: z.array(z.record(z.union([z.string(), z.number(), z.null()]))),
@@ -33,7 +31,8 @@ export async function importData(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Track the import
+  // Track the import outside the transaction so it survives ROLLBACK for audit purposes.
+  // Acquire the client after the tracking INSERT so pool exhaustion doesn't leave a stuck row.
   const importResult = await query(
     `INSERT INTO data_imports (user_id, source, filename, row_count, status)
      VALUES ($1, $2, $3, $4, 'processing')
@@ -128,13 +127,13 @@ export async function importData(req: Request, res: Response): Promise<void> {
       }
     }
 
-    await client.query('COMMIT');
-
-    // Update import record
-    await query(
+    // Update status inside transaction so it's atomic with the data insert
+    await client.query(
       `UPDATE data_imports SET status = 'completed', row_count = $1, completed_at = NOW() WHERE id = $2`,
       [inserted, importId],
     );
+
+    await client.query('COMMIT');
 
     res.json({
       importId,

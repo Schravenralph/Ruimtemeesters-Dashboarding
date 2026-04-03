@@ -69,27 +69,37 @@ export async function createTheme(req: Request, res: Response): Promise<void> {
   }
 }
 
+const UpdateThemeSchema = CreateThemeSchema.pick({ name: true, description: true, icon: true, order: true }).partial();
+
 export async function updateTheme(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
+
+  const parsed = UpdateThemeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+    return;
+  }
+
+  const { name, description, icon, order } = parsed.data;
   const updates: string[] = [];
   const params: unknown[] = [];
   let idx = 1;
 
-  if (req.body.name) {
+  if (name !== undefined) {
     updates.push(`name = $${idx++}`);
-    params.push(req.body.name);
+    params.push(name);
   }
-  if (req.body.description !== undefined) {
+  if (description !== undefined) {
     updates.push(`description = $${idx++}`);
-    params.push(req.body.description);
+    params.push(description);
   }
-  if (req.body.icon !== undefined) {
+  if (icon !== undefined) {
     updates.push(`icon = $${idx++}`);
-    params.push(req.body.icon);
+    params.push(icon);
   }
-  if (req.body.order !== undefined) {
+  if (order !== undefined) {
     updates.push(`"order" = $${idx++}`);
-    params.push(req.body.order);
+    params.push(order);
   }
 
   if (updates.length === 0) {
@@ -114,20 +124,25 @@ export async function updateTheme(req: Request, res: Response): Promise<void> {
 export async function deleteTheme(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
 
-  // Don't delete system themes with data
-  const tileCount = await query('SELECT COUNT(*) as count FROM tiles WHERE theme_id = $1', [id]);
-  if (parseInt(tileCount.rows[0].count, 10) > 0) {
-    // Delete tiles first
-    await query('DELETE FROM tiles WHERE theme_id = $1', [id]);
-  }
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM tiles WHERE theme_id = $1', [id]);
+    const result = await client.query('DELETE FROM themes WHERE id = $1 RETURNING id', [id]);
+    await client.query('COMMIT');
 
-  const result = await query('DELETE FROM themes WHERE id = $1 RETURNING id', [id]);
-  if (result.rows.length === 0) {
-    res.status(404).json({ error: 'Theme not found' });
-    return;
-  }
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Theme not found' });
+      return;
+    }
 
-  res.status(204).send();
+    res.status(204).send();
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function addTileToTheme(req: Request, res: Response): Promise<void> {

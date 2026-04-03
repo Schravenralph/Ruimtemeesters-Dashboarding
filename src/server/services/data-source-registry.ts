@@ -6,6 +6,7 @@
  */
 
 import { query } from '../db/pool.js';
+import { safeIdent } from '../db/sql-utils.js';
 
 export interface DataSourceDef {
   key: string;
@@ -40,6 +41,14 @@ export async function getDataSources(): Promise<Record<string, DataSourceDef>> {
     const result = await query('SELECT * FROM data_sources ORDER BY sort_order');
     const sources: Record<string, DataSourceDef> = {};
     for (const row of result.rows) {
+      // Validate identifiers that will be used in SQL to prevent injection via DB config
+      safeIdent(row.table_name);
+      safeIdent(row.value_column || 'value');
+      for (const col of row.dimension_columns) safeIdent(col);
+      if (row.export_columns) {
+        for (const col of row.export_columns) safeIdent(col);
+      }
+
       sources[row.key] = {
         key: row.key,
         name: row.name,
