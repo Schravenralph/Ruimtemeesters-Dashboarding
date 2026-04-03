@@ -48,6 +48,7 @@ export function GeoHierarchyBrowser({ onSelect, onClose }: GeoHierarchyBrowserPr
   useEffect(() => {
     if (tab !== 'address' || !addressQuery || addressQuery.length < 3) {
       setAddressResults([]);
+      setIsGeocoding(false);
       return;
     }
     setIsGeocoding(true);

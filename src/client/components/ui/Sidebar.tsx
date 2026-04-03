@@ -115,7 +115,7 @@ export function Sidebar() {
           </button>
         )}
         <button
-          onClick={() => { const next = !collapsed; localStorage.setItem('sidebar-collapsed', String(next)); setCollapsed(next); }}
+          onClick={() => { const next = !collapsed; setCollapsed(next); try { localStorage.setItem('sidebar-collapsed', String(next)); } catch { /* quota exceeded */ } }}
           className="flex w-full items-center gap-3 px-2 py-2 text-sm text-gray-500 hover:text-white rounded-lg"
         >
           {collapsed ? (
