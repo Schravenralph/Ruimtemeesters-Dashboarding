@@ -16,3 +16,14 @@ export async function getArea(code: string): Promise<GeoArea> {
 export async function getChildren(code: string): Promise<{ areas: GeoArea[] }> {
   return api.get(`/geo/${code}/children`);
 }
+
+export interface GeocodeResult {
+  display: string;
+  type: string;
+  gemeenteCode: string | null;
+  gemeenteNaam: string | null;
+}
+
+export async function geocodeAddress(q: string): Promise<{ results: GeocodeResult[] }> {
+  return api.get('/geo/geocode', { q });
+}

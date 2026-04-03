@@ -19,72 +19,95 @@ export function exportTile(tile: TileConfig, format: string) {
   }
 }
 
-function exportAsCsv(tile: TileConfig) {
-  // Fetch the current data from the tile's data source
-  fetch(`/api/data/query?source=${tile.dataSource}`)
-    .then(res => res.json())
-    .then(response => {
-      const { data } = response;
-      if (!data || data.length === 0) return;
-
-      const headers = Object.keys(data[0]);
-      const csv = [
-        headers.join(','),
-        ...data.map((row: Record<string, unknown>) =>
-          headers.map(h => JSON.stringify(row[h] ?? '')).join(',')
-        ),
-      ].join('\n');
-
-      downloadFile(csv, `${tile.title}.csv`, 'text/csv');
-    });
+async function fetchTileData(tile: TileConfig) {
+  const res = await fetch(`/api/data/query?source=${tile.dataSource}`);
+  const { data } = await res.json();
+  return data as Record<string, unknown>[] | undefined;
 }
 
-function exportAsPng(tile: TileConfig) {
-  // Find the tile's chart container and use canvas
-  const tileElement = document.querySelector(`[data-tile-id="${tile.id}"]`);
-  if (!tileElement) {
-    // Fallback: just notify
-    alert(`PNG export voor "${tile.title}" — chart element niet gevonden. Gebruik de browser's screenshot functie.`);
-    return;
-  }
+function exportAsCsv(tile: TileConfig) {
+  fetchTileData(tile).then(data => {
+    if (!data || data.length === 0) return;
+
+    const headers = Object.keys(data[0]);
+    const csv = [
+      headers.join(';'),
+      ...data.map(row =>
+        headers.map(h => {
+          const v = row[h];
+          if (v === null || v === undefined) return '';
+          const str = String(v).replace(/"/g, '""');
+          return str.includes(';') || str.includes('"') || str.includes('\n') ? `"${str}"` : str;
+        }).join(';')
+      ),
+    ].join('\n');
+
+    downloadFile(csv, `${tile.title}.csv`, 'text/csv;charset=utf-8');
+  });
+}
+
+async function exportAsPng(tile: TileConfig) {
+  const tileElement = document.querySelector(`[data-tile-id="${tile.id}"]`) as HTMLElement | null;
+  if (!tileElement) return;
+
+  const html2canvas = (await import('html2canvas')).default;
+  const canvas = await html2canvas(tileElement, {
+    backgroundColor: '#ffffff',
+    scale: 2,
+  });
+
+  canvas.toBlob(blob => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${tile.title}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 'image/png');
 }
 
 async function exportAsPdf(tile: TileConfig) {
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF();
 
+  // Title
   doc.setFontSize(16);
   doc.text(tile.title, 20, 20);
 
   doc.setFontSize(10);
   doc.text(`Bron: ${tile.dataSource}`, 20, 30);
-  doc.text(`Type: ${tile.chartType}`, 20, 36);
-  doc.text(`Geexporteerd: ${new Date().toLocaleString('nl-NL')}`, 20, 42);
+  doc.text(`Geexporteerd: ${new Date().toLocaleString('nl-NL')}`, 20, 36);
+
+  // Capture chart as image if available
+  const tileElement = document.querySelector(`[data-tile-id="${tile.id}"]`) as HTMLElement | null;
+  if (tileElement) {
+    const html2canvas = (await import('html2canvas')).default;
+    const canvas = await html2canvas(tileElement, { backgroundColor: '#ffffff', scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+    const imgWidth = 170;
+    const imgHeight = (canvas.height / canvas.width) * imgWidth;
+    doc.addImage(imgData, 'PNG', 20, 45, imgWidth, imgHeight);
+  }
 
   doc.save(`${tile.title}.pdf`);
 }
 
 async function exportAsExcel(tile: TileConfig) {
-  const response = await fetch(`/api/data/query?source=${tile.dataSource}`);
-  const { data } = await response.json();
-
+  const data = await fetchTileData(tile);
   if (!data || data.length === 0) return;
 
-  // Simple CSV with .xlsx extension as a basic fallback
-  // A full implementation would use the xlsx library
-  const headers = Object.keys(data[0]);
-  const csv = [
-    headers.join('\t'),
-    ...data.map((row: Record<string, unknown>) =>
-      headers.map(h => String(row[h] ?? '')).join('\t')
-    ),
-  ].join('\n');
-
-  downloadFile(csv, `${tile.title}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  const XLSX = await import('xlsx');
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, tile.title.slice(0, 31));
+  XLSX.writeFile(wb, `${tile.title}.xlsx`);
 }
 
 function downloadFile(content: string, filename: string, mimeType: string) {
-  const blob = new Blob([content], { type: mimeType });
+  const blob = new Blob(['\uFEFF' + content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

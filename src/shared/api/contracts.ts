@@ -135,6 +135,7 @@ export const FilterState = z.object({
   comparisonEnabled: z.boolean().default(false),
   comparisonLevel: GeoLevel.nullable().default(null),
   comparisonGeoCode: z.string().nullable().default(null),
+  showPrognose: z.boolean().default(true),
 });
 export type FilterState = z.infer<typeof FilterState>;
 
@@ -149,6 +150,8 @@ export const DataPoint = z.object({
   value: z.number(),
   label: z.string().optional(),
   source: z.string().optional(), // 'cbs_actuals' | 'cbs_prognose' | 'ruimtemeesters_prognose'
+  confidenceLower: z.number().optional(),
+  confidenceUpper: z.number().optional(),
 });
 export type DataPoint = z.infer<typeof DataPoint>;
 

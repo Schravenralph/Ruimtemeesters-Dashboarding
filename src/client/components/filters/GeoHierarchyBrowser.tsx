@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronRight, ChevronDown, MapPin, Globe, Building, Landmark } from 'lucide-react';
-import { listAreas, getChildren } from '../../services/api/geo';
+import { ChevronRight, ChevronDown, MapPin, Globe, Building, Landmark, Navigation } from 'lucide-react';
+import { listAreas, getChildren, geocodeAddress, type GeocodeResult } from '../../services/api/geo';
 import { useFilters } from '../../contexts/FilterContext';
 import { SearchInput } from '../ui/SearchInput';
 import type { GeoArea, GeoLevel } from '@shared/api/contracts';
@@ -39,6 +39,26 @@ export function GeoHierarchyBrowser({ onSelect, onClose }: GeoHierarchyBrowserPr
   const [searchResults, setSearchResults] = useState<GeoArea[]>([]);
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [tab, setTab] = useState<'tree' | 'address'>('tree');
+  const [addressQuery, setAddressQuery] = useState('');
+  const [addressResults, setAddressResults] = useState<GeocodeResult[]>([]);
+  const [isGeocoging, setIsGeocoding] = useState(false);
+
+  // Address geocoding handler
+  useEffect(() => {
+    if (tab !== 'address' || !addressQuery || addressQuery.length < 3) {
+      setAddressResults([]);
+      return;
+    }
+    setIsGeocoding(true);
+    const timeout = setTimeout(() => {
+      geocodeAddress(addressQuery).then(({ results }) => {
+        setAddressResults(results);
+        setIsGeocoding(false);
+      }).catch(() => setIsGeocoding(false));
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [addressQuery, tab]);
 
   // Initialize tree with top-level areas
   useEffect(() => {
@@ -175,21 +195,76 @@ export function GeoHierarchyBrowser({ onSelect, onClose }: GeoHierarchyBrowserPr
     );
   }
 
+  function selectGemeente(result: GeocodeResult) {
+    if (!result.gemeenteCode) return;
+    setGeoCode(result.gemeenteCode);
+    setGeoLevel('gemeente' as GeoLevel);
+    onSelect?.({ code: result.gemeenteCode, name: result.gemeenteNaam || result.display, level: 'gemeente' as GeoLevel, parentCode: null });
+  }
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-lg max-h-[500px] flex flex-col">
+      {/* Tabs */}
+      <div className="flex border-b border-gray-100">
+        <button
+          onClick={() => setTab('tree')}
+          className={`flex-1 px-3 py-2 text-sm font-medium ${tab === 'tree' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          Gebieden
+        </button>
+        <button
+          onClick={() => setTab('address')}
+          className={`flex-1 px-3 py-2 text-sm font-medium ${tab === 'address' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <Navigation className="h-3.5 w-3.5 inline mr-1" />
+          Adres zoeken
+        </button>
+      </div>
+
       {/* Search */}
       <div className="p-3 border-b border-gray-100">
-        <SearchInput
-          placeholder="Zoek een gebied..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onClear={() => setSearchQuery('')}
-        />
+        {tab === 'tree' ? (
+          <SearchInput
+            placeholder="Zoek een gebied..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onClear={() => setSearchQuery('')}
+          />
+        ) : (
+          <SearchInput
+            placeholder="Straat, postcode of plaatsnaam..."
+            value={addressQuery}
+            onChange={(e) => setAddressQuery(e.target.value)}
+            onClear={() => setAddressQuery('')}
+          />
+        )}
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-2">
-        {searchQuery.length >= 2 ? (
+        {tab === 'address' ? (
+          // Address geocoding results
+          isGeocoging ? (
+            <p className="text-sm text-gray-400 p-3">Zoeken...</p>
+          ) : addressResults.length === 0 && addressQuery.length >= 3 ? (
+            <p className="text-sm text-gray-400 p-3">Geen resultaten</p>
+          ) : (
+            addressResults.map((result, i) => (
+              <button
+                key={i}
+                onClick={() => selectGemeente(result)}
+                disabled={!result.gemeenteCode}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-gray-50 text-gray-700 disabled:opacity-50"
+              >
+                <Navigation className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                <span className="flex-1 truncate">{result.display}</span>
+                {result.gemeenteNaam && (
+                  <span className="text-xs text-blue-500 shrink-0">{result.gemeenteNaam}</span>
+                )}
+              </button>
+            ))
+          )
+        ) : searchQuery.length >= 2 ? (
           // Search results
           isSearching ? (
             <p className="text-sm text-gray-400 p-3">Zoeken...</p>

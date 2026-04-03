@@ -18,7 +18,7 @@ function getIcon(iconName?: string) {
 }
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === 'true');
   const { themes, activeTheme, setActiveTheme } = useThemes();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -115,7 +115,7 @@ export function Sidebar() {
           </button>
         )}
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={() => { const next = !collapsed; localStorage.setItem('sidebar-collapsed', String(next)); setCollapsed(next); }}
           className="flex w-full items-center gap-3 px-2 py-2 text-sm text-gray-500 hover:text-white rounded-lg"
         >
           {collapsed ? (

@@ -1,6 +1,6 @@
 import {
-  LineChart as RechartsLine,
-  Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
+  ComposedChart,
+  Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import type { DataPoint } from '@shared/api/contracts';
 
@@ -24,11 +24,16 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
     const isPrognose = (d: DataPoint) => d.source === 'cbs_prognose' || d.source === 'ruimtemeesters_prognose';
     const hasPrognose = data.some(isPrognose);
 
+    const hasConfidence = data.some(d => d.confidenceLower != null);
+
     const chartData = data.map(d => ({
       name: String(d.year),
       actuals: !isPrognose(d) ? d.value : undefined,
       prognose: isPrognose(d) ? d.value : undefined,
-      value: d.value, // fallback for non-source data
+      value: d.value,
+      ...(d.confidenceLower != null && d.confidenceUpper != null
+        ? { confidenceBand: [d.confidenceLower, d.confidenceUpper] }
+        : {}),
     }));
 
     // Add bridge point: last actual year also appears in prognose series for continuity
@@ -42,11 +47,14 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
 
     return (
       <ResponsiveContainer width="100%" height={300}>
-        <RechartsLine data={chartData}>
+        <ComposedChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="name" tick={{ fontSize: 12 }} />
           <YAxis tick={{ fontSize: 12 }} tickFormatter={formatNumber} />
-          <Tooltip formatter={(value: number) => formatNumber(value)} />
+          <Tooltip formatter={(value: number | number[]) => Array.isArray(value) ? `${formatNumber(value[0])} – ${formatNumber(value[1])}` : formatNumber(value)} />
+          {hasConfidence && (
+            <Area type="monotone" dataKey="confidenceBand" name="Betrouwbaarheid" fill={colors[0]} fillOpacity={0.1} stroke="none" />
+          )}
           {hasPrognose ? (
             <>
               <Line type="monotone" dataKey="actuals" name="Actueel" stroke={colors[0]} strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
@@ -59,7 +67,7 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
           {comparisonData && comparisonData.length > 0 && (
             <ReferenceLine y={comparisonData.reduce((sum, d) => sum + d.value, 0) / comparisonData.length} stroke="#ef4444" strokeDasharray="8 4" label={{ value: comparisonLabel || 'Vergelijking', position: 'right', fontSize: 11, fill: '#ef4444' }} />
           )}
-        </RechartsLine>
+        </ComposedChart>
       </ResponsiveContainer>
     );
   }
@@ -77,7 +85,7 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <RechartsLine data={chartData}>
+      <ComposedChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
         <XAxis dataKey="name" tick={{ fontSize: 12 }} />
         <YAxis tick={{ fontSize: 12 }} tickFormatter={formatNumber} />
@@ -93,7 +101,7 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
             dot={{ r: 3 }}
           />
         ))}
-      </RechartsLine>
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

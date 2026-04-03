@@ -75,6 +75,39 @@ export async function getArea(req: Request, res: Response): Promise<void> {
   });
 }
 
+/**
+ * Geocode an address via PDOK Locatieserver (free, no API key).
+ * Returns matching addresses with their gemeente code for geo selection.
+ */
+export async function geocodeAddress(req: Request, res: Response): Promise<void> {
+  const q = req.query.q as string;
+  if (!q || q.length < 2) {
+    res.json({ results: [] });
+    return;
+  }
+
+  try {
+    const pdokUrl = `https://api.pdok.nl/bzk/locatieserver/search/v3_1/suggest?q=${encodeURIComponent(q)}&rows=8&fq=type:(adres OR woonplaats OR gemeente)`;
+    const pdokRes = await fetch(pdokUrl, { signal: AbortSignal.timeout(5000) });
+    if (!pdokRes.ok) {
+      res.json({ results: [] });
+      return;
+    }
+
+    const data = await pdokRes.json();
+    const suggestions = (data.response?.docs || []).map((doc: Record<string, unknown>) => ({
+      display: doc.weergavenaam as string,
+      type: doc.type as string,
+      gemeenteCode: doc.gemeentecode ? `GM${String(doc.gemeentecode).padStart(4, '0')}` : null,
+      gemeenteNaam: doc.gemeentenaam as string | null,
+    }));
+
+    res.json({ results: suggestions });
+  } catch {
+    res.json({ results: [] });
+  }
+}
+
 export async function getChildren(req: Request, res: Response): Promise<void> {
   const { code } = req.params;
 

@@ -41,6 +41,7 @@ const defaultFilters: FilterState = {
   comparisonEnabled: false,
   comparisonLevel: null,
   comparisonGeoCode: null,
+  showPrognose: true,
 };
 
 function createDefaultPresentation(): Presentation {
