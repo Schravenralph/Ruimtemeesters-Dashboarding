@@ -35,7 +35,9 @@ async function getThemeSlugsForSource(source: string): Promise<string[]> {
  * Denies unauthenticated access and fails closed on errors.
  */
 export function checkDataAccess(req: Request, res: Response, next: NextFunction): void {
-  const source = (req.query.source as string) || (req.params.source as string);
+  // Prefer params.source (path parameter) over query.source to prevent
+  // ABAC bypass via ?source=allowed on /api/trends/restricted
+  const source = (req.params.source as string) || (req.query.source as string);
 
   if (!source) {
     next();
