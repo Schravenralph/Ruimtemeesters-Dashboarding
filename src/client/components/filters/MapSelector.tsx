@@ -7,7 +7,7 @@ import { useFilters } from '../../contexts/FilterContext';
 import type { GeoLevel } from '@shared/api/contracts';
 
 interface MapSelectorProps {
-  onSelect?: (code: string, name: string) => void;
+  onSelect?: (code: string, name: string, level: string) => void;
 }
 
 const LEVEL_OPTIONS: { value: string; label: string }[] = [
@@ -70,7 +70,7 @@ export function MapSelector({ onSelect }: MapSelectorProps) {
   const handleClick = useCallback((code: string, name: string) => {
     setGeoCode(code);
     setGeoLevel(level as GeoLevel);
-    onSelect?.(code, name);
+    onSelect?.(code, name, level);
   }, [setGeoCode, setGeoLevel, level, onSelect]);
 
   const onEachFeature = useCallback((feature: GeoJsonFeature, layer: Layer) => {

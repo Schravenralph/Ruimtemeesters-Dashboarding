@@ -102,7 +102,8 @@ async function exportAsExcel(tile: TileConfig) {
   const XLSX = await import('xlsx');
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, tile.title.slice(0, 31));
+  const sheetName = tile.title.replace(/[\\/*?:\[\]]/g, '-').slice(0, 31);
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
   XLSX.writeFile(wb, `${tile.title}.xlsx`);
 }
 

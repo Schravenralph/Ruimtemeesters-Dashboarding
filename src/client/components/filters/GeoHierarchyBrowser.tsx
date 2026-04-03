@@ -234,8 +234,8 @@ export function GeoHierarchyBrowser({ onSelect, onClose }: GeoHierarchyBrowserPr
       {/* Map tab — full takeover, no search bar */}
       {tab === 'map' ? (
         <Suspense fallback={<div className="h-[400px] flex items-center justify-center text-sm text-gray-400">Kaart laden...</div>}>
-          <MapSelector onSelect={(code, name) => {
-            onSelect?.({ code, name, level: 'gemeente' as GeoLevel, parentCode: null });
+          <MapSelector onSelect={(code, name, selectedLevel) => {
+            onSelect?.({ code, name, level: selectedLevel as GeoLevel, parentCode: null });
           }} />
         </Suspense>
       ) : (
