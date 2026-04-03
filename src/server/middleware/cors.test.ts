@@ -13,14 +13,14 @@ describe('CORS configuration', () => {
   });
 
   it('handles empty allowed origins', () => {
-    const originsStr = '';
-    const origins = originsStr ? originsStr.split(',').map(s => s.trim()) : [];
+    const originsStr: string = '';
+    const origins = originsStr ? originsStr.split(',').map((s: string) => s.trim()) : [];
     expect(origins).toEqual([]);
   });
 
   it('handles undefined allowed origins', () => {
-    const originsStr: string | undefined = undefined;
-    const origins = originsStr?.split(',').map(s => s.trim()) || [];
+    const originsStr = undefined as string | undefined;
+    const origins = originsStr?.split(',').map((s: string) => s.trim()) || [];
     expect(origins).toEqual([]);
   });
 });

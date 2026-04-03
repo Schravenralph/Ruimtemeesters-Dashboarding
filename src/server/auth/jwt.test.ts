@@ -5,7 +5,7 @@ describe('JWT', () => {
   const testUser = {
     id: 'user-123',
     email: 'test@example.com',
-    role: 'admin',
+    role: 'admin' as const,
   };
 
   it('signs and verifies a token', () => {

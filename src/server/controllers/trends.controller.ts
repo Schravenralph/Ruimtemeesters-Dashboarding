@@ -6,7 +6,7 @@ import { query } from '../db/pool.js';
  * Returns year-over-year growth rates and compound annual growth rate (CAGR).
  */
 export async function getTrends(req: Request, res: Response): Promise<void> {
-  const source = req.params.source;
+  const source = req.params.source as string;
   const geoCode = (req.query.geoCode as string) || 'NL';
 
   const tableMap: Record<string, string> = {
@@ -92,7 +92,7 @@ export async function getTrends(req: Request, res: Response): Promise<void> {
  * Compare trends across multiple geographic areas.
  */
 export async function compareTrends(req: Request, res: Response): Promise<void> {
-  const source = req.params.source;
+  const source = req.params.source as string;
   const geoCodes = (req.query.geoCodes as string)?.split(',') || [];
 
   const tableMap: Record<string, string> = {

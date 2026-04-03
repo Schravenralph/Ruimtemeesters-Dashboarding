@@ -1,11 +1,11 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { z } from 'zod';
 import { PolicyCondition } from '../../shared/api/contracts.js';
 
-const router = Router();
+const router: RouterType = Router();
 
 const CreatePolicySchema = z.object({
   name: z.string().min(1),

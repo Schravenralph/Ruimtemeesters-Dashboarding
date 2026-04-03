@@ -1,4 +1,5 @@
 import { signToken, verifyToken, type JwtPayload } from '../auth/jwt.js';
+import type { Role } from '../../shared/api/contracts.js';
 
 /**
  * Token refresh service.
@@ -22,7 +23,7 @@ export function refreshToken(currentToken: string): RefreshResult | null {
     const newToken = signToken({
       id: payload.userId,
       email: payload.email,
-      role: payload.role,
+      role: payload.role as Role,
     });
 
     // Calculate expiry (24h from now)

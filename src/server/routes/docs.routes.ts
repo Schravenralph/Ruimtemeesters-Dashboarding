@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import type { Request, Response } from 'express';
 
-const router = Router();
+const router: RouterType = Router();
 
 router.get('/', (_req: Request, res: Response) => {
   res.json({

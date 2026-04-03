@@ -1,9 +1,9 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import type { Request, Response } from 'express';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { getAuditLog } from '../services/audit.service.js';
 
-const router = Router();
+const router: RouterType = Router();
 
 router.get('/', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
   const entries = await getAuditLog({

@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import jwt, { type SignOptions } from 'jsonwebtoken';
 import { env } from '../env.js';
 import type { User } from '../../shared/api/contracts.js';
 
@@ -12,7 +12,7 @@ export function signToken(user: Pick<User, 'id' | 'email' | 'role'>): string {
   return jwt.sign(
     { userId: user.id, email: user.email, role: user.role } satisfies JwtPayload,
     env.jwt.secret,
-    { expiresIn: env.jwt.expiry },
+    { expiresIn: env.jwt.expiry as SignOptions['expiresIn'] },
   );
 }
 

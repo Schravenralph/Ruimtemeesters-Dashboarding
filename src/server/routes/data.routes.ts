@@ -1,9 +1,9 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import { queryData, queryTimeSeries, getAvailableYears, getDimensions } from '../controllers/data.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { checkDataAccess } from '../middleware/abac-data.js';
 
-const router = Router();
+const router: RouterType = Router();
 
 router.get('/query', authenticate, checkDataAccess, queryData);
 router.get('/timeseries', authenticate, checkDataAccess, queryTimeSeries);

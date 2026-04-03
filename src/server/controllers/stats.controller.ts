@@ -70,7 +70,7 @@ export async function getOverviewStats(req: Request, res: Response): Promise<voi
 }
 
 export async function getTimeSeriesAgg(req: Request, res: Response): Promise<void> {
-  const source = req.params.source;
+  const source = req.params.source as string;
   const geoCode = (req.query.geoCode as string) || 'NL';
 
   const tableMap: Record<string, string> = {

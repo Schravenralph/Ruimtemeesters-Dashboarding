@@ -7,13 +7,13 @@ describe('API versioning', () => {
   });
 
   it('accepts version 1', () => {
-    const requestedVersion = '1';
+    const requestedVersion: string = '1';
     const isSupported = requestedVersion === '1.0' || requestedVersion === '1';
     expect(isSupported).toBe(true);
   });
 
   it('rejects unsupported versions', () => {
-    const requestedVersion = '2.0';
+    const requestedVersion: string = '2.0';
     const isSupported = requestedVersion === '1.0' || requestedVersion === '1';
     expect(isSupported).toBe(false);
   });

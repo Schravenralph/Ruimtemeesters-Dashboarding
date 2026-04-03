@@ -1,3 +1,4 @@
+import pg from 'pg';
 import { query } from '../db/pool.js';
 
 /**
@@ -22,7 +23,7 @@ export async function getHierarchyPath(code: string): Promise<GeoNode[]> {
   let currentCode: string | null = code;
 
   while (currentCode) {
-    const result = await query(
+    const result: pg.QueryResult = await query(
       `SELECT g.code, g.name, g.level, g.parent_code,
               (SELECT COUNT(*) FROM geo_areas c WHERE c.parent_code = g.code) as child_count
        FROM geo_areas g WHERE g.code = $1`,
@@ -31,7 +32,7 @@ export async function getHierarchyPath(code: string): Promise<GeoNode[]> {
 
     if (result.rows.length === 0) break;
 
-    const row = result.rows[0];
+    const row: Record<string, string> = result.rows[0];
     path.unshift({
       code: row.code,
       name: row.name,

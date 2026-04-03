@@ -1,8 +1,8 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import { listWebhooks, createWebhook, deleteWebhook } from '../controllers/webhook.controller.js';
 import { authenticate } from '../middleware/auth.js';
 
-const router = Router();
+const router: RouterType = Router();
 
 router.get('/', authenticate, listWebhooks);
 router.post('/', authenticate, createWebhook);

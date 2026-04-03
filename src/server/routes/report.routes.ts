@@ -1,13 +1,13 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import type { Request, Response } from 'express';
 import { generateReport } from '../services/report.service.js';
 import { authenticate } from '../middleware/auth.js';
 import { checkDataAccess } from '../middleware/abac-data.js';
 
-const router = Router();
+const router: RouterType = Router();
 
 router.get('/:source', authenticate, checkDataAccess, async (req: Request, res: Response) => {
-  const { source } = req.params;
+  const source = req.params.source as string;
   const geoCode = (req.query.geoCode as string) || 'NL';
   const year = parseInt(req.query.year as string) || 2024;
   const compareYear = req.query.compareYear ? parseInt(req.query.compareYear as string) : undefined;

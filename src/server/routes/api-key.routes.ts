@@ -1,8 +1,8 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import { createApiKey, listApiKeys, revokeApiKey } from '../controllers/api-key.controller.js';
 import { authenticate } from '../middleware/auth.js';
 
-const router = Router();
+const router: RouterType = Router();
 
 router.post('/', authenticate, createApiKey);
 router.get('/', authenticate, listApiKeys);

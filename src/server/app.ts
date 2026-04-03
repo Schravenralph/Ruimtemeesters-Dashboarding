@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -34,7 +34,7 @@ import { rateLimit } from './middleware/rate-limit.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { authenticate, requireRole } from './middleware/auth.js';
 
-const app = express();
+const app: Express = express();
 
 // Logging
 app.use(requestLogger);

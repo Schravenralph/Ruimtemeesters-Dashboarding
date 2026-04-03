@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MetricsCollector } from './metrics-testable';
 
 // Test a standalone MetricsCollector instance
 class TestMetrics {

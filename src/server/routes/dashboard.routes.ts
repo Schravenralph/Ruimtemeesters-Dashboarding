@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import {
   listCustomDashboards,
   createCustomDashboard,
@@ -12,7 +12,7 @@ import {
 import { authenticate } from '../middleware/auth.js';
 import { cloneDashboard, cloneThemeToDashboard } from '../controllers/clone.controller.js';
 
-const router = Router();
+const router: RouterType = Router();
 
 // Custom dashboards
 router.get('/custom', authenticate, listCustomDashboards);

@@ -192,7 +192,7 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
 }
 
 export async function getAvailableYears(req: Request, res: Response): Promise<void> {
-  const { source } = req.params;
+  const source = req.params.source as string;
   const sourceDef = await getDataSource(source);
   if (!sourceDef) {
     res.status(400).json({ error: `Unknown data source: ${source}` });
@@ -207,7 +207,7 @@ export async function getAvailableYears(req: Request, res: Response): Promise<vo
 }
 
 export async function getDimensions(req: Request, res: Response): Promise<void> {
-  const { source } = req.params;
+  const source = req.params.source as string;
   const sourceDef = await getDataSource(source);
   if (!sourceDef) {
     res.status(400).json({ error: `Unknown data source: ${source}` });

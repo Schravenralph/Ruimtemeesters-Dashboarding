@@ -1,8 +1,8 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import { createTheme, updateTheme, deleteTheme, addTileToTheme, removeTileFromTheme } from '../controllers/theme-admin.controller.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 
-const router = Router();
+const router: RouterType = Router();
 
 router.post('/', authenticate, requireRole('admin'), createTheme);
 router.put('/:id', authenticate, requireRole('admin'), updateTheme);
