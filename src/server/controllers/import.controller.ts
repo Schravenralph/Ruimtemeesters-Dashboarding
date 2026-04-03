@@ -127,12 +127,13 @@ export async function importData(req: Request, res: Response): Promise<void> {
       }
     }
 
-    await client.query('COMMIT');
-
+    // Update status inside transaction so it's atomic with the data insert
     await client.query(
       `UPDATE data_imports SET status = 'completed', row_count = $1, completed_at = NOW() WHERE id = $2`,
       [inserted, importId],
     );
+
+    await client.query('COMMIT');
 
     res.json({
       importId,
