@@ -27,3 +27,18 @@ export interface GeocodeResult {
 export async function geocodeAddress(q: string): Promise<{ results: GeocodeResult[] }> {
   return api.get('/geo/geocode', { q });
 }
+
+export interface GeoJsonFeature {
+  type: 'Feature';
+  properties: { code: string; name: string; level: string };
+  geometry: GeoJSON.Geometry;
+}
+
+export interface GeoJsonCollection {
+  type: 'FeatureCollection';
+  features: GeoJsonFeature[];
+}
+
+export async function getGeoJson(level: string): Promise<GeoJsonCollection> {
+  return api.get('/geo/geojson', { level });
+}

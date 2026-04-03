@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
-import { ChevronRight, ChevronDown, MapPin, Globe, Building, Landmark, Navigation } from 'lucide-react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { ChevronRight, ChevronDown, MapPin, Globe, Building, Landmark, Navigation, Map } from 'lucide-react';
 import { listAreas, getChildren, geocodeAddress, type GeocodeResult } from '../../services/api/geo';
 import { useFilters } from '../../contexts/FilterContext';
 import { SearchInput } from '../ui/SearchInput';
 import type { GeoArea, GeoLevel } from '@shared/api/contracts';
+
+const MapSelector = lazy(() => import('./MapSelector').then(m => ({ default: m.MapSelector })));
 
 interface GeoHierarchyBrowserProps {
   onSelect?: (area: GeoArea) => void;
@@ -39,7 +41,7 @@ export function GeoHierarchyBrowser({ onSelect, onClose }: GeoHierarchyBrowserPr
   const [searchResults, setSearchResults] = useState<GeoArea[]>([]);
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [tab, setTab] = useState<'tree' | 'address'>('tree');
+  const [tab, setTab] = useState<'tree' | 'address' | 'map'>('tree');
   const [addressQuery, setAddressQuery] = useState('');
   const [addressResults, setAddressResults] = useState<GeocodeResult[]>([]);
   const [isGeocoging, setIsGeocoding] = useState(false);
@@ -218,10 +220,26 @@ export function GeoHierarchyBrowser({ onSelect, onClose }: GeoHierarchyBrowserPr
           className={`flex-1 px-3 py-2 text-sm font-medium ${tab === 'address' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
         >
           <Navigation className="h-3.5 w-3.5 inline mr-1" />
-          Adres zoeken
+          Adres
+        </button>
+        <button
+          onClick={() => setTab('map')}
+          className={`flex-1 px-3 py-2 text-sm font-medium ${tab === 'map' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <Map className="h-3.5 w-3.5 inline mr-1" />
+          Kaart
         </button>
       </div>
 
+      {/* Map tab — full takeover, no search bar */}
+      {tab === 'map' ? (
+        <Suspense fallback={<div className="h-[400px] flex items-center justify-center text-sm text-gray-400">Kaart laden...</div>}>
+          <MapSelector onSelect={(code, name) => {
+            onSelect?.({ code, name, level: 'gemeente' as GeoLevel, parentCode: null });
+          }} />
+        </Suspense>
+      ) : (
+      <>
       {/* Search */}
       <div className="p-3 border-b border-gray-100">
         {tab === 'tree' ? (
@@ -296,6 +314,8 @@ export function GeoHierarchyBrowser({ onSelect, onClose }: GeoHierarchyBrowserPr
           tree.map(node => renderNode(node))
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

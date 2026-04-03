@@ -108,6 +108,31 @@ export async function geocodeAddress(req: Request, res: Response): Promise<void>
   }
 }
 
+/**
+ * Return GeoJSON FeatureCollection for all areas at a given level.
+ * Used by the interactive map selector.
+ */
+export async function getGeoJson(req: Request, res: Response): Promise<void> {
+  const level = req.query.level as string;
+  if (!level) {
+    res.status(400).json({ error: 'level parameter required' });
+    return;
+  }
+
+  const result = await query(
+    'SELECT code, name, level, geometry FROM geo_areas WHERE level = $1 AND geometry IS NOT NULL ORDER BY name',
+    [level],
+  );
+
+  const features = result.rows.map(r => ({
+    type: 'Feature' as const,
+    properties: { code: r.code, name: r.name, level: r.level },
+    geometry: typeof r.geometry === 'string' ? JSON.parse(r.geometry) : r.geometry,
+  }));
+
+  res.json({ type: 'FeatureCollection', features });
+}
+
 export async function getChildren(req: Request, res: Response): Promise<void> {
   const { code } = req.params;
 
