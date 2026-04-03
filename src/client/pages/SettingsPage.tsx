@@ -1,15 +1,11 @@
-import { Save } from 'lucide-react';
-import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { Card, CardHeader } from '../components/ui/Card';
 import { useThemes } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useToast } from '../components/ui/Toast';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 export function SettingsPage() {
   const { user } = useAuth();
-  const { showToast } = useToast();
   const { themes } = useThemes();
 
   const [defaultTheme, setDefaultTheme] = useLocalStorage('defaultTheme', '');
@@ -17,10 +13,6 @@ export function SettingsPage() {
   const [autoRefresh, setAutoRefresh] = useLocalStorage('autoRefresh', false);
   const [compactNumbers, setCompactNumbers] = useLocalStorage('compactNumbers', true);
   const [chartAnimation, setChartAnimation] = useLocalStorage('chartAnimation', true);
-
-  function handleSave() {
-    showToast('success', 'Instellingen opgeslagen');
-  }
 
   if (!user) {
     return (
@@ -113,10 +105,7 @@ export function SettingsPage() {
           </div>
         </Card>
 
-        <Button onClick={handleSave}>
-          <Save className="h-4 w-4" />
-          Opslaan
-        </Button>
+        <p className="text-xs text-gray-400">Wijzigingen worden automatisch opgeslagen.</p>
       </div>
     </div>
   );
