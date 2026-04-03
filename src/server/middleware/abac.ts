@@ -101,6 +101,35 @@ function resolveField(field: string, user: NonNullable<Request['user']>): unknow
 }
 
 /**
+ * Evaluate policies for multiple resources in a single DB round-trip.
+ * Returns the subset of resources that are allowed.
+ */
+export async function filterAllowedResources(
+  user: NonNullable<Request['user']>,
+  resources: string[],
+): Promise<Set<string>> {
+  const { rows: policies } = await query<PolicyRow>(
+    `SELECT id, effect, resource, conditions, priority
+     FROM access_policies
+     ORDER BY priority DESC`,
+  );
+
+  const allowed = new Set<string>();
+  for (const resource of resources) {
+    const matching = policies.filter(p => matchesResource(p.resource, resource));
+    let granted = user.role === 'admin'; // default
+    for (const policy of matching) {
+      if (evaluateConditions(policy.conditions, user, resource)) {
+        granted = policy.effect === 'allow';
+        break;
+      }
+    }
+    if (granted) allowed.add(resource);
+  }
+  return allowed;
+}
+
+/**
  * Express middleware that checks ABAC policies for a resource.
  */
 export function requireAccess(resource: string) {

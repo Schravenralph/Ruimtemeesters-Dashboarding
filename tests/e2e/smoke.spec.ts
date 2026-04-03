@@ -18,11 +18,9 @@ test.describe('Smoke tests', () => {
     expect(body.status).toBe('ok');
   });
 
-  test('themes API returns data', async ({ request }) => {
+  test('themes API requires authentication', async ({ request }) => {
     const response = await request.get('/api/themes');
-    expect(response.ok()).toBeTruthy();
-    const body = await response.json();
-    expect(body.themes).toBeDefined();
+    expect(response.status()).toBe(401);
   });
 
   test('docs endpoint returns API documentation', async ({ request }) => {

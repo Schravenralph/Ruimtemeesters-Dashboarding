@@ -22,10 +22,13 @@ export async function cloneDashboard(req: Request, res: Response): Promise<void>
     return;
   }
 
-  // Get original dashboard (can be from any user if shared, or own)
+  // Only allow cloning dashboards owned by the current user.
+  // Shared dashboards must go through an explicit share-token based flow.
   const original = await query(
-    `SELECT name, description, tiles, layout FROM custom_dashboards WHERE id = $1`,
-    [id],
+    `SELECT name, description, tiles, layout
+     FROM custom_dashboards
+     WHERE id = $1 AND user_id = $2`,
+    [id, req.user.id],
   );
 
   if (original.rows.length === 0) {

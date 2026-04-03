@@ -32,6 +32,7 @@ import supercategoryRoutes from './routes/supercategory.routes.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
+import { authenticate, requireRole } from './middleware/auth.js';
 
 const app = express();
 
@@ -58,7 +59,7 @@ import { detailedHealth } from './controllers/health.controller.js';
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
-app.get('/api/health/detailed', detailedHealth);
+app.get('/api/health/detailed', authenticate, requireRole('admin'), detailedHealth);
 
 // API routes
 app.use('/api/auth', authRoutes);

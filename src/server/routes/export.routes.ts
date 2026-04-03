@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { exportData } from '../controllers/export.controller.js';
-import { optionalAuth } from '../middleware/auth.js';
+import { authenticate } from '../middleware/auth.js';
+import { checkDataAccess } from '../middleware/abac-data.js';
 
 const router = Router();
 
-router.get('/', optionalAuth, exportData);
+router.get('/', authenticate, checkDataAccess, exportData);
 
 export default router;
