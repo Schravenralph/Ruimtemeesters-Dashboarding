@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { timingSafeEqual } from 'crypto';
+import { timingSafeEqual, createHmac } from 'crypto';
 import { verifyToken, type JwtPayload } from '../auth/jwt.js';
 import { query } from '../db/pool.js';
 
@@ -22,8 +22,10 @@ declare global {
 const SERVICE_API_KEY = process.env.SERVICE_API_KEY || '';
 
 function safeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  // Hash both to fixed length so comparison doesn't leak input lengths
+  const ha = createHmac('sha256', 'key-compare').update(a).digest();
+  const hb = createHmac('sha256', 'key-compare').update(b).digest();
+  return timingSafeEqual(ha, hb);
 }
 
 export function authenticate(req: Request, res: Response, next: NextFunction): void {
