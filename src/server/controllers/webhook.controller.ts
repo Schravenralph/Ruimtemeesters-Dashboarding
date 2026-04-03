@@ -75,6 +75,16 @@ export async function deleteWebhook(req: Request, res: Response): Promise<void> 
   res.status(204).send();
 }
 
+async function recordFailure(webhook: { id: string; failure_count: number }): Promise<void> {
+  await query(
+    `UPDATE webhooks SET failure_count = failure_count + 1 WHERE id = $1`,
+    [webhook.id],
+  );
+  if (webhook.failure_count >= 9) {
+    await query(`UPDATE webhooks SET is_active = false WHERE id = $1`, [webhook.id]);
+  }
+}
+
 /**
  * Trigger webhooks for a specific event.
  * Called internally when events occur (data import, dashboard create, etc.)
@@ -107,28 +117,10 @@ export async function triggerWebhooks(event: string, payload: Record<string, unk
           [webhook.id],
         );
       } else {
-        await query(
-          `UPDATE webhooks SET failure_count = failure_count + 1 WHERE id = $1`,
-          [webhook.id],
-        );
-        if (webhook.failure_count >= 9) {
-          await query(
-            `UPDATE webhooks SET is_active = false WHERE id = $1`,
-            [webhook.id],
-          );
-        }
+        await recordFailure(webhook);
       }
     } catch {
-      await query(
-        `UPDATE webhooks SET failure_count = failure_count + 1 WHERE id = $1`,
-        [webhook.id],
-      );
-      if (webhook.failure_count >= 9) {
-        await query(
-          `UPDATE webhooks SET is_active = false WHERE id = $1`,
-          [webhook.id],
-        );
-      }
+      await recordFailure(webhook);
     }
   }
 }

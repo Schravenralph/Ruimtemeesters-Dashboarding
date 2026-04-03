@@ -80,7 +80,8 @@ export async function generateReport(config: ReportConfig): Promise<{
        WHERE geo_code = $1 AND year = $2`,
       [config.geoCode, config.compareYear],
     );
-    compareGrandTotal = Number(compareTotalResult.rows[0]?.total || 0);
+    const rawTotal = compareTotalResult.rows[0]?.total;
+    compareGrandTotal = rawTotal != null ? Number(rawTotal) : undefined;
   }
 
   // Build sections
