@@ -21,6 +21,9 @@ declare global {
 
 const SERVICE_API_KEY = process.env.SERVICE_API_KEY || '';
 
+// Deterministic UUID for the synthetic service account (UUID v5 equivalent using SHA-256)
+const SERVICE_USER_ID = '00000000-0000-4000-8000-000000000001';
+
 function safeCompare(a: string, b: string): boolean {
   // Hash both to fixed length so comparison doesn't leak input lengths
   const ha = createHmac('sha256', 'key-compare').update(a).digest();
@@ -51,7 +54,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
         });
     } else {
       // No user context — grant read-only viewer access
-      req.user = { id: 'service:chatbot', email: 'chatbot@ruimtemeesters.nl', name: 'Ruimtemeesters AI', role: 'viewer', organizationId: null, attributes: {} };
+      req.user = { id: SERVICE_USER_ID, email: 'chatbot@ruimtemeesters.nl', name: 'Ruimtemeesters AI', role: 'viewer', organizationId: null, attributes: {} };
       next();
     }
     return;

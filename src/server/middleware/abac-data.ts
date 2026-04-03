@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { query } from '../db/pool.js';
-import { evaluatePolicies } from './abac.js';
+import { filterAllowedResources } from './abac.js';
 
 /**
  * Resolve a data source key to the theme slugs that use it (via tiles).
@@ -63,13 +63,12 @@ export function checkDataAccess(req: Request, res: Response, next: NextFunction)
         return;
       }
 
-      // Allow if user has access to any theme that uses this source
-      for (const slug of themeSlugs) {
-        const allowed = await evaluatePolicies(req.user!, `theme:${slug}`);
-        if (allowed) {
-          next();
-          return;
-        }
+      // Check all theme slugs in a single DB round-trip
+      const resources = themeSlugs.map(s => `theme:${s}`);
+      const allowed = await filterAllowedResources(req.user!, resources);
+      if (allowed.size > 0) {
+        next();
+        return;
       }
 
       res.status(403).json({ error: 'Access denied to this data source' });

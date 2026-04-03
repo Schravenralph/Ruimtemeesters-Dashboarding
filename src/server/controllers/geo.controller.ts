@@ -87,7 +87,7 @@ export async function geocodeAddress(req: Request, res: Response): Promise<void>
   }
 
   try {
-    const pdokUrl = `https://api.pdok.nl/bzk/locatieserver/search/v3_1/suggest?q=${encodeURIComponent(q)}&rows=8&fq=type:(adres OR woonplaats OR gemeente)`;
+    const pdokUrl = `https://api.pdok.nl/bzk/locatieserver/search/v3_1/suggest?q=${encodeURIComponent(q)}&rows=8&fq=type:(adres OR woonplaats OR gemeente)&fl=weergavenaam,type,gemeentecode,gemeentenaam`;
     const pdokRes = await fetch(pdokUrl, { signal: AbortSignal.timeout(5000) });
     if (!pdokRes.ok) {
       res.json({ results: [] });

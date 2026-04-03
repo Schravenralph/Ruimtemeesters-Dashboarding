@@ -54,13 +54,16 @@ export function GeoHierarchyBrowser({ onSelect, onClose }: GeoHierarchyBrowserPr
       return;
     }
     setIsGeocoding(true);
+    let cancelled = false;
     const timeout = setTimeout(() => {
       geocodeAddress(addressQuery).then(({ results }) => {
-        setAddressResults(results);
-        setIsGeocoding(false);
-      }).catch(() => setIsGeocoding(false));
+        if (!cancelled) {
+          setAddressResults(results);
+          setIsGeocoding(false);
+        }
+      }).catch(() => { if (!cancelled) setIsGeocoding(false); });
     }, 300);
-    return () => clearTimeout(timeout);
+    return () => { cancelled = true; clearTimeout(timeout); };
   }, [addressQuery, tab]);
 
   // Initialize tree with top-level areas
