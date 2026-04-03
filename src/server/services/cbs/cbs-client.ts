@@ -25,7 +25,7 @@ interface CbsObservation {
   [key: string]: unknown; // Dynamic dimension fields
 }
 
-interface CbsCodeItem {
+export interface CbsCodeItem {
   Identifier: string;
   Index: number;
   Title: string;
@@ -57,7 +57,7 @@ export async function cbsFetch<T>(url: string, maxPages: number = 50): Promise<T
           throw new Error(`CBS API error: ${response.status} ${response.statusText}`);
         }
 
-        data = await response.json();
+        data = await response.json() as ODataResponse<T>;
         break;
       } catch (err) {
         if (attempt >= 2) throw err;

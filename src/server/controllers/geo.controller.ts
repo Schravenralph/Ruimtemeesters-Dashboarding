@@ -94,7 +94,7 @@ export async function geocodeAddress(req: Request, res: Response): Promise<void>
       return;
     }
 
-    const data = await pdokRes.json();
+    const data = await pdokRes.json() as { response?: { docs?: Record<string, unknown>[] } };
     const suggestions = (data.response?.docs || []).map((doc: Record<string, unknown>) => ({
       display: doc.weergavenaam as string,
       type: doc.type as string,
