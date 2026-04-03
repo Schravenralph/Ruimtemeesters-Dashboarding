@@ -1,10 +1,13 @@
 import { Router } from 'express';
-import { listAreas, getArea, getChildren } from '../controllers/geo.controller.js';
+import { listAreas, getArea, getChildren, geocodeAddress, getGeoJson } from '../controllers/geo.controller.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
 
-router.get('/', listAreas);
-router.get('/:code', getArea);
-router.get('/:code/children', getChildren);
+router.get('/', authenticate, listAreas);
+router.get('/geocode', authenticate, geocodeAddress);
+router.get('/geojson', authenticate, getGeoJson);
+router.get('/:code', authenticate, getArea);
+router.get('/:code/children', authenticate, getChildren);
 
 export default router;

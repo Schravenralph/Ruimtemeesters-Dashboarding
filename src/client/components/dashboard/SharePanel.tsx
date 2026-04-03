@@ -103,14 +103,50 @@ export function SharePanel({ shareToken, onGenerateLink, title }: SharePanelProp
         </div>
       </div>
 
-      {/* Share via email */}
-      <div>
+      {/* Share via platforms */}
+      <div className="flex flex-wrap gap-2">
         <a
           href={`mailto:?subject=${encodeURIComponent(`Dashboard: ${title}`)}&body=${encodeURIComponent(`Bekijk dit dashboard: ${shareUrl}`)}`}
-          className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
         >
           <Mail className="h-4 w-4" />
-          Delen via e-mail
+          E-mail
+        </a>
+        <a
+          href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl!)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+        >
+          <ExternalLink className="h-4 w-4" />
+          LinkedIn
+        </a>
+        <a
+          href={`https://x.com/intent/tweet?url=${encodeURIComponent(shareUrl!)}&text=${encodeURIComponent(`Dashboard: ${title}`)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+        >
+          <ExternalLink className="h-4 w-4" />
+          X
+        </a>
+        <a
+          href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl!)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Facebook
+        </a>
+        <a
+          href={`https://wa.me/?text=${encodeURIComponent(`${title}: ${shareUrl}`)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+        >
+          <ExternalLink className="h-4 w-4" />
+          WhatsApp
         </a>
       </div>
 
