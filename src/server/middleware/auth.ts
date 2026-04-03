@@ -18,7 +18,17 @@ declare global {
   }
 }
 
+const SERVICE_API_KEY = process.env.SERVICE_API_KEY || '';
+
 export function authenticate(req: Request, res: Response, next: NextFunction): void {
+  // Service API key for internal chatbot/MCP access
+  const apiKey = req.headers['x-api-key'] as string | undefined;
+  if (SERVICE_API_KEY && apiKey === SERVICE_API_KEY) {
+    req.user = { id: 'service:chatbot', email: 'chatbot@ruimtemeesters.nl', name: 'Ruimtemeesters AI', role: 'admin', organizationId: null, attributes: {} };
+    next();
+    return;
+  }
+
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 

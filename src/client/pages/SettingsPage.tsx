@@ -1,30 +1,18 @@
-import { useState } from 'react';
-import { Save, Globe, Palette, Bell } from 'lucide-react';
-import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { Card, CardHeader } from '../components/ui/Card';
 import { useThemes } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useToast } from '../components/ui/Toast';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import { setLocale, getLocale, getSupportedLocales } from '../utils/i18n';
 
 export function SettingsPage() {
   const { user } = useAuth();
-  const { showToast } = useToast();
   const { themes } = useThemes();
 
-  const [locale, setLocaleState] = useLocalStorage<string>('locale', getLocale());
   const [defaultTheme, setDefaultTheme] = useLocalStorage('defaultTheme', '');
   const [defaultYear, setDefaultYear] = useLocalStorage('defaultYear', '2024');
   const [autoRefresh, setAutoRefresh] = useLocalStorage('autoRefresh', false);
   const [compactNumbers, setCompactNumbers] = useLocalStorage('compactNumbers', true);
   const [chartAnimation, setChartAnimation] = useLocalStorage('chartAnimation', true);
-
-  function handleSave() {
-    setLocale(locale as 'nl' | 'en');
-    showToast('success', 'Instellingen opgeslagen');
-  }
 
   if (!user) {
     return (
@@ -59,16 +47,6 @@ export function SettingsPage() {
               <span className="text-sm font-medium text-gray-900 capitalize">{user.role}</span>
             </div>
           </div>
-        </Card>
-
-        {/* Language */}
-        <Card>
-          <CardHeader title="Taal" subtitle="Kies de taal van de interface" />
-          <Select
-            value={locale}
-            onChange={(e) => setLocaleState(e.target.value)}
-            options={getSupportedLocales().map(l => ({ value: l.value, label: l.label }))}
-          />
         </Card>
 
         {/* Dashboard Defaults */}
@@ -127,10 +105,7 @@ export function SettingsPage() {
           </div>
         </Card>
 
-        <Button onClick={handleSave}>
-          <Save className="h-4 w-4" />
-          Opslaan
-        </Button>
+        <p className="text-xs text-gray-400">Wijzigingen worden automatisch opgeslagen.</p>
       </div>
     </div>
   );
