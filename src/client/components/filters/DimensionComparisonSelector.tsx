@@ -22,9 +22,8 @@ export function DimensionComparisonSelector({ dataSource }: DimensionComparisonS
     if (!dataSource) return;
     getDimensions(dataSource).then(({ dimensions: dims }) => {
       setDimensions(dims);
-      if (dims.length > 0 && !activeDimension) {
-        setActiveDimension(dims[0].id);
-      }
+      setActiveDimension(dims.length > 0 ? dims[0].id : null);
+      clear();
     });
   }, [dataSource]);
 
@@ -33,14 +32,14 @@ export function DimensionComparisonSelector({ dataSource }: DimensionComparisonS
 
   function toggleValue(value: string) {
     if (compared.includes(value)) {
-      setComparedDimensionValues(compared.filter(v => v !== value));
+      setComparedDimensionValues(compared.filter(v => v !== value), activeDimension || undefined);
     } else if (compared.length < MAX_COMPARED) {
-      setComparedDimensionValues([...compared, value]);
+      setComparedDimensionValues([...compared, value], activeDimension || undefined);
     }
   }
 
   function clear() {
-    setComparedDimensionValues([]);
+    setComparedDimensionValues([], undefined);
   }
 
   if (dimensions.length === 0) return null;
