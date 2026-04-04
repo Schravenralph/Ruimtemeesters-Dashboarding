@@ -13,6 +13,7 @@ interface FilterContextValue {
   setComparisonLevel: (level: GeoLevel | null) => void;
   setComparisonGeoCode: (code: string | null) => void;
   setShowPrognose: (show: boolean) => void;
+  setComparedDimensionValues: (values: string[]) => void;
   resetFilters: () => void;
 }
 
@@ -25,6 +26,7 @@ const defaultFilters: FilterState = {
   comparisonLevel: null,
   comparisonGeoCode: null,
   showPrognose: true,
+  comparedDimensionValues: [],
 };
 
 const FilterContext = createContext<FilterContextValue | null>(null);
@@ -99,6 +101,10 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     updateFilters(prev => ({ ...prev, showPrognose: show }));
   }, [updateFilters]);
 
+  const setComparedDimensionValues = useCallback((values: string[]) => {
+    updateFilters(prev => ({ ...prev, comparedDimensionValues: values }));
+  }, [updateFilters]);
+
   const resetFilters = useCallback(() => {
     if (!activeId) return;
     updatePresentation(activeId, { filters: { ...defaultFilters } });
@@ -116,6 +122,7 @@ export function FilterProvider({ children }: { children: ReactNode }) {
       setComparisonLevel,
       setComparisonGeoCode,
       setShowPrognose,
+      setComparedDimensionValues,
       resetFilters,
     }}>
       {children}

@@ -136,6 +136,7 @@ export const FilterState = z.object({
   comparisonLevel: GeoLevel.nullable().default(null),
   comparisonGeoCode: z.string().nullable().default(null),
   showPrognose: z.boolean().default(true),
+  comparedDimensionValues: z.array(z.string()).default([]),
 });
 export type FilterState = z.infer<typeof FilterState>;
 
