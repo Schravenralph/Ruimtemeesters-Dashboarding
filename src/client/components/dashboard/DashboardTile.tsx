@@ -16,17 +16,21 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
   const [showMenu, setShowMenu] = useState(false);
   const { filters } = useFilters();
 
-  const isDimensionComparison = filters.comparedDimensionValues.length >= 2;
+  // Only apply dimension comparison to tiles that use the compared dimension
+  const tileHasComparedDimension = filters.comparedDimension != null
+    && tile.dimensions.includes(filters.comparedDimension);
+  const isDimensionComparison = tileHasComparedDimension
+    && filters.comparedDimensionValues.length >= 2;
 
   const { data, isLoading, error } = useDataQuery({
     source: tile.dataSource,
-    // When dimension comparison is active, don't filter by dimension value — fetch all
+    // When dimension comparison is active for THIS tile, don't filter by dimension value
     dimension: isDimensionComparison ? undefined : tile.dimensions[0],
   });
 
-  // Merge dimension comparison values into tile config
+  // Merge dimension comparison values into tile config (only for relevant tiles)
   const mergedConfig = isDimensionComparison
-    ? { ...tile.config, comparedDimensionValues: filters.comparedDimensionValues }
+    ? { ...tile.config, comparedDimensionValues: filters.comparedDimensionValues, filterDimension: undefined, filterValue: undefined }
     : tile.config;
 
   return (
@@ -132,6 +136,7 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
                   data={data}
                   isLoading={isLoading}
                   error={error}
+                  config={mergedConfig as Record<string, unknown>}
                 />
               </div>
             </div>

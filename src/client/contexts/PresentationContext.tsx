@@ -42,6 +42,7 @@ const defaultFilters: FilterState = {
   comparisonLevel: null,
   comparisonGeoCode: null,
   showPrognose: true,
+  comparedDimension: null,
   comparedDimensionValues: [],
 };
 
