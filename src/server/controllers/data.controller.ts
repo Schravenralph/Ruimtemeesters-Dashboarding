@@ -40,12 +40,33 @@ export async function queryData(req: Request, res: Response): Promise<void> {
   }
 
   if (dimension && dimensionValue) {
+    // Filtering to a specific dimension value
     const dimCol = sourceDef.dimensionColumns.find(c =>
       c.replace(/_/g, '') === dimension.replace(/_/g, ''),
     );
     if (dimCol) {
       conditions.push(`d.${safeIdent(dimCol)} = $${paramIdx++}`);
       params.push(dimensionValue);
+    }
+  } else if (dimension) {
+    // Browsing a dimension without a specific value:
+    // 1. Exclude 'totaal' from the active dimension (it's a subtotal row)
+    // 2. Pin all OTHER dimensions to 'totaal' to avoid cross-product double-counting
+    const dimCol = sourceDef.dimensionColumns.find(c =>
+      c.replace(/_/g, '') === dimension.replace(/_/g, ''),
+    );
+    if (dimCol) {
+      conditions.push(`d.${safeIdent(dimCol)} != 'totaal'`);
+      for (const otherCol of sourceDef.dimensionColumns) {
+        if (otherCol !== dimCol) {
+          conditions.push(`d.${safeIdent(otherCol)} = 'totaal'`);
+        }
+      }
+    }
+  } else if (sourceDef.dimensionColumns.length > 0) {
+    // No dimension specified — return only the grand totals to avoid overcounting
+    for (const col of sourceDef.dimensionColumns) {
+      conditions.push(`d.${safeIdent(col)} = 'totaal'`);
     }
   }
 
