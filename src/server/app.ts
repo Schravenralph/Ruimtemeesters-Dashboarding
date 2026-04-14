@@ -1,7 +1,11 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
 import express, { type Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import authRoutes from './routes/auth.routes.js';
 import themeRoutes from './routes/theme.routes.js';
@@ -89,8 +93,19 @@ app.use('/api/webhooks', webhookRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
 app.use('/api/supercategories', supercategoryRoutes);
 
-// Error handling (must be last)
+// API not-found handler (before SPA catch-all)
 app.use('/api', notFoundHandler);
+
+// Serve static client files in production
+if (process.env.NODE_ENV === 'production') {
+  const clientDir = path.resolve(__dirname, '../../client');
+  app.use(express.static(clientDir));
+  app.get('{*path}', (_req, res) => {
+    res.sendFile(path.join(clientDir, 'index.html'));
+  });
+}
+
+// Error handling (must be last)
 app.use(errorHandler);
 
 export default app;

@@ -1,4 +1,35 @@
 services:
+  app:
+    build:
+      context: .
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
+    container_name: dashboarding-app
+    ports:
+      - "127.0.0.1:5022:5022"
+    environment:
+      NODE_ENV: production
+      PORT: 5022
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/dashboarding
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: dashboarding
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
+      SALES_VIEWER_GRAPHQL_URL: ${SALES_VIEWER_GRAPHQL_URL}
+      SALES_VIEWER_GRAPHQL_KEY: ${SALES_VIEWER_GRAPHQL_KEY}
+      SERVICE_API_KEY: ${SERVICE_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   db:
     image: postgres:16-alpine
     container_name: dashboarding-postgres
@@ -7,7 +38,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "6433:5432"
+      - "127.0.0.1:6433:5432"
     volumes:
       - dashboarding-pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -15,6 +46,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
 volumes:
   dashboarding-pgdata:

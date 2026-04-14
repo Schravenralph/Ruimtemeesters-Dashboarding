@@ -33,6 +33,8 @@
   "author": "Ruimtemeesters",
   "license": "UNLICENSED",
   "dependencies": {
+    "@clerk/express": "^2.1.1",
+    "@clerk/react": "^6.3.0",
     "@types/leaflet": "^1.9.21",
     "axios": "^1.13.0",
     "bcryptjs": "^3.0.3",

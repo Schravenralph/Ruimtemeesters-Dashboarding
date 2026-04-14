@@ -12,6 +12,8 @@ FROM base AS build-client
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+ARG VITE_CLERK_PUBLISHABLE_KEY
+ENV VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY}
 RUN pnpm run build:client
 
 # Build server
@@ -32,11 +34,11 @@ RUN pnpm install --frozen-lockfile --prod
 COPY --from=build-client /app/dist/client ./dist/client
 COPY --from=build-server /app/dist/server ./dist/server
 
-EXPOSE 5002
+EXPOSE 5022
 ENV NODE_ENV=production
-ENV PORT=5002
+ENV PORT=5022
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget -q --spider http://localhost:5002/api/health || exit 1
+  CMD wget -q --spider http://localhost:5022/api/health || exit 1
 
 CMD ["node", "dist/server/server/index.js"]

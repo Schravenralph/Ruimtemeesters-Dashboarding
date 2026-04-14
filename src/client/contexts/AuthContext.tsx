@@ -1,60 +1,71 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useUser, useAuth as useClerkAuth } from '@clerk/react';
 import type { User } from '@shared/api/contracts';
-import * as authApi from '../services/api/auth';
+import { api } from '../services/api/client.js';
 
 interface AuthState {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
+  const { getToken, signOut } = useClerkAuth();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const token = authApi.restoreToken();
-    if (token) {
-      authApi.getMe()
-        .then(({ user }) => setUser(user as User))
-        .catch(() => {
-          authApi.logout();
-          setUser(null);
-        })
-        .finally(() => setIsLoading(false));
-    } else {
+    if (!clerkLoaded) return;
+
+    if (!clerkUser) {
+      setUser(null);
+      api.setToken(null);
       setIsLoading(false);
+      return;
     }
-  }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const response = await authApi.login(email, password);
-    setUser(response.user);
-  }, []);
+    // Get Clerk session token and set it for API calls
+    getToken().then(token => {
+      if (token) {
+        api.setToken(token);
+      }
+      // Map Clerk user to app User shape
+      const clerkRole = (clerkUser.publicMetadata?.role as string) || 'viewer';
+      const isAdmin = clerkRole === 'director' || clerkRole === 'manager';
 
-  const register = useCallback(async (email: string, password: string, name: string) => {
-    const response = await authApi.register(email, password, name);
-    setUser(response.user);
-  }, []);
+      setUser({
+        id: clerkUser.id,
+        email: clerkUser.primaryEmailAddress?.emailAddress || '',
+        name: clerkUser.fullName || clerkUser.firstName || 'Gebruiker',
+        role: isAdmin ? 'admin' : 'viewer',
+      } as User);
+      setIsLoading(false);
+    }).catch(() => {
+      setIsLoading(false);
+    });
+  }, [clerkUser, clerkLoaded, getToken]);
 
-  const logout = useCallback(() => {
-    authApi.logout();
-    setUser(null);
-  }, []);
+  // Refresh token periodically (Clerk tokens are short-lived)
+  useEffect(() => {
+    if (!clerkUser) return;
+    const interval = setInterval(() => {
+      getToken().then(token => {
+        if (token) api.setToken(token);
+      });
+    }, 50_000); // refresh every 50s (tokens last ~60s)
+    return () => clearInterval(interval);
+  }, [clerkUser, getToken]);
 
   return (
     <AuthContext.Provider value={{
       user,
       isLoading,
       isAuthenticated: !!user,
-      login,
-      register,
-      logout,
+      logout: () => signOut(),
     }}>
       {children}
     </AuthContext.Provider>

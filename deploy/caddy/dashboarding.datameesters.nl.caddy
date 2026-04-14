@@ -1,0 +1,13 @@
+# dashboarding.datameesters.nl — Ruimtemeesters Dashboarding
+#
+# Architecture:
+#   Express server serves both API (/api/*) and static client
+#   on localhost:5022
+#
+# SSOT: this file lives in deploy/caddy/ of the Ruimtemeesters-Dashboarding
+# repo. Install to /etc/caddy/conf.d/ and import from the main Caddyfile:
+#   import conf.d/dashboarding.datameesters.nl.caddy
+
+dashboarding.datameesters.nl {
+	reverse_proxy localhost:5022
+}

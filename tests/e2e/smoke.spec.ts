@@ -1,14 +1,15 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Smoke tests', () => {
-  test('homepage loads', async ({ page }) => {
+  test('homepage loads and shows title', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/Ruimtemeesters/);
   });
 
-  test('login page renders', async ({ page }) => {
-    await page.goto('/login');
-    await expect(page.getByText('Inloggen')).toBeVisible();
+  test('unauthenticated users see workspace login prompt', async ({ page }) => {
+    await page.goto('/');
+    // Clerk will render signed-out state — user should see the workspace redirect
+    await expect(page.getByText('Je bent niet ingelogd.')).toBeVisible({ timeout: 15000 });
   });
 
   test('health endpoint returns ok', async ({ request }) => {

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ClerkProvider, Show } from '@clerk/react';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider, useThemes } from './contexts/ThemeContext';
 import { PresentationProvider } from './contexts/PresentationContext';
@@ -8,9 +9,10 @@ import { Layout } from './components/ui/Layout';
 import { ToastProvider } from './components/ui/Toast';
 import { LoadingOverlay } from './components/ui/Spinner';
 
+const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
+
 // Lazy-loaded pages for code splitting
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
-const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
 const CustomDashboardsPage = lazy(() => import('./pages/CustomDashboardsPage').then(m => ({ default: m.CustomDashboardsPage })));
 const CustomDashboardEditorPage = lazy(() => import('./pages/CustomDashboardEditorPage').then(m => ({ default: m.CustomDashboardEditorPage })));
 const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
@@ -26,6 +28,20 @@ function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<LoadingOverlay message="Pagina laden..." />}>{children}</Suspense>;
 }
 
+function NotSignedIn() {
+  return (
+    <div className="flex flex-col items-center justify-center h-screen gap-4">
+      <p className="text-gray-600 text-lg">Je bent niet ingelogd.</p>
+      <a
+        href="https://datameesters.nl"
+        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+      >
+        Ga naar Workspace om in te loggen
+      </a>
+    </div>
+  );
+}
+
 function DashboardRedirect() {
   const { themes, isLoading } = useThemes();
 
@@ -36,43 +52,55 @@ function DashboardRedirect() {
   return <Navigate to={`/dashboard/${fallback}`} replace />;
 }
 
+function AuthenticatedApp() {
+  return (
+    <AuthProvider>
+      <ThemeProvider>
+        <PresentationProvider>
+        <FilterProvider>
+          <ToastProvider>
+            <SuspenseWrapper>
+              <Routes>
+                {/* Public routes */}
+                <Route path="/shared/:token" element={<SharedDashboardPage />} />
+                <Route path="/print/:slug" element={<PrintPage />} />
+                <Route path="/embed/:slug" element={<EmbedPage />} />
+
+                {/* App routes with layout */}
+                <Route path="/" element={<Layout><Navigate to="/dashboard" replace /></Layout>} />
+                <Route path="/dashboard" element={<Layout><DashboardRedirect /></Layout>} />
+                <Route path="/dashboard/:slug" element={<Layout><DashboardPage /></Layout>} />
+                <Route path="/mijn-dashboards" element={<Layout><CustomDashboardsPage /></Layout>} />
+                <Route path="/mijn-dashboards/:id" element={<Layout><CustomDashboardEditorPage /></Layout>} />
+                <Route path="/admin" element={<Layout><AdminPage /></Layout>} />
+                <Route path="/instellingen" element={<Layout><SettingsPage /></Layout>} />
+                <Route path="/help" element={<Layout><HelpPage /></Layout>} />
+                <Route path="/download" element={<Layout><DataDownloadPage /></Layout>} />
+                <Route path="/rapport" element={<Layout><ReportPage /></Layout>} />
+
+                {/* Fallback */}
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </Routes>
+            </SuspenseWrapper>
+          </ToastProvider>
+        </FilterProvider>
+        </PresentationProvider>
+      </ThemeProvider>
+    </AuthProvider>
+  );
+}
+
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <ThemeProvider>
-          <PresentationProvider>
-          <FilterProvider>
-            <ToastProvider>
-              <SuspenseWrapper>
-                <Routes>
-                  {/* Public routes */}
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route path="/shared/:token" element={<SharedDashboardPage />} />
-                  <Route path="/print/:slug" element={<PrintPage />} />
-                  <Route path="/embed/:slug" element={<EmbedPage />} />
-
-                  {/* App routes with layout */}
-                  <Route path="/" element={<Layout><Navigate to="/dashboard" replace /></Layout>} />
-                  <Route path="/dashboard" element={<Layout><DashboardRedirect /></Layout>} />
-                  <Route path="/dashboard/:slug" element={<Layout><DashboardPage /></Layout>} />
-                  <Route path="/mijn-dashboards" element={<Layout><CustomDashboardsPage /></Layout>} />
-                  <Route path="/mijn-dashboards/:id" element={<Layout><CustomDashboardEditorPage /></Layout>} />
-                  <Route path="/admin" element={<Layout><AdminPage /></Layout>} />
-                  <Route path="/instellingen" element={<Layout><SettingsPage /></Layout>} />
-                  <Route path="/help" element={<Layout><HelpPage /></Layout>} />
-                  <Route path="/download" element={<Layout><DataDownloadPage /></Layout>} />
-                  <Route path="/rapport" element={<Layout><ReportPage /></Layout>} />
-
-                  {/* Fallback */}
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                </Routes>
-              </SuspenseWrapper>
-            </ToastProvider>
-          </FilterProvider>
-          </PresentationProvider>
-        </ThemeProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ClerkProvider publishableKey={CLERK_KEY}>
+      <BrowserRouter>
+        <Show when="signed-in">
+          <AuthenticatedApp />
+        </Show>
+        <Show when="signed-out">
+          <NotSignedIn />
+        </Show>
+      </BrowserRouter>
+    </ClerkProvider>
   );
 }
