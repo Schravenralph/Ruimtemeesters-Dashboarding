@@ -91,30 +91,9 @@ export function DashboardPage() {
   }
 
   async function handleExportAll() {
-    // Trigger download of all tiles as PDF
-    const { jsPDF } = await import('jspdf');
-    const doc = new jsPDF();
-
-    doc.setFontSize(20);
-    doc.text(theme?.name || 'Dashboard', 20, 20);
-    doc.setFontSize(10);
-    doc.text(`Geexporteerd: ${new Date().toLocaleString('nl-NL')}`, 20, 30);
-
-    let yOffset = 40;
-    for (const tile of theme?.tiles || []) {
-      if (yOffset > 250) {
-        doc.addPage();
-        yOffset = 20;
-      }
-      doc.setFontSize(14);
-      doc.text(tile.title, 20, yOffset);
-      yOffset += 8;
-      doc.setFontSize(9);
-      doc.text(`Bron: ${tile.dataSource} | Type: ${tile.chartType}`, 20, yOffset);
-      yOffset += 15;
-    }
-
-    doc.save(`${theme?.name || 'dashboard'}.pdf`);
+    if (!theme) return;
+    const { exportBulkPdf } = await import('../utils/export');
+    await exportBulkPdf(theme.tiles, theme.name);
   }
 
   if (themesLoading || isLoading) {

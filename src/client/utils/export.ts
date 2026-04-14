@@ -107,6 +107,47 @@ async function exportAsExcel(tile: TileConfig) {
   XLSX.writeFile(wb, `${tile.title}.xlsx`);
 }
 
+export async function exportBulkPdf(tiles: TileConfig[], themeName: string) {
+  const { jsPDF } = await import('jspdf');
+  const html2canvas = (await import('html2canvas')).default;
+  const doc = new jsPDF();
+
+  // Cover page
+  doc.setFontSize(24);
+  doc.text(themeName, 20, 40);
+  doc.setFontSize(11);
+  doc.text(`Geexporteerd: ${new Date().toLocaleString('nl-NL')}`, 20, 52);
+  doc.text(`Aantal tegels: ${tiles.length}`, 20, 59);
+  doc.setFontSize(9);
+  doc.text('Bron: CBS, StatLine (opendata.cbs.nl) — Licentie: CC-BY 4.0', 20, 70);
+
+  for (let i = 0; i < tiles.length; i++) {
+    const tile = tiles[i];
+    doc.addPage();
+
+    doc.setFontSize(14);
+    doc.text(tile.title, 20, 20);
+    doc.setFontSize(9);
+    doc.text(`Bron: ${tile.dataSource} | Type: ${tile.chartType}`, 20, 28);
+
+    const tileElement = document.querySelector(`[data-tile-id="${tile.id}"]`) as HTMLElement | null;
+    if (tileElement) {
+      try {
+        const canvas = await html2canvas(tileElement, { backgroundColor: '#ffffff', scale: 2 });
+        const imgData = canvas.toDataURL('image/png');
+        const imgWidth = 170;
+        const imgHeight = Math.min((canvas.height / canvas.width) * imgWidth, 220);
+        doc.addImage(imgData, 'PNG', 20, 35, imgWidth, imgHeight);
+      } catch {
+        doc.setFontSize(10);
+        doc.text('(Tegel kon niet worden gerenderd)', 20, 45);
+      }
+    }
+  }
+
+  doc.save(`${themeName}.pdf`);
+}
+
 function downloadFile(content: string, filename: string, mimeType: string) {
   const blob = new Blob(['\uFEFF' + content], { type: mimeType });
   const url = URL.createObjectURL(blob);
