@@ -71,6 +71,8 @@ export async function queryData(req: Request, res: Response): Promise<void> {
   }
 
   // Filter by data origin (cbs_actuals vs cbs_prognose)
+  // When not explicitly filtered, deduplicate overlapping sources later via window function
+  const explicitSource = !!dataOrigin;
   if (dataOrigin) {
     conditions.push(`d.source = $${paramIdx++}`);
     params.push(dataOrigin);
@@ -94,30 +96,87 @@ export async function queryData(req: Request, res: Response): Promise<void> {
   const dimSelects = sourceDef.dimensionColumns
     .map(c => `d.${safeIdent(c)}`)
     .join(', ');
+  const dimPartition = sourceDef.dimensionColumns
+    .map(c => `d.${safeIdent(c)}`)
+    .join(', ');
 
   const hasConfidence = TABLES_WITH_CONFIDENCE.includes(sourceDef.tableName);
   const confidenceSelect = hasConfidence ? ', d.confidence_lower, d.confidence_upper' : '';
 
-  const sql = `
-    SELECT d.geo_code, g.name as geo_name, d.year,
-           ${dimSelects},
-           d.${safeIdent(sourceDef.valueColumn)} as value,
-           d.source as data_source${confidenceSelect}
-    FROM ${safeIdent(sourceDef.tableName)} d
-    JOIN geo_areas g ON g.code = d.geo_code
-    ${whereClause}
-    ORDER BY d.year, g.name
-    ${limitClause} ${offsetClause}
-  `;
+  // When no explicit source filter: deduplicate overlapping sources.
+  // Priority: cbs_actuals > cbs_prognose > ruimtemeesters_prognose.
+  // Uses ROW_NUMBER to keep only the highest-priority source per (geo, year, dimensions).
+  const needsDedup = !explicitSource;
+
+  let sql: string;
+  if (needsDedup) {
+    const partitionCols = dimPartition ? `d.geo_code, d.year, ${dimPartition}` : 'd.geo_code, d.year';
+    sql = `
+      WITH ranked AS (
+        SELECT d.geo_code, g.name as geo_name, d.year,
+               ${dimSelects},
+               d.${safeIdent(sourceDef.valueColumn)} as value,
+               d.source as data_source${confidenceSelect},
+               ROW_NUMBER() OVER (
+                 PARTITION BY ${partitionCols}
+                 ORDER BY CASE d.source
+                   WHEN 'cbs_actuals' THEN 1
+                   WHEN 'cbs_prognose' THEN 2
+                   WHEN 'ruimtemeesters_prognose' THEN 3
+                   ELSE 4
+                 END
+               ) as rn
+        FROM ${safeIdent(sourceDef.tableName)} d
+        JOIN geo_areas g ON g.code = d.geo_code
+        ${whereClause}
+      )
+      SELECT geo_code, geo_name, year, ${sourceDef.dimensionColumns.map(c => safeIdent(c)).join(', ')},
+             value, data_source${hasConfidence ? ', confidence_lower, confidence_upper' : ''}
+      FROM ranked WHERE rn = 1
+      ORDER BY year, geo_name
+      ${limitClause} ${offsetClause}
+    `;
+  } else {
+    sql = `
+      SELECT d.geo_code, g.name as geo_name, d.year,
+             ${dimSelects},
+             d.${safeIdent(sourceDef.valueColumn)} as value,
+             d.source as data_source${confidenceSelect}
+      FROM ${safeIdent(sourceDef.tableName)} d
+      JOIN geo_areas g ON g.code = d.geo_code
+      ${whereClause}
+      ORDER BY d.year, g.name
+      ${limitClause} ${offsetClause}
+    `;
+  }
 
   const result = await query(sql, params);
 
-  const countSql = `
-    SELECT COUNT(*) as total
-    FROM ${safeIdent(sourceDef.tableName)} d
-    JOIN geo_areas g ON g.code = d.geo_code
-    ${whereClause}
-  `;
+  const countSql = needsDedup
+    ? `
+      WITH ranked AS (
+        SELECT d.geo_code, d.year,
+               ROW_NUMBER() OVER (
+                 PARTITION BY d.geo_code, d.year${dimPartition ? ', ' + dimPartition : ''}
+                 ORDER BY CASE d.source
+                   WHEN 'cbs_actuals' THEN 1
+                   WHEN 'cbs_prognose' THEN 2
+                   WHEN 'ruimtemeesters_prognose' THEN 3
+                   ELSE 4
+                 END
+               ) as rn
+        FROM ${safeIdent(sourceDef.tableName)} d
+        JOIN geo_areas g ON g.code = d.geo_code
+        ${whereClause}
+      )
+      SELECT COUNT(*) as total FROM ranked WHERE rn = 1
+    `
+    : `
+      SELECT COUNT(*) as total
+      FROM ${safeIdent(sourceDef.tableName)} d
+      JOIN geo_areas g ON g.code = d.geo_code
+      ${whereClause}
+    `;
   const countResult = await query(countSql, params);
 
   const data = result.rows.map(row => ({
