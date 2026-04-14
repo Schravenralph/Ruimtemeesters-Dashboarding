@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Database, CheckCircle, AlertCircle, Play } from 'lucide-react';
+import { RefreshCw, Database, CheckCircle, AlertCircle, Play, Brain } from 'lucide-react';
 import { api } from '../../services/api/client.js';
 import { Button } from '../ui/Button.js';
 
@@ -44,11 +44,18 @@ export function DataSyncPanel() {
   const [syncYear, setSyncYear] = useState<string>('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const [tsaStatus, setTsaStatus] = useState<{ health: { status: string }; models: { models_available: string[]; last_forecast_run: string; last_forecast_gemeenten: number; total_forecast_rows: number } | null } | null>(null);
+  const [forecastRunning, setForecastRunning] = useState(false);
+
   async function loadStatus() {
     setLoading(true);
     try {
-      const data = await api.get<SyncStatus>('/sync/status');
+      const [data, tsa] = await Promise.all([
+        api.get<SyncStatus>('/sync/status'),
+        api.get<typeof tsaStatus>('/sync/forecast/status').catch(() => null),
+      ]);
       setStatus(data);
+      setTsaStatus(tsa);
     } catch (err) {
       console.error('Failed to load sync status:', err);
     } finally {
@@ -57,6 +64,19 @@ export function DataSyncPanel() {
   }
 
   useEffect(() => { loadStatus(); }, []);
+
+  async function runForecast() {
+    setForecastRunning(true);
+    setMessage(null);
+    try {
+      await api.post('/sync/forecast');
+      setMessage({ type: 'success', text: 'Prognose gestart. Dit kan enkele minuten duren.' });
+    } catch {
+      setMessage({ type: 'error', text: 'Prognose starten mislukt — TSA engine niet bereikbaar.' });
+    } finally {
+      setForecastRunning(false);
+    }
+  }
 
   async function runSync(source?: string) {
     const key = source || 'all';
@@ -106,6 +126,46 @@ export function DataSyncPanel() {
         <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
           {message.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           {message.text}
+        </div>
+      )}
+
+      {/* TSA Forecast Engine */}
+      {tsaStatus && (
+        <div className="border border-purple-200 bg-purple-50/30 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Brain className="w-5 h-5 text-purple-600" />
+              <h3 className="font-medium text-gray-900">TSA Prognose Engine</h3>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${tsaStatus.health.status === 'ok' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {tsaStatus.health.status}
+              </span>
+            </div>
+            <Button onClick={runForecast} disabled={forecastRunning || tsaStatus.health.status !== 'ok'}>
+              <Play className="w-4 h-4 mr-1" />
+              {forecastRunning ? 'Bezig...' : 'Prognose draaien'}
+            </Button>
+          </div>
+          {tsaStatus.models && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div>
+                <p className="text-gray-500 text-xs">Modellen</p>
+                <p className="font-medium">{tsaStatus.models.models_available.length}</p>
+                <p className="text-xs text-gray-400">{tsaStatus.models.models_available.join(', ')}</p>
+              </div>
+              <div>
+                <p className="text-gray-500 text-xs">Laatste run</p>
+                <p className="font-medium">{tsaStatus.models.last_forecast_run ? new Date(tsaStatus.models.last_forecast_run).toLocaleDateString('nl-NL') : '—'}</p>
+              </div>
+              <div>
+                <p className="text-gray-500 text-xs">Gemeenten</p>
+                <p className="font-medium">{tsaStatus.models.last_forecast_gemeenten}</p>
+              </div>
+              <div>
+                <p className="text-gray-500 text-xs">Prognose rijen</p>
+                <p className="font-medium">{tsaStatus.models.total_forecast_rows.toLocaleString('nl-NL')}</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

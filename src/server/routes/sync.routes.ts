@@ -82,4 +82,49 @@ router.post('/run', authenticate, requireRole('admin'), async (req: Request, res
   res.json({ status: 'started', source: source || 'all', year: year || 'all' });
 });
 
+// POST /api/sync/forecast — trigger a TSA forecast run
+router.post('/forecast', authenticate, requireRole('admin'), async (_req: Request, res: Response) => {
+  const tsaUrl = process.env.TSA_API_URL || 'http://tsa-engine:8100';
+  const tsaKey = process.env.TSA_API_KEY || process.env.SERVICE_API_KEY || '';
+
+  try {
+    const response = await fetch(`${tsaUrl}/api/v1/forecast/bevolking`, {
+      method: 'POST',
+      headers: { 'X-API-Key': tsaKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ years_ahead: 5 }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      res.status(502).json({ error: `TSA returned ${response.status}: ${text}` });
+      return;
+    }
+
+    const result = await response.json();
+    res.json({ status: 'started', result });
+  } catch (err) {
+    res.status(502).json({ error: `TSA unreachable: ${(err as Error).message}` });
+  }
+});
+
+// GET /api/sync/forecast/status — check TSA engine status
+router.get('/forecast/status', authenticate, requireRole('admin'), async (_req: Request, res: Response) => {
+  const tsaUrl = process.env.TSA_API_URL || 'http://tsa-engine:8100';
+  const tsaKey = process.env.TSA_API_KEY || process.env.SERVICE_API_KEY || '';
+
+  try {
+    const [healthRes, modelsRes] = await Promise.all([
+      fetch(`${tsaUrl}/health`),
+      fetch(`${tsaUrl}/api/v1/models/status`, { headers: { 'X-API-Key': tsaKey } }),
+    ]);
+
+    const health = await healthRes.json();
+    const models = modelsRes.ok ? await modelsRes.json() : null;
+
+    res.json({ health, models });
+  } catch (err) {
+    res.json({ health: { status: 'unreachable', error: (err as Error).message }, models: null });
+  }
+});
+
 export default router;

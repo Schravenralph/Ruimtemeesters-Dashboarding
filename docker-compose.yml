@@ -25,10 +25,15 @@ services:
       SALES_VIEWER_GRAPHQL_URL: ${SALES_VIEWER_GRAPHQL_URL}
       SALES_VIEWER_GRAPHQL_KEY: ${SALES_VIEWER_GRAPHQL_KEY}
       SERVICE_API_KEY: ${SERVICE_API_KEY}
+      TSA_API_URL: http://tsa-engine:8100
+      TSA_API_KEY: ${TSA_API_KEY:-rm-tsa-service-2026}
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - default
+      - ruimtemeesters-shared
 
   db:
     image: postgres:16-alpine
@@ -47,6 +52,13 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - default
+      - ruimtemeesters-shared
 
 volumes:
   dashboarding-pgdata:
+
+networks:
+  ruimtemeesters-shared:
+    external: true
