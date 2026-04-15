@@ -229,6 +229,30 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
     if (dimCol) {
       conditions.push(`d.${safeIdent(dimCol)} = $${paramIdx++}`);
       params.push(dimensionValue);
+      // Pin other dimensions to 'totaal' to avoid cross-product overcounting
+      for (const otherCol of sourceDef.dimensionColumns) {
+        if (otherCol !== dimCol) {
+          conditions.push(`d.${safeIdent(otherCol)} = 'totaal'`);
+        }
+      }
+    }
+  } else if (dimension) {
+    // Browsing a dimension: exclude subtotals, pin others to totaal
+    const dimCol = sourceDef.dimensionColumns.find(c =>
+      c.replace(/_/g, '') === dimension.replace(/_/g, ''),
+    );
+    if (dimCol) {
+      conditions.push(`d.${safeIdent(dimCol)} != 'totaal'`);
+      for (const otherCol of sourceDef.dimensionColumns) {
+        if (otherCol !== dimCol) {
+          conditions.push(`d.${safeIdent(otherCol)} = 'totaal'`);
+        }
+      }
+    }
+  } else if (sourceDef.dimensionColumns.length > 0) {
+    // No dimension specified — return only grand totals to avoid overcounting
+    for (const col of sourceDef.dimensionColumns) {
+      conditions.push(`d.${safeIdent(col)} = 'totaal'`);
     }
   }
 

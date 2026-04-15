@@ -132,14 +132,49 @@ async function seed() {
         icon: 'TrendingDown',
         order: 4,
       },
+      // --- AI Prognose & Example Dashboards ---
+      {
+        id: '40000000-0000-0000-0000-000000000001',
+        slug: 'prognose',
+        name: 'Prognose',
+        description: 'AI-gestuurde bevolkingsprognoses op basis van 7 machine learning modellen (TSA Engine)',
+        icon: 'Brain',
+        order: 5,
+      },
+      {
+        id: '40000000-0000-0000-0000-000000000002',
+        slug: 'groeianalyse',
+        name: 'Groeianalyse',
+        description: 'Vergelijk bevolkingsgroei tussen gemeenten — ontdek welke steden het snelst groeien',
+        icon: 'TrendingUp',
+        order: 6,
+      },
+      {
+        id: '40000000-0000-0000-0000-000000000003',
+        slug: 'energietransitie',
+        name: 'Energietransitie',
+        description: 'Energieverbruik trends en AI-prognoses — van fossiel naar hernieuwbaar',
+        icon: 'Zap',
+        order: 7,
+        supercategory: 'duurzaamheid',
+      },
+      {
+        id: '40000000-0000-0000-0000-000000000004',
+        slug: 'circulair',
+        name: 'Circulaire Economie',
+        description: 'Afvalproductie en recycling trends met AI-voorspellingen',
+        icon: 'Leaf',
+        order: 8,
+        supercategory: 'duurzaamheid',
+      },
     ];
 
     for (const theme of themes) {
       await client.query(
-        `INSERT INTO themes (id, slug, name, description, icon, "order", is_system)
-         VALUES ($1, $2, $3, $4, $5, $6, true)
+        `INSERT INTO themes (id, slug, name, description, icon, "order", is_system, supercategory)
+         VALUES ($1, $2, $3, $4, $5, $6, true, $7)
          ON CONFLICT (id) DO NOTHING`,
-        [theme.id, theme.slug, theme.name, theme.description, theme.icon, theme.order],
+        [theme.id, theme.slug, theme.name, theme.description, theme.icon, theme.order, (theme as { supercategory?: string }).supercategory || 'wonen'],
       );
     }
 
@@ -176,6 +211,30 @@ async function seed() {
       { themeId: themes[4].id, title: 'Vraag vs. Aanbod', chartType: 'stacked-bar', dataSource: 'woningtekort', dims: ['metric'], geoLevel: 'gemeente', order: 1 },
       { themeId: themes[4].id, title: 'Tekort per gemeente', chartType: 'choropleth', dataSource: 'woningtekort', dims: ['metric'], geoLevel: 'gemeente', order: 2 },
       { themeId: themes[4].id, title: 'Tekort tabel', chartType: 'table', dataSource: 'woningtekort', dims: ['metric'], geoLevel: 'gemeente', order: 3 },
+
+      // Prognose tiles (AI forecasting dashboard)
+      { themeId: themes[5].id, title: 'Bevolkingsprognose', chartType: 'line', dataSource: 'bevolking', dims: [], geoLevel: 'gemeente', order: 0 },
+      { themeId: themes[5].id, title: 'Prognose naar leeftijd', chartType: 'bar', dataSource: 'bevolking', dims: ['age_group'], geoLevel: 'gemeente', order: 1 },
+      { themeId: themes[5].id, title: 'Bevolking per gemeente', chartType: 'choropleth', dataSource: 'bevolking', dims: [], geoLevel: 'gemeente', order: 2 },
+      { themeId: themes[5].id, title: 'Prognose details', chartType: 'table', dataSource: 'bevolking', dims: ['age_group'], geoLevel: 'gemeente', order: 3 },
+
+      // Groeianalyse tiles
+      { themeId: themes[6].id, title: 'Bevolkingsgroei', chartType: 'line', dataSource: 'bevolking', dims: [], geoLevel: 'gemeente', order: 0 },
+      { themeId: themes[6].id, title: 'Leeftijdsopbouw', chartType: 'bar', dataSource: 'bevolking', dims: ['age_group'], geoLevel: 'gemeente', order: 1 },
+      { themeId: themes[6].id, title: 'Bevolkingsspreiding', chartType: 'choropleth', dataSource: 'bevolking', dims: [], geoLevel: 'gemeente', order: 2 },
+      { themeId: themes[6].id, title: 'Gemeenten overzicht', chartType: 'table', dataSource: 'bevolking', dims: ['age_group'], geoLevel: 'gemeente', order: 3 },
+
+      // Energietransitie tiles
+      { themeId: themes[7].id, title: 'Energieverbruik trend', chartType: 'line', dataSource: 'energie', dims: [], geoLevel: 'gemeente', order: 0 },
+      { themeId: themes[7].id, title: 'Hernieuwbare energie trend', chartType: 'line', dataSource: 'hernieuwbaar', dims: [], geoLevel: 'gemeente', order: 1 },
+      { themeId: themes[7].id, title: 'Energie per sector', chartType: 'bar', dataSource: 'energie', dims: ['sector'], geoLevel: 'gemeente', order: 2 },
+      { themeId: themes[7].id, title: 'Hernieuwbaar per bron', chartType: 'pie', dataSource: 'hernieuwbaar', dims: ['energy_source'], geoLevel: 'gemeente', order: 3 },
+
+      // Circulaire Economie tiles
+      { themeId: themes[8].id, title: 'Afvalproductie trend', chartType: 'line', dataSource: 'afval', dims: [], geoLevel: 'gemeente', order: 0 },
+      { themeId: themes[8].id, title: 'Afval naar type', chartType: 'pie', dataSource: 'afval', dims: ['waste_type'], geoLevel: 'gemeente', order: 1 },
+      { themeId: themes[8].id, title: 'Afval per gemeente', chartType: 'choropleth', dataSource: 'afval', dims: [], geoLevel: 'gemeente', order: 2 },
+      { themeId: themes[8].id, title: 'Afval details', chartType: 'table', dataSource: 'afval', dims: ['waste_type'], geoLevel: 'gemeente', order: 3 },
     ];
 
     for (const tile of tiles) {

@@ -44,7 +44,11 @@ export function DataSyncPanel() {
   const [syncYear, setSyncYear] = useState<string>('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const [tsaStatus, setTsaStatus] = useState<{ health: { status: string }; models: { models_available: string[]; last_forecast_run: string; last_forecast_gemeenten: number; total_forecast_rows: number } | null } | null>(null);
+  const [tsaStatus, setTsaStatus] = useState<{
+    health: { status: string };
+    models: { models_available: string[]; last_forecast_run: string; last_forecast_gemeenten: number; total_forecast_rows: number } | null;
+    forecastRun: { status: 'running' | 'completed' | 'failed'; startedAt: string; completedAt?: string; error?: string } | null;
+  } | null>(null);
   const [forecastRunning, setForecastRunning] = useState(false);
 
   async function loadStatus() {
@@ -65,16 +69,47 @@ export function DataSyncPanel() {
 
   useEffect(() => { loadStatus(); }, []);
 
+  // Poll for forecast completion when a run is active
+  useEffect(() => {
+    const isRunning = tsaStatus?.forecastRun?.status === 'running';
+    if (!isRunning) return;
+
+    setForecastRunning(true);
+    const interval = setInterval(async () => {
+      try {
+        const data = await api.get<typeof tsaStatus>('/sync/forecast/status');
+        setTsaStatus(data);
+        if (data?.forecastRun?.status !== 'running') {
+          setForecastRunning(false);
+          if (data?.forecastRun?.status === 'completed') {
+            setMessage({ type: 'success', text: `Prognose voltooid (${data.forecastRun.completedAt ? new Date(data.forecastRun.completedAt).toLocaleTimeString('nl-NL') : ''})` });
+          } else if (data?.forecastRun?.status === 'failed') {
+            setMessage({ type: 'error', text: `Prognose mislukt: ${data.forecastRun.error || 'onbekende fout'}` });
+          }
+          clearInterval(interval);
+          loadStatus();
+        }
+      } catch { /* ignore poll errors */ }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [tsaStatus?.forecastRun?.status]);
+
   async function runForecast() {
     setForecastRunning(true);
     setMessage(null);
     try {
       await api.post('/sync/forecast');
-      setMessage({ type: 'success', text: 'Prognose gestart. Dit kan enkele minuten duren.' });
-    } catch {
-      setMessage({ type: 'error', text: 'Prognose starten mislukt — TSA engine niet bereikbaar.' });
-    } finally {
+      setMessage({ type: 'success', text: 'Prognose gestart — draait op de server. Je kan deze pagina sluiten.' });
+      // Reload status to start polling
+      const data = await api.get<typeof tsaStatus>('/sync/forecast/status');
+      setTsaStatus(data);
+    } catch (err) {
       setForecastRunning(false);
+      const msg = err instanceof Error && err.message.includes('409')
+        ? 'Prognose is al bezig.'
+        : 'Prognose starten mislukt — TSA engine niet bereikbaar.';
+      setMessage({ type: 'error', text: msg });
     }
   }
 
@@ -145,6 +180,13 @@ export function DataSyncPanel() {
               {forecastRunning ? 'Bezig...' : 'Prognose draaien'}
             </Button>
           </div>
+          {/* Active run indicator */}
+          {tsaStatus.forecastRun?.status === 'running' && (
+            <div className="mb-3 p-2 bg-purple-100 rounded-md flex items-center gap-2 text-sm text-purple-800">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              Prognose draait op de server sinds {new Date(tsaStatus.forecastRun.startedAt).toLocaleTimeString('nl-NL')}...
+            </div>
+          )}
           {tsaStatus.models && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
               <div>

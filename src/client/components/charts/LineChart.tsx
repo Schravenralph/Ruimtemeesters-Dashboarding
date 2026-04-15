@@ -1,6 +1,7 @@
 import {
   ComposedChart,
-  Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
+  Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ReferenceLine, ReferenceArea,
 } from 'recharts';
 import type { DataPoint } from '@shared/api/contracts';
 
@@ -23,8 +24,13 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
     // Simple line chart — split actuals from prognose
     const isPrognose = (d: DataPoint) => d.source === 'cbs_prognose' || d.source === 'ruimtemeesters_prognose';
     const hasPrognose = data.some(isPrognose);
-
     const hasConfidence = data.some(d => d.confidenceLower != null);
+
+    // Find the transition year (last year with actuals)
+    const actualYears = data.filter(d => !isPrognose(d)).map(d => d.year);
+    const transitionYear = actualYears.length > 0 ? Math.max(...actualYears) : null;
+    const prognoseYears = data.filter(isPrognose).map(d => d.year);
+    const lastPrognoseYear = prognoseYears.length > 0 ? Math.max(...prognoseYears) : null;
 
     const chartData = data.map(d => ({
       name: String(d.year),
@@ -37,11 +43,10 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
     }));
 
     // Add bridge point: last actual year also appears in prognose series for continuity
-    if (hasPrognose) {
-      const lastActual = chartData.filter(d => d.actuals !== undefined).pop();
-      if (lastActual) {
-        const bridgeIdx = chartData.findIndex(d => d.name === lastActual.name);
-        if (bridgeIdx >= 0) chartData[bridgeIdx].prognose = lastActual.actuals;
+    if (hasPrognose && transitionYear) {
+      const bridgeIdx = chartData.findIndex(d => d.name === String(transitionYear));
+      if (bridgeIdx >= 0 && chartData[bridgeIdx].actuals !== undefined) {
+        chartData[bridgeIdx].prognose = chartData[bridgeIdx].actuals;
       }
     }
 
@@ -51,15 +56,49 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="name" tick={{ fontSize: 12 }} />
           <YAxis tick={{ fontSize: 12 }} tickFormatter={formatNumber} />
-          <Tooltip formatter={(value: number | number[]) => Array.isArray(value) ? `${formatNumber(value[0])} – ${formatNumber(value[1])}` : formatNumber(value)} />
+          <Tooltip
+            formatter={(value: number | number[], name: string) => {
+              if (Array.isArray(value)) return [`${formatNumber(value[0])} – ${formatNumber(value[1])}`, name];
+              return [formatNumber(value), name];
+            }}
+            labelFormatter={(label) => {
+              const yr = parseInt(label);
+              if (transitionYear && yr > transitionYear) return `${label} (prognose)`;
+              return label;
+            }}
+          />
+          {/* Shaded prognose zone background */}
+          {hasPrognose && transitionYear && lastPrognoseYear && (
+            <ReferenceArea
+              x1={String(transitionYear)}
+              x2={String(lastPrognoseYear)}
+              fill="#8b5cf6"
+              fillOpacity={0.04}
+              strokeOpacity={0}
+            />
+          )}
+          {/* Vertical divider line at transition year */}
+          {hasPrognose && transitionYear && (
+            <ReferenceLine
+              x={String(transitionYear)}
+              stroke="#8b5cf6"
+              strokeDasharray="4 4"
+              strokeWidth={1.5}
+              label={{ value: 'Prognose →', position: 'insideTopRight', fontSize: 11, fill: '#7c3aed', fontWeight: 600 }}
+            />
+          )}
+          {/* Confidence band */}
           {hasConfidence && (
-            <Area type="monotone" dataKey="confidenceBand" name="Betrouwbaarheid" fill={colors[0]} fillOpacity={0.1} stroke="none" />
+            <Area type="monotone" dataKey="confidenceBand" name="95% betrouwbaarheid" fill="#8b5cf6" fillOpacity={0.12} stroke="none" />
           )}
           {hasPrognose ? (
             <>
-              <Line type="monotone" dataKey="actuals" name="Actueel" stroke={colors[0]} strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
-              <Line type="monotone" dataKey="prognose" name="Prognose" stroke={colors[0]} strokeWidth={2} strokeDasharray="6 3" dot={{ r: 2 }} connectNulls={false} />
-              <Legend />
+              <Line type="monotone" dataKey="actuals" name="Actueel (CBS)" stroke={colors[0]} strokeWidth={2.5} dot={{ r: 2, strokeWidth: 0 }} connectNulls={false} />
+              <Line type="monotone" dataKey="prognose" name="Prognose (TSA)" stroke="#8b5cf6" strokeWidth={2.5} strokeDasharray="6 3" dot={{ r: 2, fill: '#8b5cf6', strokeWidth: 0 }} connectNulls={false} />
+              <Legend
+                wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                formatter={(value: string) => <span style={{ color: '#374151' }}>{value}</span>}
+              />
             </>
           ) : (
             <Line type="monotone" dataKey="value" stroke={colors[0]} strokeWidth={2} dot={{ r: 3 }} />

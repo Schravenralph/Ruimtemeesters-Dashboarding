@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Home, Building2, TrendingDown,
   ChevronLeft, ChevronRight, Plus, Settings,
+  Brain, TrendingUp, Zap, Leaf, Trash2, BarChart3, Target, Map,
 } from 'lucide-react';
 import { useThemes } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -10,6 +11,7 @@ import type { ThemeConfig } from '@shared/api/contracts';
 
 const iconMap: Record<string, typeof LayoutDashboard> = {
   LayoutDashboard, Users, Home, Building2, TrendingDown,
+  Brain, TrendingUp, Zap, Leaf, Trash2, BarChart3, Target, Map,
 };
 
 function getIcon(iconName?: string) {

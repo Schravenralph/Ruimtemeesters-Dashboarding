@@ -82,48 +82,83 @@ router.post('/run', authenticate, requireRole('admin'), async (req: Request, res
   res.json({ status: 'started', source: source || 'all', year: year || 'all' });
 });
 
-// POST /api/sync/forecast — trigger a TSA forecast run
-router.post('/forecast', authenticate, requireRole('admin'), async (_req: Request, res: Response) => {
-  const tsaUrl = process.env.TSA_API_URL || 'http://tsa-engine:8100';
-  const tsaKey = process.env.TSA_API_KEY || process.env.SERVICE_API_KEY || '';
+// --- TSA forecast run tracking (in-memory) ---
+// Tracks the current/last forecast run so the UI can poll for completion.
+let forecastRun: {
+  status: 'running' | 'completed' | 'failed';
+  startedAt: string;
+  completedAt?: string;
+  result?: unknown;
+  error?: string;
+} | null = null;
 
+const TSA_URL = () => process.env.TSA_API_URL || 'http://tsa-engine:8100';
+const TSA_KEY = () => process.env.TSA_API_KEY || process.env.SERVICE_API_KEY || '';
+
+// POST /api/sync/forecast — trigger a TSA forecast run (fire-and-forget)
+// Responds immediately so the browser won't timeout on long-running forecasts.
+// The TSA runs server-side; poll GET /api/sync/forecast/status to track progress.
+router.post('/forecast', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
+  if (forecastRun?.status === 'running') {
+    res.status(409).json({ error: 'Forecast already running', startedAt: forecastRun.startedAt });
+    return;
+  }
+
+  const yearsAhead = Number(req.body?.years_ahead) || 5;
+
+  // Check TSA is reachable before starting
   try {
-    const response = await fetch(`${tsaUrl}/api/v1/forecast/bevolking`, {
-      method: 'POST',
-      headers: { 'X-API-Key': tsaKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ years_ahead: 5 }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      res.status(502).json({ error: `TSA returned ${response.status}: ${text}` });
+    const health = await fetch(`${TSA_URL()}/health`);
+    if (!health.ok) {
+      res.status(502).json({ error: 'TSA engine not healthy' });
       return;
     }
-
-    const result = await response.json();
-    res.json({ status: 'started', result });
   } catch (err) {
     res.status(502).json({ error: `TSA unreachable: ${(err as Error).message}` });
+    return;
   }
+
+  // Fire and forget — respond immediately, run in background
+  forecastRun = { status: 'running', startedAt: new Date().toISOString() };
+  res.json({ status: 'started', startedAt: forecastRun.startedAt });
+
+  // Background: call TSA and track result
+  fetch(`${TSA_URL()}/api/v1/forecast/bevolking`, {
+    method: 'POST',
+    headers: { 'X-API-Key': TSA_KEY(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ years_ahead: yearsAhead }),
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        const text = await response.text();
+        forecastRun = { ...forecastRun!, status: 'failed', completedAt: new Date().toISOString(), error: `TSA returned ${response.status}: ${text}` };
+        console.error(`[TSA] Forecast failed: ${response.status}`);
+        return;
+      }
+      const result = await response.json();
+      forecastRun = { ...forecastRun!, status: 'completed', completedAt: new Date().toISOString(), result };
+      console.log(`[TSA] Forecast completed: ${JSON.stringify(result)}`);
+    })
+    .catch((err) => {
+      forecastRun = { ...forecastRun!, status: 'failed', completedAt: new Date().toISOString(), error: (err as Error).message };
+      console.error(`[TSA] Forecast error: ${(err as Error).message}`);
+    });
 });
 
-// GET /api/sync/forecast/status — check TSA engine status
+// GET /api/sync/forecast/status — check TSA engine status + current run status
 router.get('/forecast/status', authenticate, requireRole('admin'), async (_req: Request, res: Response) => {
-  const tsaUrl = process.env.TSA_API_URL || 'http://tsa-engine:8100';
-  const tsaKey = process.env.TSA_API_KEY || process.env.SERVICE_API_KEY || '';
-
   try {
     const [healthRes, modelsRes] = await Promise.all([
-      fetch(`${tsaUrl}/health`),
-      fetch(`${tsaUrl}/api/v1/models/status`, { headers: { 'X-API-Key': tsaKey } }),
+      fetch(`${TSA_URL()}/health`),
+      fetch(`${TSA_URL()}/api/v1/models/status`, { headers: { 'X-API-Key': TSA_KEY() } }),
     ]);
 
     const health = await healthRes.json();
     const models = modelsRes.ok ? await modelsRes.json() : null;
 
-    res.json({ health, models });
+    res.json({ health, models, forecastRun });
   } catch (err) {
-    res.json({ health: { status: 'unreachable', error: (err as Error).message }, models: null });
+    res.json({ health: { status: 'unreachable', error: (err as Error).message }, models: null, forecastRun });
   }
 });
 

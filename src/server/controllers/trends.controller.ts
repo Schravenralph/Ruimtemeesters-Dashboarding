@@ -1,6 +1,43 @@
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
 
+// Priority: cbs_actuals > cbs_prognose > ruimtemeesters_prognose
+const SOURCE_PRIORITY = `CASE source WHEN 'cbs_actuals' THEN 1 WHEN 'cbs_prognose' THEN 2 ELSE 3 END`;
+
+// Per-source queries that filter dimensions to 'totaal' and deduplicate sources.
+// Without this, SUM(value) counts every dimension row (age groups, genders, etc.),
+// inflating totals by 2-4x.
+const TREND_QUERIES: Record<string, string> = {
+  bevolking: `
+    WITH ranked AS (
+      SELECT year, value, ROW_NUMBER() OVER (PARTITION BY year ORDER BY ${SOURCE_PRIORITY}) as rn
+      FROM data_bevolking
+      WHERE geo_code = $1 AND age_group = 'totaal' AND gender = 'totaal'
+    )
+    SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+  huishoudens: `
+    WITH ranked AS (
+      SELECT year, value, ROW_NUMBER() OVER (PARTITION BY year ORDER BY ${SOURCE_PRIORITY}) as rn
+      FROM data_huishoudens
+      WHERE geo_code = $1 AND household_type = 'totaal' AND dimension_type = 'samenstelling'
+    )
+    SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+  woningen: `
+    WITH ranked AS (
+      SELECT year, value, ROW_NUMBER() OVER (PARTITION BY year ORDER BY ${SOURCE_PRIORITY}) as rn
+      FROM data_woningen
+      WHERE geo_code = $1 AND tenure_type = 'totaal' AND dwelling_type = 'totaal'
+    )
+    SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+  woningtekort: `
+    WITH ranked AS (
+      SELECT year, value, ROW_NUMBER() OVER (PARTITION BY year ORDER BY ${SOURCE_PRIORITY}) as rn
+      FROM data_woningtekort
+      WHERE geo_code = $1 AND metric = 'tekort'
+    )
+    SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+};
+
 /**
  * Calculate growth trends for a data source.
  * Returns year-over-year growth rates and compound annual growth rate (CAGR).
@@ -9,27 +46,13 @@ export async function getTrends(req: Request, res: Response): Promise<void> {
   const source = req.params.source as string;
   const geoCode = (req.query.geoCode as string) || 'NL';
 
-  const tableMap: Record<string, string> = {
-    bevolking: 'data_bevolking',
-    huishoudens: 'data_huishoudens',
-    woningen: 'data_woningen',
-    woningtekort: 'data_woningtekort',
-  };
-
-  const table = tableMap[source];
-  if (!table) {
+  const sql = TREND_QUERIES[source];
+  if (!sql) {
     res.status(400).json({ error: 'Unknown source' });
     return;
   }
 
-  const result = await query(
-    `SELECT year, SUM(value) as total
-     FROM ${table}
-     WHERE geo_code = $1
-     GROUP BY year
-     ORDER BY year`,
-    [geoCode],
-  );
+  const result = await query(sql, [geoCode]);
 
   const timeSeries = result.rows.map(r => ({
     year: r.year,
@@ -88,6 +111,46 @@ export async function getTrends(req: Request, res: Response): Promise<void> {
   });
 }
 
+// Per-source comparison queries — dimension-filtered + source-deduplicated
+const COMPARE_QUERIES: Record<string, string> = {
+  bevolking: `
+    WITH ranked AS (
+      SELECT d.geo_code, g.name as geo_name, d.year, d.value,
+             ROW_NUMBER() OVER (PARTITION BY d.geo_code, d.year ORDER BY ${SOURCE_PRIORITY}) as rn
+      FROM data_bevolking d
+      JOIN geo_areas g ON g.code = d.geo_code
+      WHERE d.geo_code = ANY($1) AND d.age_group = 'totaal' AND d.gender = 'totaal'
+    )
+    SELECT geo_code, geo_name, year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+  huishoudens: `
+    WITH ranked AS (
+      SELECT d.geo_code, g.name as geo_name, d.year, d.value,
+             ROW_NUMBER() OVER (PARTITION BY d.geo_code, d.year ORDER BY ${SOURCE_PRIORITY}) as rn
+      FROM data_huishoudens d
+      JOIN geo_areas g ON g.code = d.geo_code
+      WHERE d.geo_code = ANY($1) AND d.household_type = 'totaal' AND d.dimension_type = 'samenstelling'
+    )
+    SELECT geo_code, geo_name, year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+  woningen: `
+    WITH ranked AS (
+      SELECT d.geo_code, g.name as geo_name, d.year, d.value,
+             ROW_NUMBER() OVER (PARTITION BY d.geo_code, d.year ORDER BY ${SOURCE_PRIORITY}) as rn
+      FROM data_woningen d
+      JOIN geo_areas g ON g.code = d.geo_code
+      WHERE d.geo_code = ANY($1) AND d.tenure_type = 'totaal' AND d.dwelling_type = 'totaal'
+    )
+    SELECT geo_code, geo_name, year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+  woningtekort: `
+    WITH ranked AS (
+      SELECT d.geo_code, g.name as geo_name, d.year, d.value,
+             ROW_NUMBER() OVER (PARTITION BY d.geo_code, d.year ORDER BY ${SOURCE_PRIORITY}) as rn
+      FROM data_woningtekort d
+      JOIN geo_areas g ON g.code = d.geo_code
+      WHERE d.geo_code = ANY($1) AND d.metric = 'tekort'
+    )
+    SELECT geo_code, geo_name, year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+};
+
 /**
  * Compare trends across multiple geographic areas.
  */
@@ -95,15 +158,8 @@ export async function compareTrends(req: Request, res: Response): Promise<void> 
   const source = req.params.source as string;
   const geoCodes = (req.query.geoCodes as string)?.split(',') || [];
 
-  const tableMap: Record<string, string> = {
-    bevolking: 'data_bevolking',
-    huishoudens: 'data_huishoudens',
-    woningen: 'data_woningen',
-    woningtekort: 'data_woningtekort',
-  };
-
-  const table = tableMap[source];
-  if (!table || geoCodes.length === 0) {
+  const sql = COMPARE_QUERIES[source];
+  if (!sql || geoCodes.length === 0) {
     res.status(400).json({ error: 'Invalid parameters' });
     return;
   }
@@ -113,15 +169,7 @@ export async function compareTrends(req: Request, res: Response): Promise<void> 
     return;
   }
 
-  const result = await query(
-    `SELECT d.geo_code, g.name as geo_name, d.year, SUM(d.value) as total
-     FROM ${table} d
-     JOIN geo_areas g ON g.code = d.geo_code
-     WHERE d.geo_code = ANY($1)
-     GROUP BY d.geo_code, g.name, d.year
-     ORDER BY d.year`,
-    [geoCodes],
-  );
+  const result = await query(sql, [geoCodes]);
 
   // Group by geo code
   const grouped = new Map<string, { name: string; data: { year: number; value: number }[] }>();

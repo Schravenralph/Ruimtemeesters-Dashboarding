@@ -1,5 +1,8 @@
 import { query } from '../db/pool.js';
 
+// Priority: cbs_actuals > cbs_prognose > ruimtemeesters_prognose
+const SOURCE_PRIORITY = `CASE d.source WHEN 'cbs_actuals' THEN 1 WHEN 'cbs_prognose' THEN 2 ELSE 3 END`;
+
 interface ComparisonResult {
   areaCode: string;
   areaName: string;
@@ -9,6 +12,21 @@ interface ComparisonResult {
   percentChange: number;
   rank: number;
 }
+
+// Per-source dimension filters for grand total rows
+const DIMENSION_FILTERS: Record<string, string> = {
+  bevolking: "AND d.age_group = 'totaal' AND d.gender = 'totaal'",
+  huishoudens: "AND d.household_type = 'totaal' AND d.dimension_type = 'samenstelling'",
+  woningen: "AND d.tenure_type = 'totaal' AND d.dwelling_type = 'totaal'",
+  woningtekort: "AND d.metric = 'tekort'",
+};
+
+const TABLE_MAP: Record<string, string> = {
+  bevolking: 'data_bevolking',
+  huishoudens: 'data_huishoudens',
+  woningen: 'data_woningen',
+  woningtekort: 'data_woningtekort',
+};
 
 /**
  * Compare all areas within a geographic level for a given data source.
@@ -22,38 +40,34 @@ export async function compareAreasAtLevel(options: {
 }): Promise<ComparisonResult[]> {
   const { source, level, currentYear, previousYear } = options;
 
-  const tableMap: Record<string, string> = {
-    bevolking: 'data_bevolking',
-    huishoudens: 'data_huishoudens',
-    woningen: 'data_woningen',
-    woningtekort: 'data_woningtekort',
-  };
+  const table = TABLE_MAP[source];
+  const dimFilter = DIMENSION_FILTERS[source];
+  if (!table || !dimFilter) return [];
 
-  const table = tableMap[source];
-  if (!table) return [];
-
+  // Filter dimensions to grand total, deduplicate overlapping sources per area+year
   const sql = `
-    WITH current_data AS (
-      SELECT d.geo_code, g.name, SUM(d.value) as total
+    WITH current_ranked AS (
+      SELECT d.geo_code, g.name, d.value,
+             ROW_NUMBER() OVER (PARTITION BY d.geo_code ORDER BY ${SOURCE_PRIORITY}) as rn
       FROM ${table} d
       JOIN geo_areas g ON g.code = d.geo_code AND g.level = $1
-      WHERE d.year = $2
-      GROUP BY d.geo_code, g.name
+      WHERE d.year = $2 ${dimFilter}
     ),
-    previous_data AS (
-      SELECT d.geo_code, SUM(d.value) as total
+    previous_ranked AS (
+      SELECT d.geo_code, d.value,
+             ROW_NUMBER() OVER (PARTITION BY d.geo_code ORDER BY ${SOURCE_PRIORITY}) as rn
       FROM ${table} d
       JOIN geo_areas g ON g.code = d.geo_code AND g.level = $1
-      WHERE d.year = $3
-      GROUP BY d.geo_code
+      WHERE d.year = $3 ${dimFilter}
     )
     SELECT
       c.geo_code,
       c.name,
-      c.total as current_value,
-      COALESCE(p.total, 0) as previous_value
-    FROM current_data c
-    LEFT JOIN previous_data p ON p.geo_code = c.geo_code
+      c.value as current_value,
+      COALESCE(p.value, 0) as previous_value
+    FROM current_ranked c
+    LEFT JOIN previous_ranked p ON p.geo_code = c.geo_code AND p.rn = 1
+    WHERE c.rn = 1
     ORDER BY c.name
   `;
 
