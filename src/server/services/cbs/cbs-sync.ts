@@ -100,6 +100,8 @@ export async function syncBevolking(yearFilter?: number): Promise<SyncResult> {
     // Aggregate: region+year+ageGroup+gender -> sum
     const aggregated = new Map<string, { geoCode: string; geoName: string; geoLevel: string; year: number; ageGroup: string; gender: string; value: number }>();
 
+    const unmappedCodes = new Set<string>();
+
     for (const obs of observations) {
       if (obs.Value === null) continue;
 
@@ -112,7 +114,10 @@ export async function syncBevolking(yearFilter?: number): Promise<SyncResult> {
       if (age === null) continue;
       const ageGroup = ageToGroup(age);
       const gender = genderMapping[obs.Geslacht as string];
-      if (!ageGroup || !gender) continue;
+      if (!ageGroup || !gender) {
+        unmappedCodes.add(`age:${obs.Leeftijd}` || `gender:${obs.Geslacht}`);
+        continue;
+      }
 
       const geoName = regioMap.get((obs.RegioS as string).trim()) || region.code;
       const key = `${region.code}|${year}|${ageGroup}|${gender}`;
@@ -156,6 +161,12 @@ export async function syncBevolking(yearFilter?: number): Promise<SyncResult> {
       }
 
       await client.query('COMMIT');
+
+      if (unmappedCodes.size > 0) {
+        const warning = `${unmappedCodes.size} unmapped CBS codes skipped: ${[...unmappedCodes].slice(0, 5).join(', ')}`;
+        console.warn(`[CBS Sync bevolking] ${warning}`);
+        errors.push(warning);
+      }
     } catch (err) {
       await client.query('ROLLBACK');
       errors.push(err instanceof Error ? err.message : 'Unknown error');
@@ -627,17 +638,21 @@ export async function calculateWoningtekort(year: number): Promise<SyncResult> {
 
   try {
     // Get total households per gemeente
+    // Get total households per gemeente — filter to samenstelling dimension
+    // and cbs_actuals source to avoid double-counting if multiple dimension_types
+    // or prognose rows exist
     const hhResult = await query(
-      `SELECT geo_code, SUM(value) as total
-       FROM data_huishoudens WHERE year = $1 AND household_type = 'totaal'
-       GROUP BY geo_code`,
+      `SELECT geo_code, value as total
+       FROM data_huishoudens
+       WHERE year = $1 AND household_type = 'totaal'
+         AND dimension_type = 'samenstelling' AND source = 'cbs_actuals'`,
       [year],
     );
 
     // Get total housing stock per gemeente (from woningmutaties eindstand or woningen totaal)
     const woningResult = await query(
       `SELECT geo_code, value as total
-       FROM data_woningtekort WHERE year = $1 AND metric = 'voorraad_eind'`,
+       FROM data_woningtekort WHERE year = $1 AND metric = 'voorraad_eind' AND source = 'cbs_actuals'`,
       [year],
     );
 
@@ -645,9 +660,9 @@ export async function calculateWoningtekort(year: number): Promise<SyncResult> {
     let woningMap = new Map(woningResult.rows.map(r => [r.geo_code, Number(r.total)]));
     if (woningMap.size === 0) {
       const fallback = await query(
-        `SELECT geo_code, SUM(value) as total
-         FROM data_woningen WHERE year = $1 AND tenure_type = 'totaal' AND dwelling_type = 'totaal'
-         GROUP BY geo_code`,
+        `SELECT geo_code, value as total
+         FROM data_woningen
+         WHERE year = $1 AND tenure_type = 'totaal' AND dwelling_type = 'totaal' AND source = 'cbs_actuals'`,
         [year],
       );
       woningMap = new Map(fallback.rows.map(r => [r.geo_code, Number(r.total)]));
