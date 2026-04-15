@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Users, Home, Building2, TrendingDown, ArrowUp, ArrowDown, Brain, ArrowRight } from 'lucide-react';
+import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { api } from '../../services/api/client';
 import { useFilters } from '../../contexts/FilterContext';
 import { formatCompact } from '../../utils/format';
@@ -34,6 +35,7 @@ export function StatsSummary() {
   const { filters } = useFilters();
   const [stats, setStats] = useState<StatsData | null>(null);
   const [prognose, setPrognose] = useState<PrognoseData | null>(null);
+  const [sparklines, setSparklines] = useState<Record<string, { year: number; value: number }[]>>({});
 
   useEffect(() => {
     api.get<{ stats: StatsData }>('/stats/overview', {
@@ -53,6 +55,20 @@ export function StatsSummary() {
         setPrognose(null);
       }
     }).catch(() => setPrognose(null));
+
+    // Fetch sparkline data for each source
+    const sources = ['bevolking', 'huishoudens', 'woningen', 'woningtekort'];
+    Promise.all(
+      sources.map(s =>
+        api.get<{ timeSeries: { year: number; value: number }[] }>(`/stats/timeseries/${s}`, { geoCode: filters.geoCode })
+          .then(d => [s, d.timeSeries] as [string, { year: number; value: number }[]])
+          .catch(() => [s, []] as [string, { year: number; value: number }[]])
+      )
+    ).then(results => {
+      const map: Record<string, { year: number; value: number }[]> = {};
+      for (const [source, ts] of results) map[source] = ts;
+      setSparklines(map);
+    });
   }, [filters.period.year, filters.geoCode]);
 
   if (!stats) return null;
@@ -107,18 +123,32 @@ export function StatsSummary() {
           const change = 'change' in data ? data.change : null;
           const colors = colorClasses[color];
 
+          const spark = sparklines[key === 'woningtekort' ? 'woningtekort' : key] || [];
+          const sparkColor = parseFloat(change || '0') >= 0 ? '#10b981' : '#ef4444';
+
           return (
             <div key={key} className="rounded-xl border border-gray-200 bg-white p-5">
-              <div className="flex items-center gap-3">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${colors.bg}`}>
-                  <Icon className={`h-5 w-5 ${colors.icon}`} />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${colors.bg}`}>
+                    <Icon className={`h-5 w-5 ${colors.icon}`} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-500">{label}</p>
+                    <p className="text-xl font-bold text-gray-900">
+                      {value.toLocaleString('nl-NL')}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500">{label}</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    {value.toLocaleString('nl-NL')}
-                  </p>
-                </div>
+                {spark.length > 2 && (
+                  <div className="w-20 h-8">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={spark.slice(-10)}>
+                        <Line type="monotone" dataKey="value" stroke={sparkColor} strokeWidth={1.5} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </div>
               {change !== null && (
                 <div className={`mt-3 flex items-center gap-1 text-sm ${
