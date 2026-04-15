@@ -34,6 +34,7 @@ import webhookRoutes from './routes/webhook.routes.js';
 import apiKeyRoutes from './routes/api-key.routes.js';
 import supercategoryRoutes from './routes/supercategory.routes.js';
 import syncRoutes from './routes/sync.routes.js';
+import comparisonRoutes from './routes/comparison.routes.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
@@ -94,6 +95,7 @@ app.use('/api/webhooks', webhookRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
 app.use('/api/supercategories', supercategoryRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/comparison', comparisonRoutes);
 
 // API not-found handler (before SPA catch-all)
 app.use('/api', notFoundHandler);

@@ -11,6 +11,7 @@ import { ThemeInfoPanel } from '../components/dashboard/ThemeInfoPanel';
 import { OverviewGrid } from '../components/dashboard/OverviewGrid';
 import { TrendSummary } from '../components/dashboard/TrendSummary';
 import { GemeenteComparison } from '../components/dashboard/GemeenteComparison';
+import { TopGroeiers } from '../components/dashboard/TopGroeiers';
 import { PeriodBar } from '../components/dashboard/PeriodBar';
 import { MultiAreaTable } from '../components/dashboard/MultiAreaTable';
 import { WorkspaceManager } from '../components/dashboard/WorkspaceManager';
@@ -191,6 +192,11 @@ export function DashboardPage() {
       {/* Gemeente Comparison (groeianalyse and prognose themes) */}
       {(theme.slug === 'groeianalyse' || theme.slug === 'prognose') && (
         <GemeenteComparison source={mainDataSource} />
+      )}
+
+      {/* Top Groeiers ranked list (groeianalyse theme) */}
+      {theme.slug === 'groeianalyse' && (
+        <TopGroeiers source={mainDataSource} />
       )}
 
       {/* Drilldown */}
