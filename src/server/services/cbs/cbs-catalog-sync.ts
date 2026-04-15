@@ -100,15 +100,23 @@ export async function syncCbsCatalog(): Promise<{
     tableThemes.set(j.TableIdentifier, existing);
   }
 
-  // Upsert into database
+  // Upsert into database — use savepoints so one bad row doesn't kill the batch
   const client = await getClient();
+  let inserted = 0;
   try {
     await client.query('BEGIN');
-
     const now = new Date().toISOString();
 
     for (const table of tables) {
       try {
+        // Parse modified date safely
+        let modified: Date | null = null;
+        if (table.Modified) {
+          const parsed = new Date(table.Modified);
+          if (!isNaN(parsed.getTime())) modified = parsed;
+        }
+
+        await client.query('SAVEPOINT sp');
         await client.query(`
           INSERT INTO cbs_catalog (
             identifier, title, short_title, summary, frequency, period,
@@ -130,20 +138,23 @@ export async function syncCbsCatalog(): Promise<{
             catalog_synced_at = EXCLUDED.catalog_synced_at
         `, [
           table.Identifier,
-          table.Title,
-          table.ShortTitle,
+          table.Title || 'Untitled',
+          table.ShortTitle || null,
           table.Summary || null,
-          table.Frequency,
-          table.Period,
-          table.RecordCount,
-          table.ColumnCount,
-          table.Modified ? new Date(table.Modified) : null,
-          table.GraphTypes,
-          table.ApiUrl,
+          table.Frequency || null,
+          table.Period || null,
+          table.RecordCount ?? null,
+          table.ColumnCount ?? null,
+          modified,
+          table.GraphTypes || null,
+          table.ApiUrl || null,
           tableThemes.get(table.Identifier) || [],
           now,
         ]);
+        await client.query('RELEASE SAVEPOINT sp');
+        inserted++;
       } catch (err) {
+        await client.query('ROLLBACK TO SAVEPOINT sp');
         errors.push(`${table.Identifier}: ${err instanceof Error ? err.message : 'unknown'}`);
       }
     }
@@ -153,7 +164,7 @@ export async function syncCbsCatalog(): Promise<{
       INSERT INTO system_state (key, value, updated_at)
       VALUES ('cbs_catalog_sync', $1, NOW())
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
-    `, [JSON.stringify({ tables: tables.length, themes: themes.length, at: now })]);
+    `, [JSON.stringify({ tables: inserted, themes: themes.length, at: now })]);
 
     await client.query('COMMIT');
   } catch (err) {
