@@ -5,9 +5,10 @@ import { query } from '../db/pool.js';
  * This mirrors how Primos provides aggregated views at different geographic levels.
  */
 
+// Dims must match the UNIQUE constraint columns (excluding geo_code, year, source)
 const DATA_TABLES = [
   { name: 'data_bevolking', dims: ['age_group', 'gender'] },
-  { name: 'data_huishoudens', dims: ['household_type'] },
+  { name: 'data_huishoudens', dims: ['household_type', 'dimension_type'] },
   { name: 'data_woningen', dims: ['tenure_type', 'dwelling_type'] },
   { name: 'data_woningtekort', dims: ['metric'] },
 ];

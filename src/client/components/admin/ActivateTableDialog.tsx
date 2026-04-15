@@ -124,7 +124,7 @@ export function ActivateTableDialog({ identifier, title, onClose, onActivated }:
               <p className="text-sm text-gray-600 mb-6">{success.message}</p>
               <div className="flex items-center justify-center gap-3">
                 <Button variant="secondary" onClick={() => { onActivated(); onClose(); }}>Sluiten</Button>
-                <Button onClick={() => { navigate(`/dashboard/${success.themeSlug}`); onClose(); }}>
+                <Button onClick={() => { onActivated(); navigate(`/dashboard/${success.themeSlug}`); onClose(); }}>
                   Naar dashboard →
                 </Button>
               </div>

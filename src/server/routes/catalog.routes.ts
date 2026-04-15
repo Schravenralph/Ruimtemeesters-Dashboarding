@@ -166,14 +166,19 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
     `, [key, identifier]);
 
     // 4. Auto-create a theme with default tiles
-    const themeId = crypto.randomUUID();
-    await client.query(`
-      INSERT INTO themes (id, slug, name, description, icon, "order", is_system, supercategory)
-      VALUES ($1, $2, $3, $4, 'BarChart3',
-              (SELECT COALESCE(MAX("order"), 0) + 1 FROM themes WHERE supercategory = $5),
-              true, $5)
-      ON CONFLICT DO NOTHING
-    `, [themeId, key, name, `CBS tabel ${identifier} — ${name}`, supercategory]);
+    // Use slug-based upsert to get the ID back (works whether theme is new or existing)
+    const themeResult = await client.query(`
+      INSERT INTO themes (slug, name, description, icon, "order", is_system, supercategory)
+      VALUES ($1, $2, $3, 'BarChart3',
+              (SELECT COALESCE(MAX("order"), 0) + 1 FROM themes WHERE supercategory = $4),
+              true, $4)
+      ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description
+      RETURNING id
+    `, [key, name, `CBS tabel ${identifier} — ${name}`, supercategory]);
+    const themeId = themeResult.rows[0].id;
+
+    // Remove any existing tiles for this theme (re-activation replaces them)
+    await client.query('DELETE FROM tiles WHERE theme_id = $1', [themeId]);
 
     // Default tiles: trend line, dimension bar chart, data table
     const defaultTiles = [

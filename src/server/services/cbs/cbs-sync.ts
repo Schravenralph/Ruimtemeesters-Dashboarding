@@ -115,7 +115,7 @@ export async function syncBevolking(yearFilter?: number): Promise<SyncResult> {
       const ageGroup = ageToGroup(age);
       const gender = genderMapping[obs.Geslacht as string];
       if (!ageGroup || !gender) {
-        unmappedCodes.add(`age:${obs.Leeftijd}` || `gender:${obs.Geslacht}`);
+        unmappedCodes.add(!ageGroup ? `age:${obs.Leeftijd}` : `gender:${obs.Geslacht}`);
         continue;
       }
 
