@@ -39,6 +39,11 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     params.push(year);
   }
 
+  // Track which dimension columns are already constrained by the dimension parameter,
+  // so default filters don't conflict (e.g., dimension=metric&dimensionValue=nieuwbouw
+  // should NOT also get default metric='tekort').
+  const constrainedCols = new Set<string>();
+
   if (dimension && dimensionValue) {
     // Filtering to a specific dimension value
     const dimCol = sourceDef.dimensionColumns.find(c =>
@@ -47,6 +52,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     if (dimCol) {
       conditions.push(`d.${safeIdent(dimCol)} = $${paramIdx++}`);
       params.push(dimensionValue);
+      constrainedCols.add(dimCol);
     }
   } else if (dimension) {
     // Browsing a dimension without a specific value:
@@ -57,6 +63,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     );
     if (dimCol) {
       conditions.push(`d.${safeIdent(dimCol)} != 'totaal'`);
+      constrainedCols.add(dimCol);
       for (const otherCol of sourceDef.dimensionColumns) {
         if (otherCol !== dimCol) {
           conditions.push(`d.${safeIdent(otherCol)} = 'totaal'`);
@@ -82,10 +89,11 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     params.push(dataOrigin);
   }
 
-  // Apply source-specific default filters from registry
+  // Apply source-specific default filters from registry.
+  // Skip columns already constrained by the dimension parameter to avoid contradictions.
   if (sourceDef.defaultFilters) {
     for (const [col, defaultVal] of Object.entries(sourceDef.defaultFilters)) {
-      // Check both snake_case (DB column) and camelCase (query param) forms
+      if (constrainedCols.has(col)) continue;
       const camelCol = col.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
       const queryVal = (req.query[col] as string) || (req.query[camelCol] as string);
       conditions.push(`d.${safeIdent(col)} = $${paramIdx++}`);
@@ -226,6 +234,9 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
   const params: unknown[] = [geoCode];
   let paramIdx = 2;
 
+  // Track constrained columns to avoid default filter conflicts
+  const tsConstrainedCols = new Set<string>();
+
   if (dimension && dimensionValue) {
     const dimCol = sourceDef.dimensionColumns.find(c =>
       c.replace(/_/g, '') === dimension.replace(/_/g, ''),
@@ -233,7 +244,7 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
     if (dimCol) {
       conditions.push(`d.${safeIdent(dimCol)} = $${paramIdx++}`);
       params.push(dimensionValue);
-      // Pin other dimensions to 'totaal' to avoid cross-product overcounting
+      tsConstrainedCols.add(dimCol);
       for (const otherCol of sourceDef.dimensionColumns) {
         if (otherCol !== dimCol) {
           conditions.push(`d.${safeIdent(otherCol)} = 'totaal'`);
@@ -241,12 +252,12 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
       }
     }
   } else if (dimension) {
-    // Browsing a dimension: exclude subtotals, pin others to totaal
     const dimCol = sourceDef.dimensionColumns.find(c =>
       c.replace(/_/g, '') === dimension.replace(/_/g, ''),
     );
     if (dimCol) {
       conditions.push(`d.${safeIdent(dimCol)} != 'totaal'`);
+      tsConstrainedCols.add(dimCol);
       for (const otherCol of sourceDef.dimensionColumns) {
         if (otherCol !== dimCol) {
           conditions.push(`d.${safeIdent(otherCol)} = 'totaal'`);
@@ -254,8 +265,6 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
       }
     }
   } else if (sourceDef.dimensionColumns.length > 0) {
-    // No dimension specified — return only grand totals to avoid overcounting.
-    // Skip columns that have a default filter (they'll be set by the default filter below).
     const defaultFilterCols = new Set(Object.keys(sourceDef.defaultFilters || {}));
     for (const col of sourceDef.dimensionColumns) {
       if (!defaultFilterCols.has(col)) {
@@ -264,9 +273,10 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
     }
   }
 
-  // Apply default filters from registry
+  // Apply default filters from registry — skip columns already constrained by dimension param
   if (sourceDef.defaultFilters) {
     for (const [col, defaultVal] of Object.entries(sourceDef.defaultFilters)) {
+      if (tsConstrainedCols.has(col)) continue;
       const camelCol = col.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
       const queryVal = (req.query[col] as string) || (req.query[camelCol] as string);
       conditions.push(`d.${safeIdent(col)} = $${paramIdx++}`);
