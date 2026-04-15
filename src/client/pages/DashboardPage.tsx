@@ -112,7 +112,7 @@ export function DashboardPage() {
     );
   }
 
-  const mainDataSource = theme.tiles[0]?.dataSource || '';
+  const mainDataSource = theme.tiles[0]?.dataSource || undefined;
 
   return (
     <div>
@@ -182,10 +182,12 @@ export function DashboardPage() {
       )}
 
       {/* Comparison View */}
-      <ComparisonView
-        dataSource={mainDataSource}
-        title={theme.name}
-      />
+      {mainDataSource && (
+        <ComparisonView
+          dataSource={mainDataSource}
+          title={theme.name}
+        />
+      )}
 
       {/* Trend Summary (non-overview themes) */}
       {!theme.isOverview && mainDataSource && (
@@ -206,10 +208,12 @@ export function DashboardPage() {
       )}
 
       {/* Drilldown */}
-      <DrilldownPanel
-        dataSource={mainDataSource}
-        onDimensionSelect={() => {}}
-      />
+      {mainDataSource && (
+        <DrilldownPanel
+          dataSource={mainDataSource}
+          onDimensionSelect={() => {}}
+        />
+      )}
 
       {/* Tile Grid */}
       <TileGrid

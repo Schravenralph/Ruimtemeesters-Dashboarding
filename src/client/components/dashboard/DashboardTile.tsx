@@ -43,8 +43,9 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
   const isLoading = isLineChart ? tsLoading : snapLoading;
   const error = isLineChart ? tsError : snapError;
 
-  // Merge dimension comparison values into tile config (only for relevant tiles)
-  const mergedConfig = isDimensionComparison
+  // Merge dimension comparison values into tile config (only for non-line relevant tiles).
+  // Line chart tiles use time series (grand totals), so dimension comparison doesn't apply.
+  const mergedConfig = isDimensionComparison && !isLineChart
     ? { ...tile.config, comparedDimensionValues: filters.comparedDimensionValues, filterDimension: undefined, filterValue: undefined }
     : tile.config;
 
