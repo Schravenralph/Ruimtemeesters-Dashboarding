@@ -123,8 +123,8 @@ export function StatsSummary() {
           const change = 'change' in data ? data.change : null;
           const colors = colorClasses[color];
 
-          const spark = sparklines[key === 'woningtekort' ? 'woningtekort' : key] || [];
-          const sparkColor = parseFloat(change || '0') >= 0 ? '#10b981' : '#ef4444';
+          const spark = sparklines[key] || [];
+          const sparkColor = change === null ? '#6b7280' : parseFloat(change) >= 0 ? '#10b981' : '#ef4444';
 
           return (
             <div key={key} className="rounded-xl border border-gray-200 bg-white p-5">

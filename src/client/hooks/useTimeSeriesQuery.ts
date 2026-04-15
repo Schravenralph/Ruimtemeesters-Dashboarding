@@ -41,14 +41,15 @@ export function useTimeSeriesQuery({ source, dimension, dimensionValue, enabled 
       });
 
       // Map to DataPoint format (include confidence intervals for prognose rendering)
+      // When no dimension is specified (grand total), leave dimensionValue undefined
+      // so LineChartComponent uses the simple line path with prognose features.
       const points: DataPoint[] = response.data.map(d => ({
         geoCode: filters.geoCode,
         geoName: '',
         year: d.year,
         value: d.value,
         source: d.source,
-        dimension: dimension || 'age_group',
-        dimensionValue: dimensionValue || 'totaal',
+        ...(dimension ? { dimension, dimensionValue: dimensionValue || 'totaal' } : {}),
         ...(d.confidenceLower != null ? { confidenceLower: d.confidenceLower } : {}),
         ...(d.confidenceUpper != null ? { confidenceUpper: d.confidenceUpper } : {}),
       }));

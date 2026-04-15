@@ -19,11 +19,11 @@ interface Insight {
 export async function getInsights(_req: Request, res: Response): Promise<void> {
   const insights: Insight[] = [];
 
-  // 1. National population (current + prognose)
+  // 1. National population (latest actuals year)
   const nlPop = await query(`
     SELECT year, value FROM data_bevolking
-    WHERE geo_code = 'NL' AND age_group = 'totaal' AND gender = 'totaal'
-    ORDER BY ${SOURCE_PRIORITY} LIMIT 1
+    WHERE geo_code = 'NL' AND age_group = 'totaal' AND gender = 'totaal' AND source = 'cbs_actuals'
+    ORDER BY year DESC LIMIT 1
   `).catch(() => ({ rows: [] }));
 
   const nlPop2060 = await query(`

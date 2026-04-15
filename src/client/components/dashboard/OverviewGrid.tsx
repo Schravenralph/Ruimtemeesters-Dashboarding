@@ -59,7 +59,7 @@ export function OverviewGrid({ supercategory }: OverviewGridProps) {
       setItems(items);
       setIsLoading(false);
     });
-  }, [filters.geoCode]);
+  }, [filters.geoCode, supercategory]);
 
   if (isLoading) {
     return (
