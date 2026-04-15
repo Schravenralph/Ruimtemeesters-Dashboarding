@@ -27,7 +27,7 @@ const FALLBACK_SOURCES: Record<string, DataSourceDef> = {
   bevolking: { key: 'bevolking', name: 'Bevolking', supercategory: 'wonen', tableName: 'data_bevolking', dimensionColumns: ['age_group', 'gender'], valueColumn: 'value', unit: 'aantal', defaultFilters: null, exportColumns: null, cbsTableId: '03759ned', syncConfig: null },
   huishoudens: { key: 'huishoudens', name: 'Huishoudens', supercategory: 'wonen', tableName: 'data_huishoudens', dimensionColumns: ['household_type'], valueColumn: 'value', unit: 'aantal', defaultFilters: { dimension_type: 'samenstelling' }, exportColumns: null, cbsTableId: '71486ned', syncConfig: null },
   woningen: { key: 'woningen', name: 'Woningen', supercategory: 'wonen', tableName: 'data_woningen', dimensionColumns: ['tenure_type', 'dwelling_type'], valueColumn: 'value', unit: 'aantal', defaultFilters: null, exportColumns: null, cbsTableId: '82550NED', syncConfig: null },
-  woningtekort: { key: 'woningtekort', name: 'Woningtekort', supercategory: 'wonen', tableName: 'data_woningtekort', dimensionColumns: ['metric'], valueColumn: 'value', unit: 'percentage', defaultFilters: null, exportColumns: null, cbsTableId: null, syncConfig: null },
+  woningtekort: { key: 'woningtekort', name: 'Woningtekort', supercategory: 'wonen', tableName: 'data_woningtekort', dimensionColumns: ['metric'], valueColumn: 'value', unit: 'percentage', defaultFilters: { metric: 'tekort' }, exportColumns: null, cbsTableId: null, syncConfig: null },
 };
 
 let cache: Record<string, DataSourceDef> | null = null;

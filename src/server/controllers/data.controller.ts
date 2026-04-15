@@ -64,9 +64,13 @@ export async function queryData(req: Request, res: Response): Promise<void> {
       }
     }
   } else if (sourceDef.dimensionColumns.length > 0) {
-    // No dimension specified — return only the grand totals to avoid overcounting
+    // No dimension specified — return only the grand totals to avoid overcounting.
+    // Skip columns that have a default filter (they'll be set by the default filter below).
+    const defaultFilterCols = new Set(Object.keys(sourceDef.defaultFilters || {}));
     for (const col of sourceDef.dimensionColumns) {
-      conditions.push(`d.${safeIdent(col)} = 'totaal'`);
+      if (!defaultFilterCols.has(col)) {
+        conditions.push(`d.${safeIdent(col)} = 'totaal'`);
+      }
     }
   }
 
@@ -250,9 +254,13 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
       }
     }
   } else if (sourceDef.dimensionColumns.length > 0) {
-    // No dimension specified — return only grand totals to avoid overcounting
+    // No dimension specified — return only grand totals to avoid overcounting.
+    // Skip columns that have a default filter (they'll be set by the default filter below).
+    const defaultFilterCols = new Set(Object.keys(sourceDef.defaultFilters || {}));
     for (const col of sourceDef.dimensionColumns) {
-      conditions.push(`d.${safeIdent(col)} = 'totaal'`);
+      if (!defaultFilterCols.has(col)) {
+        conditions.push(`d.${safeIdent(col)} = 'totaal'`);
+      }
     }
   }
 
