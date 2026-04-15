@@ -444,14 +444,12 @@ export async function syncWoningen(yearFilter?: number): Promise<SyncResult> {
       else if (lower.includes('totaal')) woningtypeMapping[code.Identifier] = 'totaal';
     }
 
-    // Map measures to tenure type
-    const measureMapping: Record<string, string> = {};
-    for (const code of measureCodes) {
-      const lower = code.Title.toLowerCase();
-      if (lower.includes('koopwoning') || lower.includes('eigen')) measureMapping[code.Identifier] = 'eigendom';
-      else if (lower.includes('huurwoning') || lower.includes('huur')) measureMapping[code.Identifier] = 'huur';
-      else if (lower.includes('totaal') && lower.includes('woning')) measureMapping[code.Identifier] = 'totaal';
-    }
+    // Find the housing stock count measure (D002936 = "Beginstand woningvoorraad")
+    // This table has no tenure split — only dwelling type (eengezins/meergezins)
+    const stockMeasure = measureCodes.find(c =>
+      c.Title.toLowerCase().includes('beginstand') || c.Title.toLowerCase().includes('voorraad'),
+    );
+    const stockMeasureId = stockMeasure?.Identifier || 'D002936';
 
     const client = await getClient();
     try {
@@ -459,6 +457,8 @@ export async function syncWoningen(yearFilter?: number): Promise<SyncResult> {
 
       for (const obs of observations) {
         if (obs.Value === null) continue;
+        // Only use the stock count measure, not average surface area
+        if (obs.Measure !== stockMeasureId) continue;
 
         const year = parseCbsPeriod(obs.Perioden as string);
         const region = parseCbsRegion(obs.RegioS as string);
@@ -466,7 +466,8 @@ export async function syncWoningen(yearFilter?: number): Promise<SyncResult> {
         if (region.level !== 'gemeente' && region.level !== 'land') continue;
 
         const dwellingType = woningtypeMapping[obs.Woningtype as string] || 'onbekend';
-        const tenureType = measureMapping[obs.Measure] || 'onbekend';
+        // This CBS table (82550NED) has no tenure breakdown — set to 'totaal'
+        const tenureType = 'totaal';
 
         const geoName = regioMap.get((obs.RegioS as string).trim()) || region.code;
         await client.query(
