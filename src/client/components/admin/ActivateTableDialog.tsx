@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { X, Zap, Plus, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { X, Zap, CheckCircle } from 'lucide-react';
 import { api } from '../../services/api/client';
 import { Button } from '../ui/Button';
 
@@ -35,6 +36,8 @@ export function ActivateTableDialog({ identifier, title, onClose, onActivated }:
   const [isLoading, setIsLoading] = useState(true);
   const [isActivating, setIsActivating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<{ themeSlug: string; message: string } | null>(null);
+  const navigate = useNavigate();
 
   // Form state
   const [key, setKey] = useState(identifier.toLowerCase().replace(/[^a-z0-9]/g, '_'));
@@ -82,7 +85,7 @@ export function ActivateTableDialog({ identifier, title, onClose, onActivated }:
     setIsActivating(true);
     setError(null);
     try {
-      await api.post('/catalog/activate', {
+      const result = await api.post<{ themeSlug: string; message: string; tilesCreated: number }>('/catalog/activate', {
         identifier,
         key,
         name,
@@ -92,7 +95,7 @@ export function ActivateTableDialog({ identifier, title, onClose, onActivated }:
         filter: `Measure eq '${selectedMeasure}'`,
         dimensionMappings: mappings,
       });
-      onActivated();
+      setSuccess({ themeSlug: result.themeSlug, message: result.message });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Activatie mislukt');
     } finally {
@@ -114,7 +117,19 @@ export function ActivateTableDialog({ identifier, title, onClose, onActivated }:
         </div>
 
         <div className="p-6 space-y-5">
-          {isLoading ? (
+          {success ? (
+            <div className="text-center py-8">
+              <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Tabel geactiveerd!</h3>
+              <p className="text-sm text-gray-600 mb-6">{success.message}</p>
+              <div className="flex items-center justify-center gap-3">
+                <Button variant="secondary" onClick={() => { onActivated(); onClose(); }}>Sluiten</Button>
+                <Button onClick={() => { navigate(`/dashboard/${success.themeSlug}`); onClose(); }}>
+                  Naar dashboard →
+                </Button>
+              </div>
+            </div>
+          ) : isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full" />
             </div>
@@ -236,13 +251,15 @@ export function ActivateTableDialog({ identifier, title, onClose, onActivated }:
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t px-6 py-4">
-          <Button variant="secondary" onClick={onClose}>Annuleren</Button>
-          <Button onClick={handleActivate} disabled={isActivating || isLoading || !key || !selectedMeasure}>
-            <Zap className="h-4 w-4" />
-            {isActivating ? 'Activeren...' : 'Tabel activeren'}
-          </Button>
-        </div>
+        {!success && (
+          <div className="flex items-center justify-end gap-3 border-t px-6 py-4">
+            <Button variant="secondary" onClick={onClose}>Annuleren</Button>
+            <Button onClick={handleActivate} disabled={isActivating || isLoading || !key || !selectedMeasure}>
+              <Zap className="h-4 w-4" />
+              {isActivating ? 'Activeren...' : 'Tabel activeren'}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

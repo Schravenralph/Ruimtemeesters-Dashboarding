@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import crypto from 'crypto';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { syncCbsCatalog, searchCatalog, getCatalogThemes } from '../services/cbs/cbs-catalog-sync.js';
 import { query } from '../db/pool.js';
@@ -164,18 +165,62 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
       WHERE identifier = $2
     `, [key, identifier]);
 
+    // 4. Auto-create a theme with default tiles
+    const themeId = crypto.randomUUID();
+    await client.query(`
+      INSERT INTO themes (id, slug, name, description, icon, "order", is_system, supercategory)
+      VALUES ($1, $2, $3, $4, 'BarChart3',
+              (SELECT COALESCE(MAX("order"), 0) + 1 FROM themes WHERE supercategory = $5),
+              true, $5)
+      ON CONFLICT DO NOTHING
+    `, [themeId, key, name, `CBS tabel ${identifier} — ${name}`, supercategory]);
+
+    // Default tiles: trend line, dimension bar chart, data table
+    const defaultTiles = [
+      { title: `${name} trend`, chartType: 'line', dims: [] as string[], order: 0 },
+      ...(dimColumns.length > 0 ? [{ title: `${name} per ${dimColumns[0]}`, chartType: 'bar', dims: [dimColumns[0]], order: 1 }] : []),
+      { title: `${name} per gemeente`, chartType: 'choropleth', dims: [] as string[], order: dimColumns.length > 0 ? 2 : 1 },
+      { title: `${name} tabel`, chartType: 'table', dims: dimColumns.slice(0, 1), order: dimColumns.length > 0 ? 3 : 2 },
+    ];
+
+    for (const tile of defaultTiles) {
+      await client.query(`
+        INSERT INTO tiles (theme_id, title, chart_type, data_source, dimensions, default_geo_level, "order")
+        VALUES ($1, $2, $3, $4, $5, 'gemeente', $6)
+      `, [themeId, tile.title, tile.chartType, key, tile.dims, tile.order]);
+    }
+
     await client.query('COMMIT');
 
-    // 4. Invalidate data source cache
+    // 5. Invalidate data source cache
     const { invalidateCache } = await import('../services/data-source-registry.js');
     invalidateCache();
+
+    // 6. Trigger background data sync
+    (async () => {
+      try {
+        const dsResult = await query(
+          'SELECT key, sync_config FROM data_sources WHERE key = $1 AND sync_config IS NOT NULL',
+          [key],
+        );
+        if (dsResult.rows.length > 0) {
+          const { syncGeneric } = await import('../services/cbs/cbs-generic-sync.js');
+          const result = await syncGeneric(dsResult.rows[0].key, dsResult.rows[0].sync_config);
+          console.log(`[Catalog] Auto-sync ${key}: ${result.rowsInserted} rows in ${result.duration}ms`);
+        }
+      } catch (err) {
+        console.error(`[Catalog] Auto-sync ${key} failed:`, err);
+      }
+    })();
 
     res.json({
       status: 'activated',
       key,
       tableName,
       dimensionColumns: dimColumns,
-      syncConfig,
+      themeSlug: key,
+      tilesCreated: defaultTiles.length,
+      message: `Tabel geactiveerd. Thema "${name}" aangemaakt met ${defaultTiles.length} tegels. Data sync gestart op de achtergrond.`,
     });
   } catch (err) {
     await client.query('ROLLBACK');
