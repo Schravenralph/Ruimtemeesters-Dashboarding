@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Search, Database, RefreshCw, Filter, ExternalLink, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
+import { Search, Database, RefreshCw, Filter, ExternalLink, ChevronLeft, ChevronRight, CheckCircle, Zap } from 'lucide-react';
 import { api } from '../services/api/client';
 import { Button } from '../components/ui/Button';
 import { SearchInput } from '../components/ui/SearchInput';
 import { formatCompact } from '../utils/format';
+import { ActivateTableDialog } from '../components/admin/ActivateTableDialog';
+import { useAuth } from '../contexts/AuthContext';
 
 interface CatalogTable {
   identifier: string;
@@ -47,6 +49,8 @@ export function CatalogPage() {
   const [stats, setStats] = useState<CatalogStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [activatingTable, setActivatingTable] = useState<CatalogTable | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     Promise.all([
@@ -235,20 +239,31 @@ export function CatalogPage() {
                     </div>
                   )}
                 </div>
-                <div className="text-right flex-shrink-0">
+                <div className="text-right flex-shrink-0 space-y-1">
                   {table.recordCount > 0 && (
                     <p className="text-sm font-medium text-gray-900">{formatCompact(table.recordCount)}</p>
                   )}
                   <p className="text-xs text-gray-400">rijen</p>
-                  <a
-                    href={`https://opendata.cbs.nl/statline/#/CBS/nl/dataset/${table.identifier}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-1"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    StatLine
-                  </a>
+                  <div className="flex items-center gap-2 justify-end mt-1">
+                    <a
+                      href={`https://opendata.cbs.nl/statline/#/CBS/nl/dataset/${table.identifier}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      StatLine
+                    </a>
+                    {!table.isActivated && user?.role === 'admin' && (
+                      <button
+                        onClick={() => setActivatingTable(table)}
+                        className="inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 font-medium"
+                      >
+                        <Zap className="h-3 w-3" />
+                        Activeren
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -261,6 +276,20 @@ export function CatalogPage() {
         <p className="text-xs text-gray-400 mt-4 text-center">
           Catalogus laatst gesynchroniseerd: {new Date(stats.lastSync.at).toLocaleString('nl-NL')}
         </p>
+      )}
+
+      {/* Activation dialog */}
+      {activatingTable && (
+        <ActivateTableDialog
+          identifier={activatingTable.identifier}
+          title={activatingTable.title}
+          onClose={() => setActivatingTable(null)}
+          onActivated={() => {
+            setActivatingTable(null);
+            // Refresh the list
+            setPage(p => p);
+          }}
+        />
       )}
     </div>
   );
