@@ -102,7 +102,7 @@ export function TopGroeiers({
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-xs text-gray-400">{formatCompact(area.currentValue)}</span>
                     <span className={`text-sm font-bold tabular-nums ${isGrowing ? 'text-green-600' : 'text-red-600'}`}>
-                      {isGrowing ? '+' : ''}{formatPercent(area.percentChange)}
+                      {formatPercent(area.percentChange)}
                     </span>
                   </div>
                 </div>
