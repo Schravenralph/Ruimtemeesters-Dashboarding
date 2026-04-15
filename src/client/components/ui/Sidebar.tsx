@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, Home, Building2, TrendingDown,
   ChevronLeft, ChevronRight, Plus, Settings,
   Brain, TrendingUp, Zap, Leaf, Trash2, BarChart3, Target, Map,
-  Cloud, Sun, Recycle,
+  Cloud, Sun, Recycle, Database,
 } from 'lucide-react';
 import { useThemes } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -109,10 +109,25 @@ export function Sidebar() {
 
       {/* Settings & Collapse */}
       <div className="border-t border-gray-800 p-3">
+        <button
+          onClick={() => navigate('/catalogus')}
+          className={`flex w-full items-center gap-3 px-2 py-2 text-sm rounded-lg ${
+            location.pathname === '/catalogus'
+              ? 'bg-blue-600/20 text-blue-400'
+              : 'text-gray-400 hover:text-white hover:bg-gray-800'
+          }`}
+        >
+          <Database className="h-5 w-5 shrink-0" />
+          {!collapsed && <span>CBS Catalogus</span>}
+        </button>
         {user?.role === 'admin' && (
           <button
             onClick={() => navigate('/admin')}
-            className="flex w-full items-center gap-3 px-2 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg"
+            className={`flex w-full items-center gap-3 px-2 py-2 text-sm rounded-lg ${
+              location.pathname === '/admin'
+                ? 'bg-blue-600/20 text-blue-400'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            }`}
           >
             <Settings className="h-5 w-5 shrink-0" />
             {!collapsed && <span>Beheer</span>}

@@ -36,6 +36,7 @@ import supercategoryRoutes from './routes/supercategory.routes.js';
 import syncRoutes from './routes/sync.routes.js';
 import comparisonRoutes from './routes/comparison.routes.js';
 import { getInsights } from './controllers/insights.controller.js';
+import catalogRoutes from './routes/catalog.routes.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
@@ -98,6 +99,7 @@ app.use('/api/supercategories', supercategoryRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/comparison', comparisonRoutes);
 app.get('/api/insights', authenticate, getInsights);
+app.use('/api/catalog', catalogRoutes);
 
 // API not-found handler (before SPA catch-all)
 app.use('/api', notFoundHandler);

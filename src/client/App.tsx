@@ -23,6 +23,7 @@ const HelpPage = lazy(() => import('./pages/HelpPage').then(m => ({ default: m.H
 const DataDownloadPage = lazy(() => import('./pages/DataDownloadPage').then(m => ({ default: m.DataDownloadPage })));
 const EmbedPage = lazy(() => import('./pages/EmbedPage').then(m => ({ default: m.EmbedPage })));
 const ReportPage = lazy(() => import('./pages/ReportPage').then(m => ({ default: m.ReportPage })));
+const CatalogPage = lazy(() => import('./pages/CatalogPage').then(m => ({ default: m.CatalogPage })));
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<LoadingOverlay message="Pagina laden..." />}>{children}</Suspense>;
@@ -77,6 +78,7 @@ function AuthenticatedApp() {
                 <Route path="/help" element={<Layout><HelpPage /></Layout>} />
                 <Route path="/download" element={<Layout><DataDownloadPage /></Layout>} />
                 <Route path="/rapport" element={<Layout><ReportPage /></Layout>} />
+                <Route path="/catalogus" element={<Layout><CatalogPage /></Layout>} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
