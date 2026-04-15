@@ -84,6 +84,107 @@ router.get('/:identifier', authenticate, async (req: Request, res: Response) => 
   });
 });
 
+// --- Activation routes (admin configures a CBS table for data sync) ---
+
+// POST /api/catalog/activate — activate a CBS table for data sync (admin only)
+router.post('/activate', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
+  const {
+    identifier,       // CBS table ID, e.g. '83648NED'
+    key,              // Local data source key, e.g. 'criminaliteit'
+    name,             // Display name, e.g. 'Criminaliteit'
+    supercategory,    // e.g. 'veiligheid'
+    unit,             // e.g. 'aantal'
+    measureCode,      // CBS measure to sync, e.g. 'M004200_2'
+    filter,           // OData filter, e.g. "SoortMisdrijf eq 'T001722'"
+    dimensionMappings, // Array of {cbsDimension, targetColumn, valueMap}
+  } = req.body as {
+    identifier: string;
+    key: string;
+    name: string;
+    supercategory: string;
+    unit: string;
+    measureCode: string;
+    filter: string;
+    dimensionMappings: Array<{ cbsDimension: string; targetColumn: string; valueMap: Record<string, string> }>;
+  };
+
+  if (!identifier || !key || !name || !measureCode) {
+    res.status(400).json({ error: 'Missing required fields: identifier, key, name, measureCode' });
+    return;
+  }
+
+  const tableName = `data_${key.replace(/[^a-z0-9_]/g, '_')}`;
+  const dimColumns = dimensionMappings.map(d => d.targetColumn);
+
+  // Build sync_config for the generic sync engine
+  const syncConfig = {
+    cbsTable: identifier,
+    targetTable: tableName,
+    filter: filter || `Measure eq '${measureCode}'`,
+    measureCode,
+    dimensionMappings: dimensionMappings || [],
+  };
+
+  const client = await (await import('../db/pool.js')).getClient();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Create the data table dynamically
+    const dimColumnsDDL = dimColumns.map(c => `${c} VARCHAR(100)`).join(', ');
+    const uniqueCols = ['geo_code', 'year', ...dimColumns, 'source'].join(', ');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ${tableName} (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        geo_code VARCHAR(20) NOT NULL REFERENCES geo_areas(code),
+        year INTEGER NOT NULL,
+        ${dimColumnsDDL ? dimColumnsDDL + ',' : ''}
+        value NUMERIC,
+        source VARCHAR(50) DEFAULT 'cbs_actuals',
+        confidence_lower NUMERIC,
+        confidence_upper NUMERIC,
+        model_profile VARCHAR(50),
+        forecast_vintage TIMESTAMPTZ,
+        UNIQUE(${uniqueCols})
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_${key}_geo_year ON ${tableName}(geo_code, year)`);
+
+    // 2. Register in data_sources
+    await client.query(`
+      INSERT INTO data_sources (key, name, supercategory, table_name, dimension_columns, value_column, unit, cbs_table_id, sync_config, sort_order)
+      VALUES ($1, $2, $3, $4, $5, 'value', $6, $7, $8,
+              (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM data_sources))
+      ON CONFLICT (key) DO UPDATE SET
+        name = EXCLUDED.name, sync_config = EXCLUDED.sync_config, cbs_table_id = EXCLUDED.cbs_table_id
+    `, [key, name, supercategory, tableName, dimColumns, unit, identifier, JSON.stringify(syncConfig)]);
+
+    // 3. Mark as activated in catalog
+    await client.query(`
+      UPDATE cbs_catalog SET is_activated = true, data_source_key = $1
+      WHERE identifier = $2
+    `, [key, identifier]);
+
+    await client.query('COMMIT');
+
+    // 4. Invalidate data source cache
+    const { invalidateCache } = await import('../services/data-source-registry.js');
+    invalidateCache();
+
+    res.json({
+      status: 'activated',
+      key,
+      tableName,
+      dimensionColumns: dimColumns,
+      syncConfig,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Activation failed' });
+  } finally {
+    client.release();
+  }
+});
+
 // --- Subscription routes ---
 
 // GET /api/catalog/subscriptions/mine — list my org's subscribed data sources
