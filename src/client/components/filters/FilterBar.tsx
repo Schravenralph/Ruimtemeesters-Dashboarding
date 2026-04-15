@@ -130,13 +130,16 @@ export function FilterBar({ dataSource = 'bevolking', themeSlug }: FilterBarProp
           </div>
         )}
 
-        {/* Year Selection */}
+        {/* Year Selection — mark prognose years */}
         {years.length > 0 && (
           <Select
             label="Periode"
             value={String(filters.period.year)}
             onChange={(e) => setYear(parseInt(e.target.value, 10))}
-            options={years.map(y => ({ value: String(y), label: String(y) }))}
+            options={years.map(y => ({
+              value: String(y),
+              label: y > new Date().getFullYear() ? `${y} (prognose)` : String(y),
+            }))}
           />
         )}
 
@@ -164,7 +167,7 @@ export function FilterBar({ dataSource = 'bevolking', themeSlug }: FilterBarProp
             onChange={(e) => setCompareYear(parseInt(e.target.value, 10))}
             options={years.filter(y => y !== filters.period.year).map(y => ({
               value: String(y),
-              label: String(y),
+              label: y > new Date().getFullYear() ? `${y} (prognose)` : String(y),
             }))}
           />
         )}
