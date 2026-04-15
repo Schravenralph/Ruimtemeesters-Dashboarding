@@ -54,7 +54,14 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
       <div className="flex h-full flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         {/* Tile Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-          <h3 className="text-sm font-semibold text-gray-900 truncate">{tile.title}</h3>
+          <div className="flex items-center gap-2 min-w-0">
+            <h3 className="text-sm font-semibold text-gray-900 truncate">{tile.title}</h3>
+            {filters.period.year > new Date().getFullYear() && !isLineChart && (
+              <span className="flex-shrink-0 text-[10px] font-medium bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                prognose
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setIsExpanded(true)}
