@@ -10,6 +10,7 @@ import { StatsSummary } from '../components/dashboard/StatsSummary';
 import { ThemeInfoPanel } from '../components/dashboard/ThemeInfoPanel';
 import { OverviewGrid } from '../components/dashboard/OverviewGrid';
 import { TrendSummary } from '../components/dashboard/TrendSummary';
+import { GemeenteComparison } from '../components/dashboard/GemeenteComparison';
 import { PeriodBar } from '../components/dashboard/PeriodBar';
 import { MultiAreaTable } from '../components/dashboard/MultiAreaTable';
 import { WorkspaceManager } from '../components/dashboard/WorkspaceManager';
@@ -185,6 +186,11 @@ export function DashboardPage() {
       {/* Trend Summary (non-overview themes) */}
       {!theme.isOverview && mainDataSource && (
         <TrendSummary dataSource={mainDataSource} />
+      )}
+
+      {/* Gemeente Comparison (groeianalyse and prognose themes) */}
+      {(theme.slug === 'groeianalyse' || theme.slug === 'prognose') && (
+        <GemeenteComparison source={mainDataSource} />
       )}
 
       {/* Drilldown */}
