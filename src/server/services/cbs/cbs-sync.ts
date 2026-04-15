@@ -604,12 +604,21 @@ export async function syncWoningmutaties(yearFilter?: number): Promise<SyncResul
 /**
  * Calculate woningtekort (housing shortage) from synced CBS data.
  *
- * Simplified calculation based on CBS actuals:
- *   tekort = huishoudens - woningvoorraad
- *   tekort_percentage = tekort / woningvoorraad * 100
+ * Uses the ABF/Volkshuisvesting methodology (simplified):
+ *   - Not all dwellings are available (some are second homes, vacant, institutional)
+ *   - Not all households live independently (some share, live in institutions)
+ *   - Tekort ≈ households × (1 - independent_ratio) × adult_factor − available_vacant
  *
- * This is a simplified version — ABF Primos uses a more complex model
- * that accounts for vacancy, BAR-households, and market friction.
+ * National figures (2025, ABF Primos):
+ *   8.462M households, 8.274M dwellings, 7.837M living independently
+ *   434K housing seekers, 38K available → 396K shortage (4.8%)
+ *
+ * Since we lack the micro-level data (bijzondere woonvormen, vacancy types),
+ * we approximate the shortage rate using the national ratio (4.8% of stock)
+ * distributed proportionally by gemeente, adjusted for local supply pressure
+ * (huishoudens / woningen ratio).
+ *
+ * Source: volkshuisvestingnederland.nl/onderwerpen/aanpak-woningnood/berekening-woningbouwopgave
  */
 export async function calculateWoningtekort(year: number): Promise<SyncResult> {
   const startTime = Date.now();
@@ -648,14 +657,37 @@ export async function calculateWoningtekort(year: number): Promise<SyncResult> {
     try {
       await client.query('BEGIN');
 
+      // National-level shortage parameters (ABF Primos 2025):
+      // - 396K shortage = 4.8% of 8.274M housing stock
+      // - Source: volkshuisvestingnederland.nl/onderwerpen/aanpak-woningnood
+      //
+      // Since our CBS huishoudens data undercounts (5M vs ABF's 8.5M — we only
+      // have 'samenstelling' dimension, missing bijzondere woonvormen), we use
+      // the national shortage rate (4.8%) as baseline and distribute per gemeente
+      // based on relative supply pressure (local hh/dwelling ratio vs national).
+      const NATIONAL_SHORTAGE_PCT = 4.8;
+
+      // Compute national average hh/dwelling ratio from our data
+      let totalHH = 0, totalWon = 0;
+      for (const row of hhResult.rows) {
+        const w = woningMap.get(row.geo_code);
+        if (w && w > 0) { totalHH += Number(row.total); totalWon += w; }
+      }
+      const nationalRatio = totalHH > 0 && totalWon > 0 ? totalHH / totalWon : 0.6;
+
       for (const row of hhResult.rows) {
         const geoCode = row.geo_code;
         const huishoudens = Number(row.total);
         const woningen = woningMap.get(geoCode);
         if (!woningen || woningen === 0) continue;
 
-        const tekort = Math.max(0, huishoudens - woningen);
-        const tekortPct = (tekort / woningen) * 100;
+        // Local pressure: how tight is this gemeente vs national average?
+        const localRatio = huishoudens / woningen;
+        const pressureFactor = Math.max(0.2, localRatio / nationalRatio);
+
+        // Estimated shortage = national rate × local pressure × local stock
+        const tekortPct = Math.max(0, Math.round(NATIONAL_SHORTAGE_PCT * pressureFactor * 100) / 100);
+        const tekort = Math.round(woningen * tekortPct / 100);
 
         // Insert absolute tekort
         await client.query(
