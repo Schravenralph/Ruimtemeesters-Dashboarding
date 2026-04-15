@@ -1,0 +1,272 @@
+/**
+ * CBS StatLine Catalog Sync
+ *
+ * Fetches the full CBS table catalog (~5,900 tables) and caches it locally.
+ * Uses the v3 OData catalog which has richer metadata than v4.
+ *
+ * Catalog endpoint: https://opendata.cbs.nl/ODataCatalog/Tables
+ * Themes endpoint:  https://opendata.cbs.nl/ODataCatalog/Themes
+ * Junction:         https://opendata.cbs.nl/ODataCatalog/Tables_Themes
+ */
+
+import { getClient, query } from '../../db/pool.js';
+
+const CATALOG_BASE = 'https://opendata.cbs.nl/ODataCatalog';
+const PAGE_SIZE = 500;
+
+interface CbsCatalogEntry {
+  Identifier: string;
+  Title: string;
+  ShortTitle: string;
+  Summary: string;
+  Frequency: string;
+  Period: string;
+  Modified: string;
+  RecordCount: number;
+  ColumnCount: number;
+  GraphTypes: string;
+  ApiUrl: string;
+}
+
+interface CbsTheme {
+  ID: number;
+  Title: string;
+  ParentID: number | null;
+}
+
+interface CbsTableTheme {
+  TableIdentifier: string;
+  ThemeID: number;
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
+  if (!response.ok) throw new Error(`CBS catalog fetch failed: ${response.status} ${url}`);
+  return response.json() as Promise<T>;
+}
+
+/**
+ * Fetch all pages from a CBS OData v3 endpoint.
+ */
+async function fetchAllPages<T>(baseUrl: string): Promise<T[]> {
+  const all: T[] = [];
+  let skip = 0;
+
+  while (true) {
+    const url = `${baseUrl}?$format=json&$top=${PAGE_SIZE}&$skip=${skip}`;
+    const data = await fetchJson<{ value: T[] }>(url);
+    if (!data.value || data.value.length === 0) break;
+    all.push(...data.value);
+    if (data.value.length < PAGE_SIZE) break;
+    skip += PAGE_SIZE;
+  }
+
+  return all;
+}
+
+/**
+ * Sync the full CBS catalog into cbs_catalog table.
+ * Fetches tables, themes, and the junction table to build theme arrays.
+ */
+export async function syncCbsCatalog(): Promise<{
+  tablesProcessed: number;
+  themesLoaded: number;
+  duration: number;
+  errors: string[];
+}> {
+  const startTime = Date.now();
+  const errors: string[] = [];
+
+  console.log('[CBS Catalog] Fetching tables...');
+  const tables = await fetchAllPages<CbsCatalogEntry>(`${CATALOG_BASE}/Tables`);
+  console.log(`[CBS Catalog] ${tables.length} tables fetched`);
+
+  console.log('[CBS Catalog] Fetching themes...');
+  const themes = await fetchAllPages<CbsTheme>(`${CATALOG_BASE}/Themes`);
+  const themeMap = new Map(themes.map(t => [t.ID, t.Title]));
+  console.log(`[CBS Catalog] ${themes.length} themes fetched`);
+
+  console.log('[CBS Catalog] Fetching table-theme junction...');
+  const junctions = await fetchAllPages<CbsTableTheme>(`${CATALOG_BASE}/Tables_Themes`);
+  console.log(`[CBS Catalog] ${junctions.length} junction entries fetched`);
+
+  // Build theme arrays per table
+  const tableThemes = new Map<string, string[]>();
+  for (const j of junctions) {
+    const themeName = themeMap.get(j.ThemeID);
+    if (!themeName) continue;
+    const existing = tableThemes.get(j.TableIdentifier) || [];
+    existing.push(themeName);
+    tableThemes.set(j.TableIdentifier, existing);
+  }
+
+  // Upsert into database
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    const now = new Date().toISOString();
+
+    for (const table of tables) {
+      try {
+        await client.query(`
+          INSERT INTO cbs_catalog (
+            identifier, title, short_title, summary, frequency, period,
+            record_count, column_count, modified, graph_types, api_url,
+            themes, catalog_synced_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          ON CONFLICT (identifier) DO UPDATE SET
+            title = EXCLUDED.title,
+            short_title = EXCLUDED.short_title,
+            summary = EXCLUDED.summary,
+            frequency = EXCLUDED.frequency,
+            period = EXCLUDED.period,
+            record_count = EXCLUDED.record_count,
+            column_count = EXCLUDED.column_count,
+            modified = EXCLUDED.modified,
+            graph_types = EXCLUDED.graph_types,
+            api_url = EXCLUDED.api_url,
+            themes = EXCLUDED.themes,
+            catalog_synced_at = EXCLUDED.catalog_synced_at
+        `, [
+          table.Identifier,
+          table.Title,
+          table.ShortTitle,
+          table.Summary || null,
+          table.Frequency,
+          table.Period,
+          table.RecordCount,
+          table.ColumnCount,
+          table.Modified ? new Date(table.Modified) : null,
+          table.GraphTypes,
+          table.ApiUrl,
+          tableThemes.get(table.Identifier) || [],
+          now,
+        ]);
+      } catch (err) {
+        errors.push(`${table.Identifier}: ${err instanceof Error ? err.message : 'unknown'}`);
+      }
+    }
+
+    // Track last sync time
+    await client.query(`
+      INSERT INTO system_state (key, value, updated_at)
+      VALUES ('cbs_catalog_sync', $1, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+    `, [JSON.stringify({ tables: tables.length, themes: themes.length, at: now })]);
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    errors.push(err instanceof Error ? err.message : 'Transaction failed');
+  } finally {
+    client.release();
+  }
+
+  const duration = Date.now() - startTime;
+  console.log(`[CBS Catalog] Sync complete: ${tables.length} tables, ${themes.length} themes in ${(duration / 1000).toFixed(1)}s`);
+
+  return {
+    tablesProcessed: tables.length,
+    themesLoaded: themes.length,
+    duration,
+    errors,
+  };
+}
+
+/**
+ * Search the local CBS catalog cache.
+ */
+export async function searchCatalog(options: {
+  search?: string;
+  theme?: string;
+  frequency?: string;
+  activated?: boolean;
+  limit?: number;
+  offset?: number;
+}): Promise<{
+  tables: Array<{
+    identifier: string;
+    title: string;
+    shortTitle: string;
+    summary: string;
+    frequency: string;
+    period: string;
+    recordCount: number;
+    modified: string;
+    themes: string[];
+    isActivated: boolean;
+    dataSourceKey: string | null;
+  }>;
+  total: number;
+}> {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let idx = 1;
+
+  if (options.search) {
+    conditions.push(`(title ILIKE $${idx} OR short_title ILIKE $${idx} OR summary ILIKE $${idx} OR identifier ILIKE $${idx})`);
+    params.push(`%${options.search}%`);
+    idx++;
+  }
+
+  if (options.theme) {
+    conditions.push(`$${idx} = ANY(themes)`);
+    params.push(options.theme);
+    idx++;
+  }
+
+  if (options.frequency) {
+    conditions.push(`frequency = $${idx}`);
+    params.push(options.frequency);
+    idx++;
+  }
+
+  if (options.activated !== undefined) {
+    conditions.push(`is_activated = $${idx}`);
+    params.push(options.activated);
+    idx++;
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const limit = Math.min(options.limit || 50, 200);
+  const offset = options.offset || 0;
+
+  const [dataResult, countResult] = await Promise.all([
+    query(`
+      SELECT identifier, title, short_title, summary, frequency, period,
+             record_count, modified, themes, is_activated, data_source_key
+      FROM cbs_catalog ${where}
+      ORDER BY record_count DESC NULLS LAST
+      LIMIT ${limit} OFFSET ${offset}
+    `, params),
+    query(`SELECT COUNT(*) as total FROM cbs_catalog ${where}`, params),
+  ]);
+
+  return {
+    tables: dataResult.rows.map(r => ({
+      identifier: r.identifier,
+      title: r.title,
+      shortTitle: r.short_title,
+      summary: r.summary,
+      frequency: r.frequency,
+      period: r.period,
+      recordCount: r.record_count,
+      modified: r.modified,
+      themes: r.themes,
+      isActivated: r.is_activated,
+      dataSourceKey: r.data_source_key,
+    })),
+    total: parseInt(countResult.rows[0].total),
+  };
+}
+
+/**
+ * Get CBS catalog themes (distinct theme names from cached data).
+ */
+export async function getCatalogThemes(): Promise<string[]> {
+  const result = await query(`
+    SELECT DISTINCT unnest(themes) as theme FROM cbs_catalog ORDER BY theme
+  `);
+  return result.rows.map(r => r.theme);
+}
