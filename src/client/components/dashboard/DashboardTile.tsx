@@ -3,6 +3,7 @@ import { Download, Maximize2, MoreVertical, X } from 'lucide-react';
 import type { TileConfig, ChartType } from '@shared/api/contracts';
 import { ChartRenderer } from '../charts/ChartRenderer';
 import { useDataQuery } from '../../hooks/useDataQuery';
+import { useTimeSeriesQuery } from '../../hooks/useTimeSeriesQuery';
 import { useFilters } from '../../contexts/FilterContext';
 
 interface DashboardTileProps {
@@ -22,11 +23,26 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
   const isDimensionComparison = tileHasComparedDimension
     && filters.comparedDimensionValues.length >= 2;
 
-  const { data, isLoading, error } = useDataQuery({
+  // Line charts need full time series (all years + prognose), not a single-year snapshot
+  const isLineChart = tile.chartType === 'line';
+  const lineDim = tile.dimensions[0];
+
+  const { data: snapshotData, isLoading: snapLoading, error: snapError } = useDataQuery({
     source: tile.dataSource,
-    // When dimension comparison is active for THIS tile, don't filter by dimension value
-    dimension: isDimensionComparison ? undefined : tile.dimensions[0],
+    dimension: isDimensionComparison ? undefined : lineDim,
+    enabled: !isLineChart,
   });
+
+  const { data: timeSeriesData, isLoading: tsLoading, error: tsError } = useTimeSeriesQuery({
+    source: tile.dataSource,
+    dimension: lineDim,
+    dimensionValue: lineDim ? 'totaal' : undefined,
+    enabled: isLineChart,
+  });
+
+  const data = isLineChart ? timeSeriesData : snapshotData;
+  const isLoading = isLineChart ? tsLoading : snapLoading;
+  const error = isLineChart ? tsError : snapError;
 
   // Merge dimension comparison values into tile config (only for relevant tiles)
   const mergedConfig = isDimensionComparison
