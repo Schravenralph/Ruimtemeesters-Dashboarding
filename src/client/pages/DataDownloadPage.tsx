@@ -7,10 +7,13 @@ import { useToast } from '../components/ui/Toast';
 import { useFilters } from '../contexts/FilterContext';
 
 const dataSources = [
-  { value: 'bevolking', label: 'Bevolking', description: 'Bevolkingsgegevens per leeftijdsgroep en geslacht' },
-  { value: 'huishoudens', label: 'Huishoudens', description: 'Huishoudenssamenstelling per type' },
-  { value: 'woningen', label: 'Woningen', description: 'Woningvoorraad naar eigendom en type' },
-  { value: 'woningtekort', label: 'Woningtekort', description: 'Woningtekort, vraag en aanbod' },
+  { value: 'bevolking', label: 'Bevolking', description: 'Bevolkingsgegevens per leeftijdsgroep en geslacht (incl. TSA prognose)', category: 'Wonen' },
+  { value: 'huishoudens', label: 'Huishoudens', description: 'Huishoudenssamenstelling per type', category: 'Wonen' },
+  { value: 'woningen', label: 'Woningen', description: 'Woningvoorraad naar eigendom en type', category: 'Wonen' },
+  { value: 'woningtekort', label: 'Woningtekort', description: 'Woningtekort, vraag en aanbod', category: 'Wonen' },
+  { value: 'energie', label: 'Energie', description: 'Energieverbruik per sector en brandstof (incl. TSA prognose)', category: 'Duurzaamheid' },
+  { value: 'hernieuwbaar', label: 'Hernieuwbare Energie', description: 'Capaciteit hernieuwbare energiebronnen (incl. TSA prognose)', category: 'Duurzaamheid' },
+  { value: 'afval', label: 'Afval & Circulair', description: 'Afvalproductie en recycling per type (incl. TSA prognose)', category: 'Duurzaamheid' },
 ];
 
 const formats = [
@@ -68,31 +71,36 @@ export function DataDownloadPage() {
       {/* Source Selection */}
       <Card className="mb-4">
         <CardHeader title="Databron" subtitle="Selecteer de dataset die je wilt downloaden" />
-        <div className="space-y-2">
-          {dataSources.map(source => (
-            <label
-              key={source.value}
-              className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                selectedSource === source.value
-                  ? 'border-blue-300 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <input
-                type="radio"
-                name="source"
-                value={source.value}
-                checked={selectedSource === source.value}
-                onChange={(e) => setSelectedSource(e.target.value)}
-                className="mt-0.5"
-              />
-              <div>
-                <p className="text-sm font-medium text-gray-900">{source.label}</p>
-                <p className="text-xs text-gray-500">{source.description}</p>
-              </div>
-            </label>
-          ))}
-        </div>
+        {['Wonen', 'Duurzaamheid'].map(cat => (
+          <div key={cat} className="mb-3">
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1.5">{cat}</p>
+            <div className="space-y-2">
+              {dataSources.filter(s => s.category === cat).map(source => (
+                <label
+                  key={source.value}
+                  className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                    selectedSource === source.value
+                      ? 'border-blue-300 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="source"
+                    value={source.value}
+                    checked={selectedSource === source.value}
+                    onChange={(e) => setSelectedSource(e.target.value)}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{source.label}</p>
+                    <p className="text-xs text-gray-500">{source.description}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
       </Card>
 
       {/* Filters */}
