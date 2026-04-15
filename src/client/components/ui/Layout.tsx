@@ -51,6 +51,10 @@ export function Layout({ children }: { children: ReactNode }) {
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6 print:p-0 print:overflow-visible">
           {children}
+          <footer className="mt-8 pb-4 text-xs text-gray-400 text-center print:mt-4">
+            <p>Bron: CBS, StatLine (opendata.cbs.nl) &middot; Licentie: CC-BY 4.0</p>
+            <p className="mt-0.5">AI prognoses: Ruimtemeesters TSA Engine &middot; Geen rechten ontleend aan voorspellingen</p>
+          </footer>
         </main>
       </div>
     </div>
