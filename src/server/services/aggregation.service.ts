@@ -45,13 +45,16 @@ export async function aggregateToLevel(targetLevel: 'provincie' | 'corop' | 'lan
     const uniqueCols = ['geo_code', 'year', ...table.dims].join(', ');
     const onConflict = `ON CONFLICT (${uniqueCols}) DO UPDATE SET value = EXCLUDED.value`;
 
+    // Only aggregate cbs_actuals to avoid double-counting from prognose sources.
+    // The source column must be included in the unique constraint for upsert to work.
     const sql = `
-      INSERT INTO ${table.name} (geo_code, year${dimGroupBy}, value)
-      SELECT ${targetCodeExpr} as geo_code, d.year${dimGroupBy}, SUM(d.value) as value
+      INSERT INTO ${table.name} (geo_code, year${dimGroupBy}, value, source)
+      SELECT ${targetCodeExpr} as geo_code, d.year${dimGroupBy}, SUM(d.value) as value, 'cbs_actuals' as source
       FROM ${table.name} d
       ${joinClause}
+      WHERE d.source = 'cbs_actuals'
       GROUP BY ${targetCodeExpr}, d.year${dimGroupBy}
-      ${onConflict}
+      ON CONFLICT (${uniqueCols}, source) DO UPDATE SET value = EXCLUDED.value
     `;
 
     try {
