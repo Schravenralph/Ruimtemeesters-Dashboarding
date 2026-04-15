@@ -40,7 +40,7 @@ export function useTimeSeriesQuery({ source, dimension, dimensionValue, enabled 
         dimensionValue,
       });
 
-      // Map to DataPoint format
+      // Map to DataPoint format (include confidence intervals for prognose rendering)
       const points: DataPoint[] = response.data.map(d => ({
         geoCode: filters.geoCode,
         geoName: '',
@@ -49,6 +49,8 @@ export function useTimeSeriesQuery({ source, dimension, dimensionValue, enabled 
         source: d.source,
         dimension: dimension || 'age_group',
         dimensionValue: dimensionValue || 'totaal',
+        ...(d.confidenceLower != null ? { confidenceLower: d.confidenceLower } : {}),
+        ...(d.confidenceUpper != null ? { confidenceUpper: d.confidenceUpper } : {}),
       }));
 
       setData(points);
