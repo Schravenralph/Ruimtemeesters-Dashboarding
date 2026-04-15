@@ -37,11 +37,10 @@ export function TrendSummary({ dataSource }: TrendSummaryProps) {
   const [trend, setTrend] = useState<TrendData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch full time series (actuals + prognose) for the line chart
+  // Fetch full time series (actuals + prognose) for the line chart.
+  // No dimension specified → backend pins all dimensions to 'totaal' (grand total).
   const { data: timeSeriesData, isLoading: tsLoading } = useTimeSeriesQuery({
     source: dataSource,
-    dimension: 'age_group',
-    dimensionValue: 'totaal',
   });
 
   useEffect(() => {

@@ -33,10 +33,9 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
     enabled: !isLineChart,
   });
 
+  // No dimension → backend returns grand total per year (all dimensions pinned to 'totaal')
   const { data: timeSeriesData, isLoading: tsLoading, error: tsError } = useTimeSeriesQuery({
     source: tile.dataSource,
-    dimension: lineDim,
-    dimensionValue: lineDim ? 'totaal' : undefined,
     enabled: isLineChart,
   });
 
