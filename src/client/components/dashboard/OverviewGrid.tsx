@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Users, Home, Building2, TrendingDown, ArrowRight } from 'lucide-react';
+import { Users, Home, Building2, TrendingDown, ArrowRight, Zap, Leaf, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { queryData } from '../../services/api/data';
 import { MiniChart } from './MiniChart';
@@ -16,18 +16,30 @@ interface OverviewItem {
   data: DataPoint[];
 }
 
-export function OverviewGrid() {
+const WONEN_CONFIG: Omit<OverviewItem, 'data'>[] = [
+  { slug: 'bevolking', label: 'Bevolking', icon: Users, color: '#3b82f6', dataSource: 'bevolking' },
+  { slug: 'huishoudens', label: 'Huishoudens', icon: Home, color: '#10b981', dataSource: 'huishoudens' },
+  { slug: 'woningen', label: 'Woningen', icon: Building2, color: '#8b5cf6', dataSource: 'woningen' },
+  { slug: 'woningtekort', label: 'Woningtekort', icon: TrendingDown, color: '#f59e0b', dataSource: 'woningtekort' },
+];
+
+const DUURZAAMHEID_CONFIG: Omit<OverviewItem, 'data'>[] = [
+  { slug: 'energie', label: 'Energie', icon: Zap, color: '#f59e0b', dataSource: 'energie' },
+  { slug: 'hernieuwbare-energie', label: 'Hernieuwbaar', icon: Leaf, color: '#10b981', dataSource: 'hernieuwbaar' },
+  { slug: 'afval-circulair', label: 'Afval & Circulair', icon: Trash2, color: '#8b5cf6', dataSource: 'afval' },
+];
+
+interface OverviewGridProps {
+  supercategory?: string;
+}
+
+export function OverviewGrid({ supercategory }: OverviewGridProps) {
   const { filters } = useFilters();
   const navigate = useNavigate();
   const [items, setItems] = useState<OverviewItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const overviewConfig: Omit<OverviewItem, 'data'>[] = [
-    { slug: 'bevolking', label: 'Bevolking', icon: Users, color: '#3b82f6', dataSource: 'bevolking' },
-    { slug: 'huishoudens', label: 'Huishoudens', icon: Home, color: '#10b981', dataSource: 'huishoudens' },
-    { slug: 'woningen', label: 'Woningen', icon: Building2, color: '#8b5cf6', dataSource: 'woningen' },
-    { slug: 'woningtekort', label: 'Woningtekort', icon: TrendingDown, color: '#f59e0b', dataSource: 'woningtekort' },
-  ];
+  const overviewConfig = supercategory === 'duurzaamheid' ? DUURZAAMHEID_CONFIG : WONEN_CONFIG;
 
   useEffect(() => {
     setIsLoading(true);

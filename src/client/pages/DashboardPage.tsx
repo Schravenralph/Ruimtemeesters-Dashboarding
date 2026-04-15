@@ -164,8 +164,8 @@ export function DashboardPage() {
       {/* Overview Stats (only for overview themes) */}
       {theme.isOverview && (
         <>
-          <StatsSummary />
-          <OverviewGrid />
+          {theme.supercategory !== 'duurzaamheid' && <StatsSummary />}
+          <OverviewGrid supercategory={theme.supercategory} />
         </>
       )}
 
