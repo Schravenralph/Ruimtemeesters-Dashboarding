@@ -4,6 +4,7 @@ import { api } from '../../services/api/client';
 import { useFilters } from '../../contexts/FilterContext';
 import { useTimeSeriesQuery } from '../../hooks/useTimeSeriesQuery';
 import { formatCompact, formatPercent } from '../../utils/format';
+import { isPrognoseSource } from '../../utils/prognose';
 import { LineChartComponent } from '../charts/LineChart';
 import { Spinner } from '../ui/Spinner';
 
@@ -56,8 +57,7 @@ export function TrendSummary({ dataSource }: TrendSummaryProps) {
   const { summary } = trend;
 
   // Use time series data if available (includes prognose), fallback to trend data
-  const isPrognose = (d: { source?: string }) => d.source === 'cbs_prognose' || d.source === 'ruimtemeesters_prognose';
-  const hasPrognose = timeSeriesData.some(d => isPrognose(d));
+  const hasPrognose = timeSeriesData.some(d => isPrognoseSource(d.source));
   const chartData = hasPrognose ? timeSeriesData : trend.timeSeries.map(t => ({
     geoCode: trend.geoCode,
     geoName: '',
@@ -67,8 +67,8 @@ export function TrendSummary({ dataSource }: TrendSummaryProps) {
   }));
 
   // Extract prognose KPIs
-  const latestActual = [...timeSeriesData].filter(d => !isPrognose(d)).sort((a, b) => b.year - a.year)[0];
-  const latestPrognose = [...timeSeriesData].filter(d => isPrognose(d)).sort((a, b) => b.year - a.year)[0];
+  const latestActual = [...timeSeriesData].filter(d => !isPrognoseSource(d.source)).sort((a, b) => b.year - a.year)[0];
+  const latestPrognose = [...timeSeriesData].filter(d => isPrognoseSource(d.source)).sort((a, b) => b.year - a.year)[0];
   const prognoseChange = latestActual && latestPrognose
     ? ((latestPrognose.value - latestActual.value) / latestActual.value) * 100
     : null;

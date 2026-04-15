@@ -64,7 +64,7 @@ export function OverviewGrid({ supercategory }: OverviewGridProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {[1, 2, 3, 4].map(i => (
+        {Array.from({ length: overviewConfig.length }, (_, i) => i + 1).map(i => (
           <div key={i} className="rounded-xl border border-gray-200 bg-white p-5 h-32 animate-pulse" />
         ))}
       </div>

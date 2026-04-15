@@ -4,6 +4,7 @@ import {
   ReferenceLine, ReferenceArea,
 } from 'recharts';
 import type { DataPoint } from '@shared/api/contracts';
+import { isPrognoseSource } from '../../utils/prognose';
 
 interface LineChartProps {
   data: DataPoint[];
@@ -22,7 +23,7 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
 
   if (dimensionValues.length === 0) {
     // Simple line chart — split actuals from prognose
-    const isPrognose = (d: DataPoint) => d.source === 'cbs_prognose' || d.source === 'ruimtemeesters_prognose';
+    const isPrognose = (d: DataPoint) => isPrognoseSource(d.source);
     const hasPrognose = data.some(isPrognose);
     const hasConfidence = data.some(d => d.confidenceLower != null);
 

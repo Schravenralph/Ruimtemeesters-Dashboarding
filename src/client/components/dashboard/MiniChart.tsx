@@ -1,6 +1,7 @@
 import { ComposedChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
 import type { DataPoint } from '@shared/api/contracts';
 import { formatCompact } from '../../utils/format';
+import { isPrognoseSource } from '../../utils/prognose';
 
 interface MiniChartProps {
   data: DataPoint[];
@@ -15,32 +16,30 @@ interface MiniChartProps {
 export function MiniChart({ data, color = '#3b82f6', height = 40 }: MiniChartProps) {
   if (data.length === 0) return null;
 
-  const isPrognose = (d: DataPoint) => d.source === 'cbs_prognose' || d.source === 'ruimtemeesters_prognose';
+  // Aggregate by year, tracking source per data point (not per year).
+  // A year can have both actuals and prognose — keep the actuals value for the actuals line.
+  const yearActuals = new Map<number, number>();
+  const yearPrognose = new Map<number, number>();
 
-  // Aggregate by year, tracking source
-  const yearMap = new Map<number, { value: number; prognose: boolean }>();
   for (const d of data) {
-    const existing = yearMap.get(d.year);
-    if (existing) {
-      existing.value += d.value;
-      if (isPrognose(d)) existing.prognose = true;
+    if (isPrognoseSource(d.source)) {
+      yearPrognose.set(d.year, (yearPrognose.get(d.year) || 0) + d.value);
     } else {
-      yearMap.set(d.year, { value: d.value, prognose: isPrognose(d) });
+      yearActuals.set(d.year, (yearActuals.get(d.year) || 0) + d.value);
     }
   }
 
-  const sorted = [...yearMap.entries()].sort((a, b) => a[0] - b[0]);
-  const hasPrognose = sorted.some(([, v]) => v.prognose);
+  const allYears = [...new Set([...yearActuals.keys(), ...yearPrognose.keys()])].sort((a, b) => a - b);
+  const hasPrognose = yearPrognose.size > 0;
 
-  // Build chart data with separate actuals/prognose series
-  const chartData = sorted.map(([year, { value, prognose }]) => ({
+  const chartData = allYears.map(year => ({
     year: String(year),
-    actuals: !prognose ? value : undefined,
-    prognose: prognose ? value : undefined,
-    value,
+    actuals: yearActuals.get(year),
+    prognose: yearPrognose.get(year),
+    value: yearActuals.get(year) ?? yearPrognose.get(year) ?? 0,
   }));
 
-  // Bridge point: last actual also appears in prognose for line continuity
+  // Bridge point: last actual year also appears in prognose for line continuity
   if (hasPrognose) {
     const lastActualIdx = chartData.map((d, i) => d.actuals !== undefined ? i : -1).filter(i => i >= 0).pop();
     if (lastActualIdx !== undefined && lastActualIdx >= 0) {
@@ -53,7 +52,7 @@ export function MiniChart({ data, color = '#3b82f6', height = 40 }: MiniChartPro
       <ComposedChart data={chartData}>
         <Tooltip
           formatter={(value: number) => formatCompact(value)}
-          labelFormatter={(label) => `${label}`}
+          labelFormatter={(label) => `Jaar ${label}`}
           contentStyle={{ fontSize: 11, padding: '4px 8px' }}
         />
         {hasPrognose ? (

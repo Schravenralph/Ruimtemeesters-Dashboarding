@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { DataPoint } from '@shared/api/contracts';
 import { dimensionValueLabel } from '../../utils/format';
+import { isPrognoseSource } from '../../utils/prognose';
 
 interface DataTableProps {
   data: DataPoint[];
@@ -148,7 +149,7 @@ export function DataTableComponent({ data, comparisonRow }: DataTableProps) {
               </tr>
             )}
             {sortedData.map((row, index) => {
-              const isPrognose = row.source === 'cbs_prognose' || row.source === 'ruimtemeesters_prognose';
+              const isPrognose = isPrognoseSource(row.source);
               return (
               <tr key={index} className={isPrognose ? 'bg-yellow-50 hover:bg-yellow-100' : 'hover:bg-gray-50'}>
                 <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">

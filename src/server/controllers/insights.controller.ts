@@ -1,8 +1,6 @@
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
 
-const SOURCE_PRIORITY = `CASE source WHEN 'cbs_actuals' THEN 1 WHEN 'cbs_prognose' THEN 2 ELSE 3 END`;
-
 interface Insight {
   id: string;
   icon: string;
@@ -15,54 +13,84 @@ interface Insight {
 /**
  * Generate data-driven insights from real CBS + TSA data.
  * Returns 4-6 auto-generated insights suitable for the overview page.
+ * All queries run in parallel for minimal latency.
  */
 export async function getInsights(_req: Request, res: Response): Promise<void> {
+  // Run all independent queries in parallel
+  const [nlPop, nlPop2060, groeier, ams, aging, tsa] = await Promise.all([
+    // 1. National population (latest actuals year)
+    query(`
+      SELECT year, value FROM data_bevolking
+      WHERE geo_code = 'NL' AND age_group = 'totaal' AND gender = 'totaal' AND source = 'cbs_actuals'
+      ORDER BY year DESC LIMIT 1
+    `).catch(() => ({ rows: [] })),
+
+    // 1b. 2060 prognose
+    query(`
+      SELECT value FROM data_bevolking
+      WHERE geo_code = 'NL' AND year = 2060 AND age_group = 'totaal' AND gender = 'totaal' AND source = 'cbs_prognose'
+    `).catch(() => ({ rows: [] })),
+
+    // 2. Fastest growing gemeente (2020→2024)
+    query(`
+      WITH t2020 AS (
+        SELECT geo_code, value FROM data_bevolking
+        WHERE year = 2020 AND age_group = 'totaal' AND gender = 'totaal' AND source = 'cbs_actuals'
+      ),
+      t2024 AS (
+        SELECT geo_code, value FROM data_bevolking
+        WHERE year = 2024 AND age_group = 'totaal' AND gender = 'totaal' AND source = 'cbs_actuals'
+      )
+      SELECT g.name, t2024.value as pop,
+             ROUND(((t2024.value - t2020.value) / t2020.value * 100)::numeric, 1) as pct
+      FROM t2024 JOIN t2020 ON t2020.geo_code = t2024.geo_code
+      JOIN geo_areas g ON g.code = t2024.geo_code AND g.level = 'gemeente'
+      WHERE t2020.value > 10000
+      ORDER BY pct DESC LIMIT 1
+    `).catch(() => ({ rows: [] })),
+
+    // 3. Amsterdam approaching 1M
+    query(`
+      SELECT value FROM data_bevolking
+      WHERE geo_code = 'GM0363' AND age_group = 'totaal' AND gender = 'totaal' AND source = 'cbs_actuals'
+      ORDER BY year DESC LIMIT 1
+    `).catch(() => ({ rows: [] })),
+
+    // 4. Aging population (65+ share)
+    query(`
+      SELECT
+        SUM(CASE WHEN age_group IN ('65-74', '75+') THEN value ELSE 0 END) as elderly,
+        SUM(CASE WHEN age_group = 'totaal' THEN value ELSE 0 END) as total
+      FROM data_bevolking
+      WHERE geo_code = 'NL' AND gender = 'totaal' AND source = 'cbs_actuals'
+        AND year = (SELECT MAX(year) FROM data_bevolking WHERE source = 'cbs_actuals' AND geo_code = 'NL')
+    `).catch(() => ({ rows: [] })),
+
+    // 5. TSA coverage
+    query(`
+      SELECT COUNT(DISTINCT geo_code) as gemeenten FROM data_bevolking WHERE source = 'ruimtemeesters_prognose'
+    `).catch(() => ({ rows: [] })),
+  ]);
+
   const insights: Insight[] = [];
 
-  // 1. National population (latest actuals year)
-  const nlPop = await query(`
-    SELECT year, value FROM data_bevolking
-    WHERE geo_code = 'NL' AND age_group = 'totaal' AND gender = 'totaal' AND source = 'cbs_actuals'
-    ORDER BY year DESC LIMIT 1
-  `).catch(() => ({ rows: [] }));
-
-  const nlPop2060 = await query(`
-    SELECT value FROM data_bevolking
-    WHERE geo_code = 'NL' AND year = 2060 AND age_group = 'totaal' AND gender = 'totaal' AND source = 'cbs_prognose'
-  `).catch(() => ({ rows: [] }));
-
+  // 1. NL 2060 projection
   if (nlPop.rows[0] && nlPop2060.rows[0]) {
     const now = Number(nlPop.rows[0].value);
     const future = Number(nlPop2060.rows[0].value);
     const growth = ((future - now) / now * 100).toFixed(1);
+    const sign = Number(growth) >= 0 ? '+' : '';
     insights.push({
       id: 'nl-2060',
       icon: 'TrendingUp',
       title: 'Nederland in 2060',
-      description: `De bevolking groeit van ${(now / 1e6).toFixed(1)}M naar ${(future / 1e6).toFixed(1)}M (+${growth}%)`,
+      description: `De bevolking groeit van ${(now / 1e6).toFixed(1)}M naar ${(future / 1e6).toFixed(1)}M (${sign}${growth}%)`,
       value: `${(future / 1e6).toFixed(1)}M`,
       link: '/dashboard/prognose',
     });
   }
 
-  // 2. Fastest growing gemeente (2020→2024)
-  const groeier = await query(`
-    WITH t2020 AS (
-      SELECT geo_code, value FROM data_bevolking
-      WHERE year = 2020 AND age_group = 'totaal' AND gender = 'totaal' AND source = 'cbs_actuals'
-    ),
-    t2024 AS (
-      SELECT geo_code, value FROM data_bevolking
-      WHERE year = 2024 AND age_group = 'totaal' AND gender = 'totaal' AND source = 'cbs_actuals'
-    )
-    SELECT g.name, t2024.value as pop,
-           ROUND(((t2024.value - t2020.value) / t2020.value * 100)::numeric, 1) as pct
-    FROM t2024 JOIN t2020 ON t2020.geo_code = t2024.geo_code
-    JOIN geo_areas g ON g.code = t2024.geo_code AND g.level = 'gemeente'
-    WHERE t2020.value > 10000
-    ORDER BY pct DESC LIMIT 1
-  `).catch(() => ({ rows: [] }));
-
+  // 2. Fastest grower
   if (groeier.rows[0]) {
     insights.push({
       id: 'fastest-grower',
@@ -74,13 +102,7 @@ export async function getInsights(_req: Request, res: Response): Promise<void> {
     });
   }
 
-  // 3. Largest city approaching milestone
-  const ams = await query(`
-    SELECT value FROM data_bevolking
-    WHERE geo_code = 'GM0363' AND age_group = 'totaal' AND gender = 'totaal' AND source = 'cbs_actuals'
-    ORDER BY year DESC LIMIT 1
-  `).catch(() => ({ rows: [] }));
-
+  // 3. Amsterdam milestone
   if (ams.rows[0]) {
     const pop = Number(ams.rows[0].value);
     const toMillion = 1000000 - pop;
@@ -95,16 +117,7 @@ export async function getInsights(_req: Request, res: Response): Promise<void> {
     }
   }
 
-  // 4. Aging population (65+ share)
-  const aging = await query(`
-    SELECT
-      SUM(CASE WHEN age_group IN ('65-74', '75+') THEN value ELSE 0 END) as elderly,
-      SUM(CASE WHEN age_group = 'totaal' THEN value ELSE 0 END) as total
-    FROM data_bevolking
-    WHERE geo_code = 'NL' AND gender = 'totaal' AND source = 'cbs_actuals'
-      AND year = (SELECT MAX(year) FROM data_bevolking WHERE source = 'cbs_actuals' AND geo_code = 'NL')
-  `).catch(() => ({ rows: [] }));
-
+  // 4. Aging
   if (aging.rows[0] && Number(aging.rows[0].total) > 0) {
     const pct = (Number(aging.rows[0].elderly) / Number(aging.rows[0].total) * 100).toFixed(1);
     insights.push({
@@ -118,10 +131,6 @@ export async function getInsights(_req: Request, res: Response): Promise<void> {
   }
 
   // 5. TSA coverage
-  const tsa = await query(`
-    SELECT COUNT(DISTINCT geo_code) as gemeenten FROM data_bevolking WHERE source = 'ruimtemeesters_prognose'
-  `).catch(() => ({ rows: [] }));
-
   if (tsa.rows[0] && Number(tsa.rows[0].gemeenten) > 0) {
     insights.push({
       id: 'tsa-coverage',
