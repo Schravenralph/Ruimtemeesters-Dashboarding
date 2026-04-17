@@ -223,23 +223,26 @@ export async function searchCatalog(options: {
   const rawSearch = options.search?.trim();
   const useFts = !!rawSearch && rawSearch.length >= 3;
 
+  // Both branches use a single parameter so the count query (which reuses the
+  // same params array but without the rank expression) doesn't receive extra
+  // binds. ILIKE uses inline '%' concatenation to reuse the raw-term param.
   if (rawSearch) {
     if (useFts) {
       conditions.push(
         `(search_vector @@ websearch_to_tsquery('dutch', unaccent($${idx})) ` +
-        `OR title ILIKE $${idx + 1} OR identifier ILIKE $${idx + 1})`,
+        `OR title ILIKE '%' || $${idx} || '%' OR identifier ILIKE '%' || $${idx} || '%')`,
       );
       rankExpr = `ts_rank_cd(search_vector, websearch_to_tsquery('dutch', unaccent($${idx})))`;
       params.push(rawSearch);
-      params.push(`%${rawSearch}%`);
-      idx += 2;
+      idx += 1;
     } else {
       // Short query: fall back to trigram/ILIKE for responsiveness.
-      conditions.push(`(title ILIKE $${idx} OR identifier ILIKE $${idx} OR short_title ILIKE $${idx})`);
-      rankExpr = `similarity(title, $${idx + 1})`;
-      params.push(`%${rawSearch}%`);
+      conditions.push(
+        `(title ILIKE '%' || $${idx} || '%' OR identifier ILIKE '%' || $${idx} || '%' OR short_title ILIKE '%' || $${idx} || '%')`,
+      );
+      rankExpr = `similarity(title, $${idx})`;
       params.push(rawSearch);
-      idx += 2;
+      idx += 1;
     }
   }
 
