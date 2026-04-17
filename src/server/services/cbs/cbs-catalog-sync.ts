@@ -208,6 +208,7 @@ export async function searchCatalog(options: {
     themes: string[];
     isActivated: boolean;
     dataSourceKey: string | null;
+    relevance: number;
   }>;
   total: number;
 }> {
@@ -215,10 +216,31 @@ export async function searchCatalog(options: {
   const params: unknown[] = [];
   let idx = 1;
 
-  if (options.search) {
-    conditions.push(`(title ILIKE $${idx} OR short_title ILIKE $${idx} OR summary ILIKE $${idx} OR identifier ILIKE $${idx})`);
-    params.push(`%${options.search}%`);
-    idx++;
+  // Search — BM25-style ranking via ts_rank_cd when the query is substantial,
+  // trigram similarity for short/partial queries (still-typing case).
+  // We build both a WHERE condition and a rank expression in one pass.
+  let rankExpr = 'ts_rank_cd(COALESCE(search_vector, \'\'::tsvector), websearch_to_tsquery(\'dutch\', unaccent(\'\')))';
+  const rawSearch = options.search?.trim();
+  const useFts = !!rawSearch && rawSearch.length >= 3;
+
+  if (rawSearch) {
+    if (useFts) {
+      conditions.push(
+        `(search_vector @@ websearch_to_tsquery('dutch', unaccent($${idx})) ` +
+        `OR title ILIKE $${idx + 1} OR identifier ILIKE $${idx + 1})`,
+      );
+      rankExpr = `ts_rank_cd(search_vector, websearch_to_tsquery('dutch', unaccent($${idx})))`;
+      params.push(rawSearch);
+      params.push(`%${rawSearch}%`);
+      idx += 2;
+    } else {
+      // Short query: fall back to trigram/ILIKE for responsiveness.
+      conditions.push(`(title ILIKE $${idx} OR identifier ILIKE $${idx} OR short_title ILIKE $${idx})`);
+      rankExpr = `similarity(title, $${idx + 1})`;
+      params.push(`%${rawSearch}%`);
+      params.push(rawSearch);
+      idx += 2;
+    }
   }
 
   if (options.theme) {
@@ -243,12 +265,19 @@ export async function searchCatalog(options: {
   const limit = Math.min(options.limit || 50, 200);
   const offset = options.offset || 0;
 
+  // Without a search query, rank is always 0 — preserve the prior behaviour
+  // (sort by record_count DESC) so the default browse view is stable.
+  const orderBy = rawSearch
+    ? `${rankExpr} DESC, record_count DESC NULLS LAST`
+    : 'record_count DESC NULLS LAST';
+
   const [dataResult, countResult] = await Promise.all([
     query(`
       SELECT identifier, title, short_title, summary, frequency, period,
-             record_count, modified, themes, is_activated, data_source_key
+             record_count, modified, themes, is_activated, data_source_key,
+             ${rawSearch ? rankExpr : '0'}::real AS relevance
       FROM cbs_catalog ${where}
-      ORDER BY record_count DESC NULLS LAST
+      ORDER BY ${orderBy}
       LIMIT ${limit} OFFSET ${offset}
     `, params),
     query(`SELECT COUNT(*) as total FROM cbs_catalog ${where}`, params),
@@ -267,6 +296,7 @@ export async function searchCatalog(options: {
       themes: r.themes,
       isActivated: r.is_activated,
       dataSourceKey: r.data_source_key,
+      relevance: typeof r.relevance === 'number' ? r.relevance : Number(r.relevance ?? 0),
     })),
     total: parseInt(countResult.rows[0].total),
   };
