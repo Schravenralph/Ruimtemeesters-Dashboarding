@@ -119,12 +119,27 @@ export async function startSyncScheduler(): Promise<void> {
   }
 }
 
+// Serialise reloads. Two admin writes racing here would otherwise orphan
+// node-cron tasks: the second clearAll() only stops tasks still in the `jobs`
+// Map, leaving the first call's intermediate tasks firing invisibly.
+let reloadInFlight: Promise<number> | null = null;
+
 export async function reloadSyncScheduler(): Promise<number> {
-  clearAll();
-  const schedules = await loadSchedules();
-  for (const s of schedules) scheduleJob(s);
-  console.log(`[SyncScheduler] Reloaded (${schedules.length} schedules)`);
-  return schedules.length;
+  if (reloadInFlight) return reloadInFlight;
+  reloadInFlight = (async () => {
+    // Load first. If this throws, the existing jobs keep running — better than
+    // leaving the scheduler empty until the next successful CRUD call.
+    const schedules = await loadSchedules();
+    clearAll();
+    for (const s of schedules) scheduleJob(s);
+    console.log(`[SyncScheduler] Reloaded (${schedules.length} schedules)`);
+    return schedules.length;
+  })();
+  try {
+    return await reloadInFlight;
+  } finally {
+    reloadInFlight = null;
+  }
 }
 
 export function stopSyncScheduler(): void {
