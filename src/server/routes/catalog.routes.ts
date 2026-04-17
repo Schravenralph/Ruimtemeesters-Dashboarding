@@ -130,13 +130,17 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
   try {
     await client.query('BEGIN');
 
-    // 1. Create the data table dynamically
+    // 1. Create the data table dynamically.
+    // No FK to geo_areas: CBS publishes many region granularities (PC4, CR, BU,
+    // wijk) that we don't pre-seed. Validation is handled by parseCbsRegion in
+    // the generic sync engine; an FK here just causes silent FK-violation
+    // rollbacks for any table wider than gemeente/provincie/land.
     const dimColumnsDDL = dimColumns.map(c => `${c} VARCHAR(100)`).join(', ');
     const uniqueCols = ['geo_code', 'year', ...dimColumns, 'source'].join(', ');
     await client.query(`
       CREATE TABLE IF NOT EXISTS ${tableName} (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        geo_code VARCHAR(20) NOT NULL REFERENCES geo_areas(code),
+        geo_code VARCHAR(20) NOT NULL,
         year INTEGER NOT NULL,
         ${dimColumnsDDL ? dimColumnsDDL + ',' : ''}
         value NUMERIC,
@@ -210,8 +214,14 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
         );
         if (dsResult.rows.length > 0) {
           const { syncGeneric } = await import('../services/cbs/cbs-generic-sync.js');
-          const result = await syncGeneric(dsResult.rows[0].key, dsResult.rows[0].sync_config);
-          console.log(`[Catalog] Auto-sync ${key}: ${result.rowsInserted} rows in ${result.duration}ms`);
+          const result = await syncGeneric(dsResult.rows[0].key, dsResult.rows[0].sync_config, {
+            trigger: 'activation',
+            triggeredBy: req.user?.id ?? null,
+          });
+          console.log(`[Catalog] Auto-sync ${key}: ${result.rowsInserted}/${result.rowsFetched} rows in ${result.duration}ms`);
+          if (result.errors.length > 0) {
+            console.error(`[Catalog] Auto-sync ${key} reported errors: ${result.errors.join(' | ')}`);
+          }
         }
       } catch (err) {
         console.error(`[Catalog] Auto-sync ${key} failed:`, err);

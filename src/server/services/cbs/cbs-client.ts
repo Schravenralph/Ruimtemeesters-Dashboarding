@@ -160,16 +160,23 @@ export function parseCbsPeriod(period: string): number | null {
 }
 
 /**
- * Parse CBS region code to determine level.
+ * Parse CBS region code to determine level. Returns null for unrecognised
+ * or missing codes — callers must skip rather than crash.
  */
-export function parseCbsRegion(code: string): { code: string; level: string } | null {
+export function parseCbsRegion(code: string | undefined | null): { code: string; level: string } | null {
+  if (!code || typeof code !== 'string') return null;
   const trimmed = code.trim();
-  if (trimmed === 'NL01') return { code: 'NL', level: 'land' };
+  if (!trimmed) return null;
+  if (trimmed === 'NL01' || trimmed === 'NL00') return { code: 'NL', level: 'land' };
   if (trimmed.startsWith('PV')) return { code: `NL-${trimmed.substring(2)}`, level: 'provincie' };
   if (trimmed.startsWith('CR')) return { code: trimmed, level: 'corop' };
   if (trimmed.startsWith('GM')) return { code: trimmed, level: 'gemeente' };
   if (trimmed.startsWith('WK')) return { code: trimmed, level: 'wijk' };
   if (trimmed.startsWith('BU')) return { code: trimmed, level: 'buurt' };
+  // PC-prefixed postcode (4-digit), e.g. "PC1011". Keep the canonical PC-prefixed form.
+  if (/^PC\d{4}$/.test(trimmed)) return { code: trimmed, level: 'postcode' };
+  // Bare 4-digit numeric postcode (PC4) — normalise to PC-prefixed.
+  if (/^\d{4}$/.test(trimmed)) return { code: `PC${trimmed}`, level: 'postcode' };
   return null;
 }
 

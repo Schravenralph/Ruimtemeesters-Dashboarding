@@ -65,7 +65,14 @@ router.post('/run', authenticate, requireRole('admin'), async (req: Request, res
         );
         if (dsResult.rows.length > 0) {
           const { syncGeneric } = await import('../services/cbs/cbs-generic-sync.js');
-          await syncGeneric(dsResult.rows[0].key, dsResult.rows[0].sync_config, year);
+          const result = await syncGeneric(dsResult.rows[0].key, dsResult.rows[0].sync_config, {
+            yearFilter: year,
+            trigger: 'manual',
+            triggeredBy: req.user?.id ?? null,
+          });
+          if (result.errors.length > 0) {
+            console.error(`[SYNC] ${source} completed with errors: ${result.errors.join(' | ')}`);
+          }
         }
       } else {
         // Sync all
