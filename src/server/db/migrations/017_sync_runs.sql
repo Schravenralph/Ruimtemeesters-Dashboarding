@@ -21,4 +21,6 @@ CREATE INDEX IF NOT EXISTS idx_sync_runs_status ON sync_runs(status) WHERE statu
 -- without a hard FK to geo_areas, because CBS uses region codes (PC4, CR, BU)
 -- that aren't pre-loaded in geo_areas. Data is still validated by the generic
 -- sync engine's region parser.
-ALTER TABLE data_85640ned DROP CONSTRAINT IF EXISTS data_85640ned_geo_code_fkey;
+-- `ALTER TABLE IF EXISTS` is a no-op on fresh deployments where the 85640ned
+-- data source was never activated (the table won't exist there).
+ALTER TABLE IF EXISTS data_85640ned DROP CONSTRAINT IF EXISTS data_85640ned_geo_code_fkey;

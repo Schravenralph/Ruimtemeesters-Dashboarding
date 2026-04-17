@@ -144,9 +144,6 @@ importers:
       '@types/node':
         specifier: ^25.5.0
         version: 25.5.0
-      '@types/node-cron':
-        specifier: ^3.0.11
-        version: 3.0.11
       '@types/nodemailer':
         specifier: ^7.0.11
         version: 7.0.11
@@ -1165,9 +1162,6 @@ packages:
 
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
-
-  '@types/node-cron@3.0.11':
-    resolution: {integrity: sha512-0ikrnug3/IyneSHqCBeslAhlK2aBfYek1fGo4bP4QnZPmiqSGRK+Oy7ZMisLWkesffJvQ1cqAcBnJC+8+nxIAg==}
 
   '@types/node@25.5.0':
     resolution: {integrity: sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw==}
@@ -4141,8 +4135,6 @@ snapshots:
       '@types/geojson': 7946.0.16
 
   '@types/ms@2.1.0': {}
-
-  '@types/node-cron@3.0.11': {}
 
   '@types/node@25.5.0':
     dependencies:
