@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import cron from 'node-cron';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { query } from '../db/pool.js';
+import { reloadSyncScheduler, runScheduleNow } from '../services/cbs/sync-scheduler.js';
+import { notifySyncFinished } from '../services/cbs/sync-notifier.js';
 
 const router: Router = Router();
 
@@ -72,6 +75,17 @@ router.post('/run', authenticate, requireRole('admin'), async (req: Request, res
           });
           if (result.errors.length > 0) {
             console.error(`[SYNC] ${source} completed with errors: ${result.errors.join(' | ')}`);
+          }
+          // Notify the triggering admin on failure (manual triggers don't spam on success).
+          if (req.user?.id) {
+            await notifySyncFinished(result, {
+              recipientUserId: req.user.id,
+              notifyEmail: true,
+              notifyInApp: true,
+              notifyOn: 'failure',
+              sourceLabel: dsResult.rows[0].key,
+              trigger: 'manual',
+            });
           }
         }
       } else {
@@ -167,6 +181,165 @@ router.get('/forecast/status', authenticate, requireRole('admin'), async (_req: 
   } catch (err) {
     res.json({ health: { status: 'unreachable', error: (err as Error).message }, models: null, forecastRun });
   }
+});
+
+// --- Sync schedules (user-definable cron rules) ---
+
+// GET /api/sync/schedules — list all schedules
+router.get('/schedules', authenticate, requireRole('admin'), async (_req: Request, res: Response) => {
+  const result = await query(`
+    SELECT s.id, s.data_source_key, s.cron_expression, s.timezone, s.year_filter,
+           s.is_enabled, s.notify_email, s.notify_in_app, s.notify_on,
+           s.last_run_at, s.last_run_status, s.created_at, s.updated_at,
+           ds.name AS source_name
+    FROM sync_schedules s
+    JOIN data_sources ds ON ds.key = s.data_source_key
+    ORDER BY ds.name, s.cron_expression
+  `);
+  res.json({ schedules: result.rows });
+});
+
+// POST /api/sync/schedules — create a schedule
+router.post('/schedules', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
+  const {
+    dataSourceKey, cronExpression, timezone, yearFilter,
+    notifyEmail, notifyInApp, notifyOn, isEnabled,
+  } = req.body as {
+    dataSourceKey: string; cronExpression: string; timezone?: string;
+    yearFilter?: number | null; notifyEmail?: boolean; notifyInApp?: boolean;
+    notifyOn?: 'always' | 'failure' | 'never'; isEnabled?: boolean;
+  };
+
+  if (!dataSourceKey || !cronExpression) {
+    res.status(400).json({ error: 'dataSourceKey and cronExpression are required' });
+    return;
+  }
+  if (!cron.validate(cronExpression)) {
+    res.status(400).json({ error: `Invalid cron expression: "${cronExpression}"` });
+    return;
+  }
+  // Ensure the data source exists and has a sync_config.
+  const ds = await query(
+    "SELECT key, sync_config FROM data_sources WHERE key = $1",
+    [dataSourceKey],
+  );
+  if (ds.rows.length === 0) {
+    res.status(404).json({ error: `Unknown data source: ${dataSourceKey}` });
+    return;
+  }
+  if (!ds.rows[0].sync_config) {
+    res.status(400).json({ error: `Data source ${dataSourceKey} has no sync_config; only generic sources are schedulable via this endpoint` });
+    return;
+  }
+
+  const result = await query(
+    `INSERT INTO sync_schedules
+       (data_source_key, cron_expression, timezone, year_filter,
+        notify_email, notify_in_app, notify_on, is_enabled, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     ON CONFLICT (data_source_key, cron_expression) DO UPDATE SET
+       timezone = EXCLUDED.timezone,
+       year_filter = EXCLUDED.year_filter,
+       notify_email = EXCLUDED.notify_email,
+       notify_in_app = EXCLUDED.notify_in_app,
+       notify_on = EXCLUDED.notify_on,
+       is_enabled = EXCLUDED.is_enabled,
+       updated_at = NOW()
+     RETURNING *`,
+    [
+      dataSourceKey, cronExpression, timezone || 'Europe/Amsterdam',
+      yearFilter ?? null,
+      notifyEmail ?? true, notifyInApp ?? true, notifyOn ?? 'failure',
+      isEnabled ?? true, req.user?.id ?? null,
+    ],
+  );
+
+  await reloadSyncScheduler();
+  res.json({ schedule: result.rows[0] });
+});
+
+// PATCH /api/sync/schedules/:id — update a schedule
+router.patch('/schedules/:id', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
+  const id = req.params.id;
+  const body = req.body as Record<string, unknown>;
+
+  if (typeof body.cronExpression === 'string' && !cron.validate(body.cronExpression)) {
+    res.status(400).json({ error: `Invalid cron expression: "${body.cronExpression}"` });
+    return;
+  }
+
+  const allowed: Record<string, string> = {
+    cronExpression: 'cron_expression',
+    timezone: 'timezone',
+    yearFilter: 'year_filter',
+    isEnabled: 'is_enabled',
+    notifyEmail: 'notify_email',
+    notifyInApp: 'notify_in_app',
+    notifyOn: 'notify_on',
+  };
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  for (const [apiKey, col] of Object.entries(allowed)) {
+    if (body[apiKey] !== undefined) {
+      params.push(body[apiKey]);
+      sets.push(`${col} = $${params.length}`);
+    }
+  }
+  if (sets.length === 0) {
+    res.status(400).json({ error: 'No updatable fields provided' });
+    return;
+  }
+  params.push(id);
+  const result = await query(
+    `UPDATE sync_schedules SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${params.length} RETURNING *`,
+    params,
+  );
+  if (result.rows.length === 0) {
+    res.status(404).json({ error: 'Schedule not found' });
+    return;
+  }
+  await reloadSyncScheduler();
+  res.json({ schedule: result.rows[0] });
+});
+
+// DELETE /api/sync/schedules/:id
+router.delete('/schedules/:id', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
+  const result = await query('DELETE FROM sync_schedules WHERE id = $1 RETURNING id', [req.params.id]);
+  if (result.rows.length === 0) {
+    res.status(404).json({ error: 'Schedule not found' });
+    return;
+  }
+  await reloadSyncScheduler();
+  res.json({ status: 'deleted', id: req.params.id });
+});
+
+// POST /api/sync/schedules/:id/run — fire a schedule immediately (manual)
+router.post('/schedules/:id/run', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  res.json({ status: 'started', id });
+  runScheduleNow(id).catch(err =>
+    console.error(`[Sync] schedule ${id} manual run crashed:`, err),
+  );
+});
+
+// GET /api/sync/runs — recent sync_runs across all sources
+router.get('/runs', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+  const source = req.query.source as string | undefined;
+  const params: unknown[] = [];
+  let where = '';
+  if (source) {
+    params.push(source);
+    where = 'WHERE data_source_key = $1';
+  }
+  const result = await query(
+    `SELECT id, data_source_key, cbs_table_id, trigger, started_at, finished_at,
+            status, rows_fetched, rows_inserted, duration_ms, error_message
+     FROM sync_runs ${where}
+     ORDER BY started_at DESC LIMIT ${limit}`,
+    params,
+  );
+  res.json({ runs: result.rows });
 });
 
 export default router;
