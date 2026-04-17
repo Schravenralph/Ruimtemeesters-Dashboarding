@@ -9,7 +9,7 @@
 
 import cron, { type ScheduledTask } from 'node-cron';
 import { query } from '../../db/pool.js';
-import { syncGeneric, type GenericSyncConfig } from './cbs-generic-sync.js';
+import { syncGeneric, classifySyncStatus, type GenericSyncConfig } from './cbs-generic-sync.js';
 import { notifySyncFinished, type NotifyOn } from './sync-notifier.js';
 
 interface ScheduleRow {
@@ -62,8 +62,7 @@ async function runScheduled(schedule: ScheduleRow): Promise<void> {
        WHERE id = $1`,
       [
         schedule.id,
-        result.errors.length === 0 && result.rowsInserted > 0 ? 'success'
-          : result.rowsInserted > 0 ? 'partial' : 'failed',
+        classifySyncStatus(result.rowsInserted, result.errors.length),
         result.syncRunId ?? null,
       ],
     );

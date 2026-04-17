@@ -254,7 +254,9 @@ router.post('/schedules', authenticate, requireRole('admin'), async (req: Reques
     ],
   );
 
-  await reloadSyncScheduler();
+  reloadSyncScheduler().catch(err =>
+    console.error('[Sync] reload after schedule create failed (write succeeded):', err),
+  );
   res.json({ schedule: result.rows[0] });
 });
 
@@ -298,7 +300,9 @@ router.patch('/schedules/:id', authenticate, requireRole('admin'), async (req: R
     res.status(404).json({ error: 'Schedule not found' });
     return;
   }
-  await reloadSyncScheduler();
+  reloadSyncScheduler().catch(err =>
+    console.error('[Sync] reload after schedule update failed (write succeeded):', err),
+  );
   res.json({ schedule: result.rows[0] });
 });
 
@@ -309,7 +313,9 @@ router.delete('/schedules/:id', authenticate, requireRole('admin'), async (req: 
     res.status(404).json({ error: 'Schedule not found' });
     return;
   }
-  await reloadSyncScheduler();
+  reloadSyncScheduler().catch(err =>
+    console.error('[Sync] reload after schedule delete failed (write succeeded):', err),
+  );
   res.json({ status: 'deleted', id: req.params.id });
 });
 
@@ -329,7 +335,8 @@ router.post('/schedules/:id/run', authenticate, requireRole('admin'), async (req
 
 // GET /api/sync/runs — recent sync_runs across all sources
 router.get('/runs', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
-  const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+  const rawLimit = parseInt(req.query.limit as string);
+  const limit = Math.min(Math.max(Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 50, 1), 200);
   const source = req.query.source as string | undefined;
   const params: unknown[] = [];
   let where = '';

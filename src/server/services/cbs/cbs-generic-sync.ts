@@ -45,6 +45,16 @@ export interface SyncOptions {
   triggeredBy?: string | null;
 }
 
+export type SyncRunStatus = 'success' | 'partial' | 'failed';
+
+/** Single source of truth for classifying a sync run's status. Used by both
+ *  syncGeneric (sync_runs.status) and runScheduled (sync_schedules.last_run_status). */
+export function classifySyncStatus(rowsInserted: number, errorCount: number): SyncRunStatus {
+  if (rowsInserted > 0 && errorCount === 0) return 'success';
+  if (rowsInserted > 0) return 'partial';
+  return 'failed';
+}
+
 async function recordRunStart(key: string, cbsTable: string, opts: SyncOptions): Promise<string | null> {
   try {
     const r = await query(
@@ -234,9 +244,7 @@ export async function syncGeneric(
   }
 
   const duration = Date.now() - startTime;
-  const status = rowsInserted > 0 && errors.length === 0
-    ? 'success'
-    : rowsInserted > 0 ? 'partial' : 'failed';
+  const status = classifySyncStatus(rowsInserted, errors.length);
   await recordRunFinish(runId, status, { rowsFetched, rowsInserted, errors, duration });
 
   console.log(`[GenericSync] ${key}: ${rowsInserted}/${rowsFetched} rows inserted in ${duration}ms (status=${status}, errors=${errors.length})`);
