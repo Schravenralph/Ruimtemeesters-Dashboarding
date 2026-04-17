@@ -108,15 +108,21 @@ function clearAll(): void {
 
 export async function startSyncScheduler(): Promise<void> {
   if (started) return;
-  try {
-    const schedules = await loadSchedules();
-    for (const s of schedules) scheduleJob(s);
-    started = true;
-    console.log(`[SyncScheduler] Started with ${schedules.length} schedules`);
-  } catch (err) {
-    // Leave started=false so a later boot/retry can pick this up.
-    console.error('[SyncScheduler] Failed to start (will retry on next call):', err);
-  }
+  const next = reloadQueue.catch(() => 0).then(async () => {
+    if (started) return 0;
+    try {
+      const schedules = await loadSchedules();
+      for (const s of schedules) scheduleJob(s);
+      started = true;
+      console.log(`[SyncScheduler] Started with ${schedules.length} schedules`);
+      return schedules.length;
+    } catch (err) {
+      console.error('[SyncScheduler] Failed to start (will retry on next call):', err);
+      return 0;
+    }
+  });
+  reloadQueue = next;
+  await next;
 }
 
 // Serialise reloads via a chain. Every caller gets their own reload that runs
