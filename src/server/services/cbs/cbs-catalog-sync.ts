@@ -219,7 +219,9 @@ export async function searchCatalog(options: {
   // Search — BM25-style ranking via ts_rank_cd when the query is substantial,
   // trigram similarity for short/partial queries (still-typing case).
   // We build both a WHERE condition and a rank expression in one pass.
-  let rankExpr = 'ts_rank_cd(COALESCE(search_vector, \'\'::tsvector), websearch_to_tsquery(\'dutch\', unaccent(\'\')))';
+  // rankExpr is only read when rawSearch is truthy; when no search term is
+  // supplied, the SELECT falls back to '0' and ORDER BY uses record_count.
+  let rankExpr = '';
   const rawSearch = options.search?.trim();
   const useFts = !!rawSearch && rawSearch.length >= 3;
 

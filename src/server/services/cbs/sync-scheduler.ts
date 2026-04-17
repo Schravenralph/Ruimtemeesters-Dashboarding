@@ -119,27 +119,25 @@ export async function startSyncScheduler(): Promise<void> {
   }
 }
 
-// Serialise reloads. Two admin writes racing here would otherwise orphan
-// node-cron tasks: the second clearAll() only stops tasks still in the `jobs`
-// Map, leaving the first call's intermediate tasks firing invisibly.
-let reloadInFlight: Promise<number> | null = null;
+// Serialise reloads via a chain. Every caller gets their own reload that runs
+// *after* any in-flight or queued reload, so each CRUD write is guaranteed to
+// be visible in the DB read that loads the scheduler's next state. Sharing a
+// single in-flight promise would let the second caller return stale state
+// from before their own DB write.
+let reloadQueue: Promise<number> = Promise.resolve(0);
 
-export async function reloadSyncScheduler(): Promise<number> {
-  if (reloadInFlight) return reloadInFlight;
-  reloadInFlight = (async () => {
-    // Load first. If this throws, the existing jobs keep running — better than
-    // leaving the scheduler empty until the next successful CRUD call.
+export function reloadSyncScheduler(): Promise<number> {
+  const next = reloadQueue.catch(() => 0).then(async () => {
+    // Load first. If this throws, existing jobs keep running — better than
+    // leaving the scheduler empty until the next CRUD call.
     const schedules = await loadSchedules();
     clearAll();
     for (const s of schedules) scheduleJob(s);
     console.log(`[SyncScheduler] Reloaded (${schedules.length} schedules)`);
     return schedules.length;
-  })();
-  try {
-    return await reloadInFlight;
-  } finally {
-    reloadInFlight = null;
-  }
+  });
+  reloadQueue = next;
+  return next;
 }
 
 export function stopSyncScheduler(): void {

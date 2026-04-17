@@ -65,7 +65,10 @@ function formatSummary(result: SyncResult, trigger: string, label: string): {
     for (const err of result.errors.slice(0, 5)) lines.push(`  - ${err}`);
   }
   const text = lines.join('\n');
-  const html = `<pre style="font-family:ui-monospace,Menlo,monospace">${lines.join('<br>')}</pre>`;
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const html = `<pre style="font-family:ui-monospace,Menlo,monospace">${lines.map(escapeHtml).join('<br>')}</pre>`;
   return { subject, text, html, type };
 }
 
