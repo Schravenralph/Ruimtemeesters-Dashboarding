@@ -316,6 +316,11 @@ router.delete('/schedules/:id', authenticate, requireRole('admin'), async (req: 
 // POST /api/sync/schedules/:id/run — fire a schedule immediately (manual)
 router.post('/schedules/:id/run', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
   const id = String(req.params.id);
+  const exists = await query('SELECT 1 FROM sync_schedules WHERE id = $1', [id]);
+  if (exists.rows.length === 0) {
+    res.status(404).json({ error: 'Schedule not found' });
+    return;
+  }
   res.json({ status: 'started', id });
   runScheduleNow(id).catch(err =>
     console.error(`[Sync] schedule ${id} manual run crashed:`, err),

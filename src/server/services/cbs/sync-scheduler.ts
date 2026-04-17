@@ -108,13 +108,14 @@ function clearAll(): void {
 
 export async function startSyncScheduler(): Promise<void> {
   if (started) return;
-  started = true;
   try {
     const schedules = await loadSchedules();
     for (const s of schedules) scheduleJob(s);
+    started = true;
     console.log(`[SyncScheduler] Started with ${schedules.length} schedules`);
   } catch (err) {
-    console.error('[SyncScheduler] Failed to start:', err);
+    // Leave started=false so a later boot/retry can pick this up.
+    console.error('[SyncScheduler] Failed to start (will retry on next call):', err);
   }
 }
 

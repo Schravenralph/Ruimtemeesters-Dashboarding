@@ -175,8 +175,9 @@ export async function syncGeneric(
       console.warn(`[GenericSync] ${key}: ${msg}`);
       errors.push(msg);
       const duration = Date.now() - startTime;
-      const status = rowsFetched === 0 ? 'failed' : 'failed';
-      await recordRunFinish(runId, status, { rowsFetched, rowsInserted: 0, errors, duration });
+      // Always 'failed' here because rowsInserted is 0 by definition. The cause
+      // (CBS empty vs mapping mismatch) is captured in errors[] and logs.
+      await recordRunFinish(runId, 'failed', { rowsFetched, rowsInserted: 0, errors, duration });
       return {
         source: key, cbsTable: config.cbsTable, rowsFetched, rowsInserted: 0,
         errors, duration, attribution: CBS_ATTRIBUTION, syncRunId: runId ?? undefined,
