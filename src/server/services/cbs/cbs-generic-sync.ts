@@ -122,6 +122,10 @@ export async function syncGeneric(
   const runId = await recordRunStart(key, config.cbsTable, options);
 
   const regionDim = config.regionDimension ?? 'RegioS';
+  // 'NONE' means the CBS table has no region column at all — treat every
+  // observation as national total (geo_code='NL', level='land'). Useful for
+  // tables like 85668NED (emissions) that only publish NL-level numbers.
+  const noRegion = regionDim === 'NONE';
   const allowedLevels = new Set(config.allowedLevels ?? ['gemeente', 'land']);
 
   try {
@@ -144,10 +148,12 @@ export async function syncGeneric(
       if (obs.Value === null || obs.Value === undefined) continue;
 
       const year = parseCbsPeriod(obs.Perioden as string);
-      const region = parseCbsRegion(obs[regionDim] as string | undefined);
+      const region = noRegion
+        ? { code: 'NL', level: 'land' }
+        : parseCbsRegion(obs[regionDim] as string | undefined);
       if (!year) continue;
       if (!region) { regionMissCount++; continue; }
-      if (!allowedLevels.has(region.level)) { levelSkipCount++; continue; }
+      if (!noRegion && !allowedLevels.has(region.level)) { levelSkipCount++; continue; }
 
       const dims: Record<string, string> = {};
       let skip = false;
