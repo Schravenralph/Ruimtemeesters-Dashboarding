@@ -106,44 +106,41 @@ function clearAll(): void {
   jobs.clear();
 }
 
-export async function startSyncScheduler(): Promise<void> {
-  if (started) return;
-  const next = reloadQueue.catch(() => 0).then(async () => {
-    if (started) return 0;
-    try {
-      const schedules = await loadSchedules();
-      for (const s of schedules) scheduleJob(s);
-      started = true;
-      console.log(`[SyncScheduler] Started with ${schedules.length} schedules`);
-      return schedules.length;
-    } catch (err) {
-      console.error('[SyncScheduler] Failed to start (will retry on next call):', err);
-      return 0;
-    }
-  });
-  reloadQueue = next;
-  await next;
-}
-
-// Serialise reloads via a chain. Every caller gets their own reload that runs
-// *after* any in-flight or queued reload, so each CRUD write is guaranteed to
-// be visible in the DB read that loads the scheduler's next state. Sharing a
-// single in-flight promise would let the second caller return stale state
-// from before their own DB write.
+// Serialise all scheduler-state mutations (start + reload) through one chain.
+// Without this, a boot-time start racing with an admin CRUD reload could call
+// scheduleJob() twice for the same id; the later assignment to jobs[id] would
+// orphan the earlier node-cron task, leaving it firing invisibly until process
+// restart. Each caller queues its own pass so every DB write is guaranteed to
+// be visible in the loadSchedules() that follows it.
 let reloadQueue: Promise<number> = Promise.resolve(0);
 
-export function reloadSyncScheduler(): Promise<number> {
+function enqueueReload(label: string, allowEmptyOnFailure: boolean): Promise<number> {
   const next = reloadQueue.catch(() => 0).then(async () => {
-    // Load first. If this throws, existing jobs keep running — better than
-    // leaving the scheduler empty until the next CRUD call.
+    // Load first. If this throws on reload, existing jobs keep running.
+    // On startup there are no existing jobs, so failure leaves the scheduler
+    // empty (a follow-up start/reload call will retry).
     const schedules = await loadSchedules();
     clearAll();
     for (const s of schedules) scheduleJob(s);
-    console.log(`[SyncScheduler] Reloaded (${schedules.length} schedules)`);
+    console.log(`[SyncScheduler] ${label} (${schedules.length} schedules)`);
     return schedules.length;
   });
-  reloadQueue = next;
+  reloadQueue = allowEmptyOnFailure ? next.catch(() => 0) : next;
   return next;
+}
+
+export async function startSyncScheduler(): Promise<void> {
+  if (started) return;
+  try {
+    await enqueueReload('Started', false);
+    started = true;
+  } catch (err) {
+    console.error('[SyncScheduler] Failed to start (will retry on next call):', err);
+  }
+}
+
+export function reloadSyncScheduler(): Promise<number> {
+  return enqueueReload('Reloaded', true);
 }
 
 export function stopSyncScheduler(): void {
