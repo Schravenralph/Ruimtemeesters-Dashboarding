@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Calendar, Plus, Trash2, Play, AlertCircle, CheckCircle } from 'lucide-react';
 import { api } from '../../services/api/client.js';
 import { Button } from '../ui/Button.js';
@@ -75,8 +75,6 @@ export function SyncScheduleManager() {
 
   useEffect(() => { load(); }, []);
 
-  const eligibleSources = useMemo(() => sources, [sources]);
-
   async function createSchedule() {
     if (!form.dataSourceKey) {
       setMessage({ type: 'error', text: 'Kies een databron.' });
@@ -95,7 +93,9 @@ export function SyncScheduleManager() {
         notifyOn: form.notifyOn,
       });
       setMessage({ type: 'success', text: 'Schema aangemaakt.' });
-      setForm({ ...form, dataSourceKey: '', yearFilter: '' });
+      // Callback form avoids discarding concurrent edits to other fields
+      // that happened while the POST was in flight.
+      setForm(prev => ({ ...prev, dataSourceKey: '', yearFilter: '' }));
       await load();
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Aanmaken mislukt' });
@@ -161,7 +161,7 @@ export function SyncScheduleManager() {
               className="w-full px-2 py-1.5 border border-gray-300 rounded-md bg-white"
             >
               <option value="">— kies —</option>
-              {eligibleSources.map((s) => (
+              {sources.map((s) => (
                 <option key={s.key} value={s.key}>{s.name} ({s.key})</option>
               ))}
             </select>

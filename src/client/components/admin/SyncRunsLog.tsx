@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Activity, RefreshCw } from 'lucide-react';
 import { api } from '../../services/api/client.js';
+import { useDebounce } from '../../hooks/useDebounce.js';
 
 interface SyncRun {
   id: string;
@@ -27,21 +28,25 @@ export function SyncRunsLog() {
   const [runs, setRuns] = useState<SyncRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [sourceFilter, setSourceFilter] = useState('');
+  const debouncedFilter = useDebounce(sourceFilter, 300);
+  const requestSeqRef = useRef(0);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
+    // Track request identity so late responses to stale filters are dropped.
+    const requestId = ++requestSeqRef.current;
     try {
       const { runs } = await api.get<{ runs: SyncRun[] }>(
         '/sync/runs',
-        sourceFilter ? { source: sourceFilter, limit: 50 } : { limit: 50 },
+        debouncedFilter ? { source: debouncedFilter, limit: 50 } : { limit: 50 },
       );
-      setRuns(runs);
+      if (requestId === requestSeqRef.current) setRuns(runs);
     } catch { /* silent */ } finally {
-      setLoading(false);
+      if (requestId === requestSeqRef.current) setLoading(false);
     }
-  }
+  }, [debouncedFilter]);
 
-  useEffect(() => { load(); }, [sourceFilter]);
+  useEffect(() => { load(); }, [load]);
 
   return (
     <div className="space-y-3">
