@@ -237,6 +237,9 @@ export async function syncGeneric(
       await client.query('COMMIT');
     } catch (err) {
       try { await client.query('ROLLBACK'); } catch { /* ignore */ }
+      // Rollback wipes every successful savepoint — reset the counter so
+      // sync_runs doesn't record rows that never actually landed.
+      rowsInserted = 0;
       const msg = err instanceof Error ? err.message : 'Unknown DB error';
       errors.push(msg);
       console.error(`[GenericSync] ${key}: transaction failed — ${msg}`);
