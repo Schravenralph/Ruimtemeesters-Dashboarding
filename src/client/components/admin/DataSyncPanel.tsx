@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { RefreshCw, Database, CheckCircle, AlertCircle, Play, Brain } from 'lucide-react';
 import { api } from '../../services/api/client.js';
 import { Button } from '../ui/Button.js';
+import { SyncScheduleManager } from './SyncScheduleManager.js';
+import { SyncRunsLog } from './SyncRunsLog.js';
 
 interface TableStatus {
   table: string;
@@ -282,6 +284,16 @@ export function DataSyncPanel() {
             </div>
           );
         })}
+      </div>
+
+      {/* Sync schedules (user-definable cron rules) */}
+      <div className="pt-6 border-t border-gray-200">
+        <SyncScheduleManager />
+      </div>
+
+      {/* Sync runs audit log */}
+      <div className="pt-6 border-t border-gray-200">
+        <SyncRunsLog />
       </div>
     </div>
   );
