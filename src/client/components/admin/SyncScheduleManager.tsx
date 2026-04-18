@@ -42,7 +42,9 @@ const STATUS_STYLES: Record<string, string> = {
 export function SyncScheduleManager() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [sources, setSources] = useState<DataSource[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Split the initial-mount load from subsequent refreshes so mutations don't
+  // flash the entire component (and blow away input focus) behind a spinner.
+  const [initialLoading, setInitialLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -58,7 +60,6 @@ export function SyncScheduleManager() {
   });
 
   async function load() {
-    setLoading(true);
     try {
       const [scheds, status] = await Promise.all([
         api.get<{ schedules: Schedule[] }>('/sync/schedules'),
@@ -69,7 +70,7 @@ export function SyncScheduleManager() {
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Laden mislukt' });
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
     }
   }
 
@@ -132,7 +133,7 @@ export function SyncScheduleManager() {
     }
   }
 
-  if (loading) return <p className="text-gray-500 py-4">Schema's laden…</p>;
+  if (initialLoading) return <p className="text-gray-500 py-4">Schema's laden…</p>;
 
   return (
     <div className="space-y-4">

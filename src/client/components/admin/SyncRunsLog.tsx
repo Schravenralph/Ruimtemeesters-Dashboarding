@@ -66,7 +66,9 @@ export function SyncRunsLog() {
       </div>
 
       {runs.length === 0 ? (
-        <p className="text-sm text-gray-500 py-6 text-center">Nog geen sync runs geregistreerd.</p>
+        <p className="text-sm text-gray-500 py-6 text-center">
+          {loading ? 'Laden…' : 'Nog geen sync runs geregistreerd.'}
+        </p>
       ) : (
         <div className="border border-gray-200 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
