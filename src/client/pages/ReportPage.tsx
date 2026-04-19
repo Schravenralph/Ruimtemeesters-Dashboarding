@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-import { FileText, Download, Printer } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { FileText, Printer } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card } from '../components/ui/Card';
 import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/ui/Spinner';
 import { useFilters } from '../contexts/FilterContext';
 import { api } from '../services/api/client';
-import { formatNumber, formatPercent } from '../utils/format';
+import { formatNumber, formatCompact } from '../utils/format';
 
 interface ReportSection {
   title: string;
@@ -39,6 +40,7 @@ export function ReportPage() {
   const { filters } = useFilters();
   const [source, setSource] = useState(searchParams.get('source') || 'bevolking');
   const [report, setReport] = useState<Report | null>(null);
+  const [trend, setTrend] = useState<{ year: number; value: number }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   function loadReport() {
@@ -55,6 +57,12 @@ export function ReportPage() {
 
   useEffect(() => {
     loadReport();
+    api.get<{ timeSeries: { year: number; value: number }[] }>(
+      `/stats/timeseries/${source}`,
+      { geoCode: filters.geoCode },
+    )
+      .then(d => setTrend(d.timeSeries.slice(-10)))
+      .catch(() => setTrend([]));
   }, [source, filters.geoCode, filters.period.year, filters.period.compareYear]);
 
   return (
@@ -104,6 +112,33 @@ export function ReportPage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b">
                 {section.title}
               </h3>
+              {idx === 0 && trend.length > 1 && (
+                <div className="h-40 mb-4 -mx-1">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={trend} margin={{ top: 4, right: 12, bottom: 4, left: 0 }}>
+                      <XAxis
+                        dataKey="year"
+                        tick={{ fontSize: 11, fill: '#6b7280' }}
+                        axisLine={{ stroke: '#e5e7eb' }}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: '#6b7280' }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={50}
+                        tickFormatter={(v) => formatCompact(Number(v))}
+                      />
+                      <Tooltip
+                        formatter={(v: number) => [formatNumber(v) + (report.unit ? ` ${report.unit}` : ''), 'Waarde']}
+                        labelFormatter={(y) => `Jaar ${y}`}
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
               <div className="space-y-2">
                 {section.data.map((item, i) => (
                   <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
