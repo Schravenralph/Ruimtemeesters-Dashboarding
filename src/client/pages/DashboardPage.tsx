@@ -183,8 +183,8 @@ export function DashboardPage() {
       {theme.isOverview && (
         <>
           {theme.supercategory !== 'duurzaamheid' && <StatsSummary />}
-          {theme.supercategory !== 'duurzaamheid' && <QuickInsights />}
           {theme.supercategory === 'duurzaamheid' && <DuurzaamheidStats />}
+          <QuickInsights category={theme.supercategory === 'duurzaamheid' ? 'duurzaamheid' : 'wonen'} />
           <OverviewGrid supercategory={theme.supercategory} />
         </>
       )}

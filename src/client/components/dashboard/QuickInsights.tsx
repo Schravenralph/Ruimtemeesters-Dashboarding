@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, ArrowUpRight, Target, Users, Brain, Lightbulb, type LucideIcon } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowUpRight, Target, Users, Brain, Lightbulb, Sun, Zap, Recycle, type LucideIcon } from 'lucide-react';
 import { api } from '../../services/api/client';
 
 interface Insight {
@@ -13,18 +13,22 @@ interface Insight {
 }
 
 const iconMap: Record<string, LucideIcon> = {
-  TrendingUp, ArrowUpRight, Target, Users, Brain,
+  TrendingUp, TrendingDown, ArrowUpRight, Target, Users, Brain, Sun, Zap, Recycle,
 };
 
-export function QuickInsights() {
+interface QuickInsightsProps {
+  category?: 'wonen' | 'duurzaamheid';
+}
+
+export function QuickInsights({ category }: QuickInsightsProps = {}) {
   const [insights, setInsights] = useState<Insight[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.get<{ insights: Insight[] }>('/insights')
+    api.get<{ insights: Insight[] }>('/insights', category ? { category } : undefined)
       .then(d => setInsights(d.insights))
       .catch(() => setInsights([]));
-  }, []);
+  }, [category]);
 
   if (insights.length === 0) return null;
 
