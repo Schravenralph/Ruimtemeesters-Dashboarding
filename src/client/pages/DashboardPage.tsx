@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Download, Edit3, Save, X, FolderOpen, Table2 } from 'lucide-react';
+import { Download, Edit3, Save, X, FolderOpen, Table2, Printer } from 'lucide-react';
 import { useThemes } from '../contexts/ThemeContext';
+import { useFilters } from '../contexts/FilterContext';
 import { FilterBar } from '../components/filters/FilterBar';
 import { TileGrid } from '../components/dashboard/TileGrid';
 import { DrilldownPanel } from '../components/dashboard/DrilldownPanel';
@@ -30,6 +31,7 @@ export function DashboardPage() {
   const { slug } = useParams<{ slug: string }>();
   const { themes, setActiveTheme, isLoading: themesLoading } = useThemes();
   const { user } = useAuth();
+  const { filters } = useFilters();
   const { presentations, setActive, addPresentation, updatePresentation } = usePresentations();
 
   const [theme, setTheme] = useState<ThemeConfig | null>(null);
@@ -136,6 +138,20 @@ export function DashboardPage() {
           <Button variant="secondary" size="sm" onClick={handleExportAll}>
             <Download className="h-4 w-4" />
             PDF
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const params = new URLSearchParams({
+                geoCode: filters.geoCode,
+                year: String(filters.period.year),
+              });
+              window.open(`/print/${theme.slug}?${params.toString()}`, '_blank', 'noopener');
+            }}
+          >
+            <Printer className="h-4 w-4" />
+            Print
           </Button>
           {user && (
             isEditing ? (
