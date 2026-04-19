@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileText, Printer, Download } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { ComposedChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card } from '../components/ui/Card';
 import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
@@ -40,7 +40,7 @@ export function ReportPage() {
   const { filters } = useFilters();
   const [source, setSource] = useState(searchParams.get('source') || 'bevolking');
   const [report, setReport] = useState<Report | null>(null);
-  const [trend, setTrend] = useState<{ year: number; value: number; source: string }[]>([]);
+  const [trend, setTrend] = useState<{ year: number; value: number; source: string; confidenceLower?: number; confidenceUpper?: number }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   function loadReport() {
@@ -57,7 +57,7 @@ export function ReportPage() {
 
   useEffect(() => {
     loadReport();
-    api.get<{ timeSeries: { year: number; value: number; source: string }[] }>(
+    api.get<{ timeSeries: { year: number; value: number; source: string; confidenceLower?: number; confidenceUpper?: number }[] }>(
       `/stats/timeseries/${source}`,
       { geoCode: filters.geoCode },
     )
@@ -155,12 +155,16 @@ export function ReportPage() {
                   year: p.year,
                   actual: p.source === 'cbs_actuals' ? p.value : (i === lastActualIdx + 1 ? trend[lastActualIdx]?.value : undefined),
                   prognose: p.source !== 'cbs_actuals' || i === lastActualIdx ? p.value : undefined,
+                  ...(p.confidenceLower != null && p.confidenceUpper != null
+                    ? { ci: [p.confidenceLower, p.confidenceUpper] as [number, number] }
+                    : {}),
                 }));
                 const hasPrognose = trend.some(p => p.source !== 'cbs_actuals');
+                const hasCI = trend.some(p => p.confidenceLower != null && p.confidenceUpper != null);
                 return (
                   <div className="h-40 mb-4 -mx-1">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={chartData} margin={{ top: 4, right: 12, bottom: 4, left: 0 }}>
+                      <ComposedChart data={chartData} margin={{ top: 4, right: 12, bottom: 4, left: 0 }}>
                         <XAxis
                           dataKey="year"
                           tick={{ fontSize: 11, fill: '#6b7280' }}
@@ -175,15 +179,24 @@ export function ReportPage() {
                           tickFormatter={(v) => formatCompact(Number(v))}
                         />
                         <Tooltip
-                          formatter={(v: number) => [formatNumber(v) + (report.unit ? ` ${report.unit}` : ''), 'Waarde']}
+                          formatter={(v: number | number[], name: string) => {
+                            const unitSuffix = report.unit ? ` ${report.unit}` : '';
+                            if (Array.isArray(v)) {
+                              return [`${formatNumber(v[0]!)} – ${formatNumber(v[1]!)}${unitSuffix}`, name];
+                            }
+                            return [formatNumber(v) + unitSuffix, name];
+                          }}
                           labelFormatter={(y) => `Jaar ${y}`}
                           contentStyle={{ fontSize: 12 }}
                         />
+                        {hasCI && (
+                          <Area type="monotone" dataKey="ci" fill="#a855f7" fillOpacity={0.12} stroke="none" name="95% CI" />
+                        )}
                         <Line type="monotone" dataKey="actual" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="Actueel" connectNulls={false} />
                         {hasPrognose && (
                           <Line type="monotone" dataKey="prognose" stroke="#a855f7" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} name="Prognose" connectNulls={false} />
                         )}
-                      </LineChart>
+                      </ComposedChart>
                     </ResponsiveContainer>
                   </div>
                 );
