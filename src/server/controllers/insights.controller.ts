@@ -15,7 +15,15 @@ interface Insight {
  * Returns 4-6 auto-generated insights suitable for the overview page.
  * All queries run in parallel for minimal latency.
  */
-export async function getInsights(_req: Request, res: Response): Promise<void> {
+export async function getInsights(req: Request, res: Response): Promise<void> {
+  const category = (req.query.category as string) || 'wonen';
+  if (category === 'duurzaamheid') {
+    return getDuurzaamheidInsights(res);
+  }
+  return getWonenInsights(res);
+}
+
+async function getWonenInsights(res: Response): Promise<void> {
   // Run all independent queries in parallel
   const [nlPop, nlPop2060, groeier, ams, aging, tsa] = await Promise.all([
     // 1. National population (latest actuals year)
@@ -139,6 +147,116 @@ export async function getInsights(_req: Request, res: Response): Promise<void> {
       description: `TSA Engine heeft prognoses voor ${tsa.rows[0].gemeenten} gemeenten`,
       value: `${tsa.rows[0].gemeenten}`,
       link: '/dashboard/prognose',
+    });
+  }
+
+  res.json({ insights });
+}
+
+async function getDuurzaamheidInsights(res: Response): Promise<void> {
+  const [co2Baseline, co2Latest, energieBaseline, energieLatest, zonneBaseline, zonneLatest, afval] = await Promise.all([
+    query(`
+      SELECT year, value FROM data_emissies
+      WHERE geo_code = 'NL' AND sector = 'totaal' AND emission_type = 'co2'
+      ORDER BY year ASC LIMIT 1
+    `).catch(() => ({ rows: [] })),
+
+    query(`
+      SELECT year, value FROM data_emissies
+      WHERE geo_code = 'NL' AND sector = 'totaal' AND emission_type = 'co2'
+      ORDER BY year DESC LIMIT 1
+    `).catch(() => ({ rows: [] })),
+
+    query(`
+      SELECT year, value FROM data_energie
+      WHERE geo_code = 'NL' AND sector = 'woningen' AND fuel_type = 'totaal'
+      ORDER BY year ASC LIMIT 1
+    `).catch(() => ({ rows: [] })),
+
+    query(`
+      SELECT year, value FROM data_energie
+      WHERE geo_code = 'NL' AND sector = 'woningen' AND fuel_type = 'totaal'
+      ORDER BY year DESC LIMIT 1
+    `).catch(() => ({ rows: [] })),
+
+    query(`
+      SELECT year, value FROM data_hernieuwbaar
+      WHERE geo_code = 'NL' AND energy_source = 'zonnepanelen' AND metric = 'aantal_installaties' AND year = 2021
+    `).catch(() => ({ rows: [] })),
+
+    query(`
+      SELECT year, value FROM data_hernieuwbaar
+      WHERE geo_code = 'NL' AND energy_source = 'zonnepanelen' AND metric = 'aantal_installaties'
+      ORDER BY year DESC LIMIT 1
+    `).catch(() => ({ rows: [] })),
+
+    query(`
+      SELECT
+        SUM(CASE WHEN waste_type = 'restafval' THEN value ELSE 0 END) as restafval,
+        SUM(CASE WHEN waste_type = 'totaal' THEN value ELSE 0 END) as total
+      FROM data_afval
+      WHERE geo_code = 'NL' AND metric = 'kg_per_inwoner'
+        AND year = (SELECT MAX(year) FROM data_afval WHERE geo_code = 'NL' AND metric = 'kg_per_inwoner')
+    `).catch(() => ({ rows: [] })),
+  ]);
+
+  const insights: Insight[] = [];
+
+  if (co2Baseline.rows[0] && co2Latest.rows[0]) {
+    const from = Number(co2Baseline.rows[0].value);
+    const to = Number(co2Latest.rows[0].value);
+    if (from > 0) {
+      const delta = ((to - from) / from * 100).toFixed(1);
+      const sign = Number(delta) >= 0 ? '+' : '';
+      insights.push({
+        id: 'co2-trend',
+        icon: 'TrendingDown',
+        title: 'CO2-uitstoot sinds ' + co2Baseline.rows[0].year,
+        description: `Van ${(from / 1000).toFixed(0)} Mt (${co2Baseline.rows[0].year}) naar ${(to / 1000).toFixed(0)} Mt (${co2Latest.rows[0].year})`,
+        value: `${sign}${delta}%`,
+      });
+    }
+  }
+
+  if (energieBaseline.rows[0] && energieLatest.rows[0]) {
+    const from = Number(energieBaseline.rows[0].value);
+    const to = Number(energieLatest.rows[0].value);
+    if (from > 0) {
+      const delta = ((to - from) / from * 100).toFixed(1);
+      const sign = Number(delta) >= 0 ? '+' : '';
+      insights.push({
+        id: 'energie-woningen',
+        icon: 'Zap',
+        title: 'Energieverbruik woningen',
+        description: `${(from).toFixed(0)} → ${(to).toFixed(0)} TJ tussen ${energieBaseline.rows[0].year} en ${energieLatest.rows[0].year}`,
+        value: `${sign}${delta}%`,
+      });
+    }
+  }
+
+  if (zonneBaseline.rows[0] && zonneLatest.rows[0]) {
+    const from = Number(zonneBaseline.rows[0].value);
+    const to = Number(zonneLatest.rows[0].value);
+    if (from > 0) {
+      const factor = (to / from).toFixed(1);
+      insights.push({
+        id: 'zonne-growth',
+        icon: 'Sun',
+        title: 'Zonnepaneel-installaties',
+        description: `Van ${(from / 1e6).toFixed(1)}M (${zonneBaseline.rows[0].year}) naar ${(to / 1e6).toFixed(1)}M (${zonneLatest.rows[0].year})`,
+        value: `×${factor}`,
+      });
+    }
+  }
+
+  if (afval.rows[0] && Number(afval.rows[0].total) > 0) {
+    const pct = (Number(afval.rows[0].restafval) / Number(afval.rows[0].total) * 100).toFixed(1);
+    insights.push({
+      id: 'afval-rest',
+      icon: 'Recycle',
+      title: 'Restafval-aandeel',
+      description: `${pct}% van huishoudelijk afval in NL is restafval`,
+      value: `${pct}%`,
     });
   }
 
