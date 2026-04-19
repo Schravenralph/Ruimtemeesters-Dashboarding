@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Users, Home, Building2, TrendingDown, ArrowRight, Zap, Leaf, Trash2 } from 'lucide-react';
+import { Users, Home, Building2, TrendingDown, ArrowRight, Zap, Leaf, Trash2, Cloud } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { queryData } from '../../services/api/data';
 import { MiniChart } from './MiniChart';
@@ -25,6 +25,7 @@ const WONEN_CONFIG: Omit<OverviewItem, 'data'>[] = [
 
 const DUURZAAMHEID_CONFIG: Omit<OverviewItem, 'data'>[] = [
   { slug: 'energie', label: 'Energie', icon: Zap, color: '#f59e0b', dataSource: 'energie' },
+  { slug: 'emissies', label: 'Emissies', icon: Cloud, color: '#ef4444', dataSource: 'emissies' },
   { slug: 'hernieuwbare-energie', label: 'Hernieuwbaar', icon: Leaf, color: '#10b981', dataSource: 'hernieuwbaar' },
   { slug: 'afval-circulair', label: 'Afval & Circulair', icon: Trash2, color: '#8b5cf6', dataSource: 'afval' },
 ];

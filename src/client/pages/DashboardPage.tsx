@@ -15,6 +15,7 @@ import { GemeenteComparison } from '../components/dashboard/GemeenteComparison';
 import { TopGroeiers } from '../components/dashboard/TopGroeiers';
 import { PrognoseInfoBanner } from '../components/dashboard/PrognoseInfoBanner';
 import { QuickInsights } from '../components/dashboard/QuickInsights';
+import { DuurzaamheidStats } from '../components/dashboard/DuurzaamheidStats';
 import { PeriodBar } from '../components/dashboard/PeriodBar';
 import { MultiAreaTable } from '../components/dashboard/MultiAreaTable';
 import { WorkspaceManager } from '../components/dashboard/WorkspaceManager';
@@ -183,6 +184,7 @@ export function DashboardPage() {
         <>
           {theme.supercategory !== 'duurzaamheid' && <StatsSummary />}
           {theme.supercategory !== 'duurzaamheid' && <QuickInsights />}
+          {theme.supercategory === 'duurzaamheid' && <DuurzaamheidStats />}
           <OverviewGrid supercategory={theme.supercategory} />
         </>
       )}

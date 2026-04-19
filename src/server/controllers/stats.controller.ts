@@ -84,6 +84,54 @@ export async function getOverviewStats(req: Request, res: Response): Promise<voi
   });
 }
 
+// Grand-total filter fragments for duurzaamheid sources. Kept together so
+// overview + timeseries stay in sync.
+const DUURZ_GRAND_TOTAL_FILTERS = {
+  energie: "sector = 'woningen' AND fuel_type = 'totaal'",
+  emissies: "sector = 'totaal' AND emission_type = 'co2'",
+  hernieuwbaar: "energy_source = 'zonnepanelen' AND metric = 'aantal_installaties'",
+  afval: "metric = 'kg_per_inwoner' AND waste_type = 'totaal'",
+} as const;
+
+const DUURZ_TABLES = {
+  energie: 'data_energie',
+  emissies: 'data_emissies',
+  hernieuwbaar: 'data_hernieuwbaar',
+  afval: 'data_afval',
+} as const;
+
+export async function getOverviewDuurzaamheid(req: Request, res: Response): Promise<void> {
+  const year = parseInt(req.query.year as string) || 2024;
+  const geoCode = (req.query.geoCode as string) || 'NL';
+  const prevYear = year - 1;
+
+  async function grandTotal(source: keyof typeof DUURZ_GRAND_TOTAL_FILTERS, y: number): Promise<number> {
+    const sql = `SELECT COALESCE(value, 0) as total FROM ${DUURZ_TABLES[source]}
+                 WHERE geo_code = $1 AND year = $2 AND ${DUURZ_GRAND_TOTAL_FILTERS[source]}
+                 ORDER BY ${SOURCE_PRIORITY} LIMIT 1`;
+    const r = await query(sql, [geoCode, y]);
+    return Number(r.rows[0]?.total ?? 0);
+  }
+
+  const sources = ['energie', 'emissies', 'hernieuwbaar', 'afval'] as const;
+  const [current, previous] = await Promise.all([
+    Promise.all(sources.map(s => grandTotal(s, year))),
+    Promise.all(sources.map(s => grandTotal(s, prevYear))),
+  ]);
+
+  const stats: Record<string, { value: number; change: string | null }> = {};
+  sources.forEach((s, i) => {
+    const v = current[i]!;
+    const prev = previous[i]!;
+    stats[s] = {
+      value: v,
+      change: prev > 0 ? ((v - prev) / prev * 100).toFixed(1) : null,
+    };
+  });
+
+  res.json({ year, geoCode, stats });
+}
+
 export async function getTimeSeriesAgg(req: Request, res: Response): Promise<void> {
   const source = req.params.source as string;
   const geoCode = (req.query.geoCode as string) || 'NL';
@@ -125,6 +173,42 @@ export async function getTimeSeriesAgg(req: Request, res: Response): Promise<voi
         ) as rn
         FROM data_woningtekort
         WHERE geo_code = $1 AND metric = 'tekort'
+      )
+      SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+    energie: `
+      WITH ranked AS (
+        SELECT year, value, ROW_NUMBER() OVER (
+          PARTITION BY year ORDER BY ${SOURCE_PRIORITY}
+        ) as rn
+        FROM ${DUURZ_TABLES.energie}
+        WHERE geo_code = $1 AND ${DUURZ_GRAND_TOTAL_FILTERS.energie}
+      )
+      SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+    emissies: `
+      WITH ranked AS (
+        SELECT year, value, ROW_NUMBER() OVER (
+          PARTITION BY year ORDER BY ${SOURCE_PRIORITY}
+        ) as rn
+        FROM ${DUURZ_TABLES.emissies}
+        WHERE geo_code = $1 AND ${DUURZ_GRAND_TOTAL_FILTERS.emissies}
+      )
+      SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+    hernieuwbaar: `
+      WITH ranked AS (
+        SELECT year, value, ROW_NUMBER() OVER (
+          PARTITION BY year ORDER BY ${SOURCE_PRIORITY}
+        ) as rn
+        FROM ${DUURZ_TABLES.hernieuwbaar}
+        WHERE geo_code = $1 AND ${DUURZ_GRAND_TOTAL_FILTERS.hernieuwbaar}
+      )
+      SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+    afval: `
+      WITH ranked AS (
+        SELECT year, value, ROW_NUMBER() OVER (
+          PARTITION BY year ORDER BY ${SOURCE_PRIORITY}
+        ) as rn
+        FROM ${DUURZ_TABLES.afval}
+        WHERE geo_code = $1 AND ${DUURZ_GRAND_TOTAL_FILTERS.afval}
       )
       SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
   };
