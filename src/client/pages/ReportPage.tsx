@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, Printer } from 'lucide-react';
+import { FileText, Printer, Download } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card } from '../components/ui/Card';
 import { Select } from '../components/ui/Select';
@@ -83,6 +83,31 @@ export function ReportPage() {
           <p className="text-sm text-gray-500 mt-1">Genereer een gestructureerd rapport</p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={async () => {
+              const params = new URLSearchParams({
+                geoCode: filters.geoCode,
+                year: String(filters.period.year),
+              });
+              if (filters.period.compareYear) params.set('compareYear', String(filters.period.compareYear));
+              const token = api.getToken();
+              const resp = await fetch(`/api/reports/${source}/csv?${params.toString()}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+              });
+              if (!resp.ok) return;
+              const blob = await resp.blob();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `rapport-${source}-${filters.geoCode}-${filters.period.year}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            <Download className="h-4 w-4" /> CSV
+          </Button>
           <Button variant="secondary" size="sm" onClick={() => window.print()}>
             <Printer className="h-4 w-4" /> Afdrukken
           </Button>
