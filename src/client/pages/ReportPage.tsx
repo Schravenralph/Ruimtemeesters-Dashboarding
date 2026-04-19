@@ -19,8 +19,20 @@ interface Report {
   generatedAt: string;
   geoCode: string;
   year: number;
+  unit?: string;
   sections: ReportSection[];
 }
+
+const SOURCE_OPTIONS = [
+  { value: 'bevolking', label: 'Bevolking (wonen)' },
+  { value: 'huishoudens', label: 'Huishoudens (wonen)' },
+  { value: 'woningen', label: 'Woningen (wonen)' },
+  { value: 'woningtekort', label: 'Woningtekort (wonen)' },
+  { value: 'energie', label: 'Energie (duurzaamheid)' },
+  { value: 'emissies', label: 'Emissies (duurzaamheid)' },
+  { value: 'hernieuwbaar', label: 'Hernieuwbare energie (duurzaamheid)' },
+  { value: 'afval', label: 'Afval & circulair (duurzaamheid)' },
+];
 
 export function ReportPage() {
   const [searchParams] = useSearchParams();
@@ -65,12 +77,7 @@ export function ReportPage() {
           label="Databron"
           value={source}
           onChange={(e) => setSource(e.target.value)}
-          options={[
-            { value: 'bevolking', label: 'Bevolking' },
-            { value: 'huishoudens', label: 'Huishoudens' },
-            { value: 'woningen', label: 'Woningen' },
-            { value: 'woningtekort', label: 'Woningtekort' },
-          ]}
+          options={SOURCE_OPTIONS}
         />
       </div>
 
@@ -104,6 +111,7 @@ export function ReportPage() {
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-semibold text-gray-900 font-mono">
                         {formatNumber(item.value)}
+                        {report.unit && <span className="ml-1 text-xs font-normal text-gray-500">{report.unit}</span>}
                       </span>
                       {item.change !== undefined && (
                         <span className={`text-xs font-medium ${
