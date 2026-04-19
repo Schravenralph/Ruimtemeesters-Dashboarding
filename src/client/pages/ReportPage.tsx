@@ -40,7 +40,7 @@ export function ReportPage() {
   const { filters } = useFilters();
   const [source, setSource] = useState(searchParams.get('source') || 'bevolking');
   const [report, setReport] = useState<Report | null>(null);
-  const [trend, setTrend] = useState<{ year: number; value: number }[]>([]);
+  const [trend, setTrend] = useState<{ year: number; value: number; source: string }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   function loadReport() {
@@ -57,11 +57,21 @@ export function ReportPage() {
 
   useEffect(() => {
     loadReport();
-    api.get<{ timeSeries: { year: number; value: number }[] }>(
+    api.get<{ timeSeries: { year: number; value: number; source: string }[] }>(
       `/stats/timeseries/${source}`,
       { geoCode: filters.geoCode },
     )
-      .then(d => setTrend(d.timeSeries.slice(-10)))
+      .then(d => {
+        const all = d.timeSeries;
+        const lastActualYear = all.filter(p => p.source === 'cbs_actuals').at(-1)?.year;
+        if (lastActualYear === undefined) {
+          setTrend(all.slice(-10));
+          return;
+        }
+        const actuals = all.filter(p => p.source === 'cbs_actuals' && p.year >= lastActualYear - 9);
+        const prognoses = all.filter(p => p.source !== 'cbs_actuals' && p.year > lastActualYear && p.year <= lastActualYear + 5);
+        setTrend([...actuals, ...prognoses]);
+      })
       .catch(() => setTrend([]));
   }, [source, filters.geoCode, filters.period.year, filters.period.compareYear]);
 
@@ -112,33 +122,47 @@ export function ReportPage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b">
                 {section.title}
               </h3>
-              {idx === 0 && trend.length > 1 && (
-                <div className="h-40 mb-4 -mx-1">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={trend} margin={{ top: 4, right: 12, bottom: 4, left: 0 }}>
-                      <XAxis
-                        dataKey="year"
-                        tick={{ fontSize: 11, fill: '#6b7280' }}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 11, fill: '#6b7280' }}
-                        axisLine={false}
-                        tickLine={false}
-                        width={50}
-                        tickFormatter={(v) => formatCompact(Number(v))}
-                      />
-                      <Tooltip
-                        formatter={(v: number) => [formatNumber(v) + (report.unit ? ` ${report.unit}` : ''), 'Waarde']}
-                        labelFormatter={(y) => `Jaar ${y}`}
-                        contentStyle={{ fontSize: 12 }}
-                      />
-                      <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
+              {idx === 0 && trend.length > 1 && (() => {
+                // Shape data so Recharts draws actuals and prognose as two connected
+                // lines — include the last actual point in both series so they meet.
+                const lastActualIdx = trend.map(p => p.source).lastIndexOf('cbs_actuals');
+                const chartData = trend.map((p, i) => ({
+                  year: p.year,
+                  actual: p.source === 'cbs_actuals' ? p.value : (i === lastActualIdx + 1 ? trend[lastActualIdx]?.value : undefined),
+                  prognose: p.source !== 'cbs_actuals' || i === lastActualIdx ? p.value : undefined,
+                }));
+                const hasPrognose = trend.some(p => p.source !== 'cbs_actuals');
+                return (
+                  <div className="h-40 mb-4 -mx-1">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData} margin={{ top: 4, right: 12, bottom: 4, left: 0 }}>
+                        <XAxis
+                          dataKey="year"
+                          tick={{ fontSize: 11, fill: '#6b7280' }}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 11, fill: '#6b7280' }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={50}
+                          tickFormatter={(v) => formatCompact(Number(v))}
+                        />
+                        <Tooltip
+                          formatter={(v: number) => [formatNumber(v) + (report.unit ? ` ${report.unit}` : ''), 'Waarde']}
+                          labelFormatter={(y) => `Jaar ${y}`}
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <Line type="monotone" dataKey="actual" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="Actueel" connectNulls={false} />
+                        {hasPrognose && (
+                          <Line type="monotone" dataKey="prognose" stroke="#a855f7" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} name="Prognose" connectNulls={false} />
+                        )}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                );
+              })()}
               <div className="space-y-2">
                 {section.data.map((item, i) => (
                   <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">

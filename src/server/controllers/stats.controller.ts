@@ -141,76 +141,76 @@ export async function getTimeSeriesAgg(req: Request, res: Response): Promise<voi
   const sourceQueries: Record<string, string> = {
     bevolking: `
       WITH ranked AS (
-        SELECT year, value, ROW_NUMBER() OVER (
+        SELECT year, value, source, ROW_NUMBER() OVER (
           PARTITION BY year ORDER BY ${SOURCE_PRIORITY}
         ) as rn
         FROM data_bevolking
         WHERE geo_code = $1 AND age_group = 'totaal' AND gender = 'totaal'
       )
-      SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+      SELECT year, value as total, source FROM ranked WHERE rn = 1 ORDER BY year`,
     huishoudens: `
       WITH ranked AS (
-        SELECT year, value, ROW_NUMBER() OVER (
+        SELECT year, value, source, ROW_NUMBER() OVER (
           PARTITION BY year ORDER BY ${SOURCE_PRIORITY}
         ) as rn
         FROM data_huishoudens
         WHERE geo_code = $1 AND household_type = 'totaal' AND dimension_type = 'samenstelling'
       )
-      SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+      SELECT year, value as total, source FROM ranked WHERE rn = 1 ORDER BY year`,
     woningen: `
       WITH ranked AS (
-        SELECT year, value, ROW_NUMBER() OVER (
+        SELECT year, value, source, ROW_NUMBER() OVER (
           PARTITION BY year ORDER BY ${SOURCE_PRIORITY}
         ) as rn
         FROM data_woningen
         WHERE geo_code = $1 AND tenure_type = 'totaal' AND dwelling_type = 'totaal'
       )
-      SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+      SELECT year, value as total, source FROM ranked WHERE rn = 1 ORDER BY year`,
     woningtekort: `
       WITH ranked AS (
-        SELECT year, value, ROW_NUMBER() OVER (
+        SELECT year, value, source, ROW_NUMBER() OVER (
           PARTITION BY year ORDER BY ${SOURCE_PRIORITY}
         ) as rn
         FROM data_woningtekort
         WHERE geo_code = $1 AND metric = 'tekort'
       )
-      SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+      SELECT year, value as total, source FROM ranked WHERE rn = 1 ORDER BY year`,
     energie: `
       WITH ranked AS (
-        SELECT year, value, ROW_NUMBER() OVER (
+        SELECT year, value, source, ROW_NUMBER() OVER (
           PARTITION BY year ORDER BY ${SOURCE_PRIORITY}
         ) as rn
         FROM ${DUURZ_TABLES.energie}
         WHERE geo_code = $1 AND ${DUURZ_GRAND_TOTAL_FILTERS.energie}
       )
-      SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+      SELECT year, value as total, source FROM ranked WHERE rn = 1 ORDER BY year`,
     emissies: `
       WITH ranked AS (
-        SELECT year, value, ROW_NUMBER() OVER (
+        SELECT year, value, source, ROW_NUMBER() OVER (
           PARTITION BY year ORDER BY ${SOURCE_PRIORITY}
         ) as rn
         FROM ${DUURZ_TABLES.emissies}
         WHERE geo_code = $1 AND ${DUURZ_GRAND_TOTAL_FILTERS.emissies}
       )
-      SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+      SELECT year, value as total, source FROM ranked WHERE rn = 1 ORDER BY year`,
     hernieuwbaar: `
       WITH ranked AS (
-        SELECT year, value, ROW_NUMBER() OVER (
+        SELECT year, value, source, ROW_NUMBER() OVER (
           PARTITION BY year ORDER BY ${SOURCE_PRIORITY}
         ) as rn
         FROM ${DUURZ_TABLES.hernieuwbaar}
         WHERE geo_code = $1 AND ${DUURZ_GRAND_TOTAL_FILTERS.hernieuwbaar}
       )
-      SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+      SELECT year, value as total, source FROM ranked WHERE rn = 1 ORDER BY year`,
     afval: `
       WITH ranked AS (
-        SELECT year, value, ROW_NUMBER() OVER (
+        SELECT year, value, source, ROW_NUMBER() OVER (
           PARTITION BY year ORDER BY ${SOURCE_PRIORITY}
         ) as rn
         FROM ${DUURZ_TABLES.afval}
         WHERE geo_code = $1 AND ${DUURZ_GRAND_TOTAL_FILTERS.afval}
       )
-      SELECT year, value as total FROM ranked WHERE rn = 1 ORDER BY year`,
+      SELECT year, value as total, source FROM ranked WHERE rn = 1 ORDER BY year`,
   };
 
   const sql = sourceQueries[source];
@@ -225,6 +225,7 @@ export async function getTimeSeriesAgg(req: Request, res: Response): Promise<voi
     timeSeries: result.rows.map(r => ({
       year: r.year,
       value: Number(r.total),
+      source: r.source,
     })),
   });
 }
