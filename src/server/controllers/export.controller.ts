@@ -3,6 +3,7 @@ import { query } from '../db/pool.js';
 import { safeIdent } from '../db/sql-utils.js';
 import { z } from 'zod';
 import { getDataSource } from '../services/data-source-registry.js';
+import { csvEscape } from '../utils/csv.js';
 
 const ExportParams = z.object({
   source: z.string(),
@@ -66,16 +67,7 @@ export async function exportData(req: Request, res: Response): Promise<void> {
     const headers = ['geo_name', ...columns];
     const csvRows = [
       headers.join(','),
-      ...result.rows.map(row =>
-        headers.map(h => {
-          const value = row[h];
-          if (value === null || value === undefined) return '';
-          const str = String(value);
-          const escaped = str.replace(/"/g, '""');
-          if (escaped.includes(',') || escaped.includes('"') || escaped.includes('\n')) return `"${escaped}"`;
-          return escaped;
-        }).join(',')
-      ),
+      ...result.rows.map(row => headers.map(h => csvEscape(row[h])).join(',')),
     ];
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');

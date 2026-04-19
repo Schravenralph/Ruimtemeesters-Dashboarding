@@ -3,16 +3,9 @@ import type { Request, Response } from 'express';
 import { generateReport } from '../services/report.service.js';
 import { authenticate } from '../middleware/auth.js';
 import { checkDataAccess } from '../middleware/abac-data.js';
+import { csvEscape } from '../utils/csv.js';
 
 const router: RouterType = Router();
-
-function csvEscape(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  const str = String(value);
-  const escaped = str.replace(/"/g, '""');
-  if (escaped.includes(',') || escaped.includes('"') || escaped.includes('\n')) return `"${escaped}"`;
-  return escaped;
-}
 
 router.get('/:source/csv', authenticate, checkDataAccess, async (req: Request, res: Response) => {
   const source = req.params.source as string;

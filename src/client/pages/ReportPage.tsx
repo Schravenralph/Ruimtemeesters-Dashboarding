@@ -153,7 +153,7 @@ export function ReportPage() {
                 const lastActualIdx = trend.map(p => p.source).lastIndexOf('cbs_actuals');
                 const chartData = trend.map((p, i) => ({
                   year: p.year,
-                  actual: p.source === 'cbs_actuals' ? p.value : (i === lastActualIdx + 1 ? trend[lastActualIdx]?.value : undefined),
+                  actual: p.source === 'cbs_actuals' ? p.value : undefined,
                   prognose: p.source !== 'cbs_actuals' || i === lastActualIdx ? p.value : undefined,
                   ...(p.confidenceLower != null && p.confidenceUpper != null
                     ? { ci: [p.confidenceLower, p.confidenceUpper] as [number, number] }
