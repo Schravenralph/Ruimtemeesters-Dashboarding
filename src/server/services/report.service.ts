@@ -23,6 +23,9 @@ interface SourceReportConfig {
   dimCol: string;
   dimFilter: string;       // Extra WHERE for breakdown (pin other dimensions to totaal)
   grandTotalFilter: string; // WHERE for grand total row
+  unit: string;
+  totalLabel?: string;      // Override for the grand total row label (e.g. "CO2-uitstoot")
+  breakdownLabel?: string;  // Override for the breakdown section title
 }
 
 const SOURCE_CONFIGS: Record<string, SourceReportConfig> = {
@@ -31,24 +34,65 @@ const SOURCE_CONFIGS: Record<string, SourceReportConfig> = {
     dimCol: 'age_group',
     dimFilter: "AND gender = 'totaal' AND age_group != 'totaal'",
     grandTotalFilter: "AND age_group = 'totaal' AND gender = 'totaal'",
+    unit: 'personen',
   },
   huishoudens: {
     table: 'data_huishoudens',
     dimCol: 'household_type',
     dimFilter: "AND dimension_type = 'samenstelling' AND household_type != 'totaal'",
     grandTotalFilter: "AND household_type = 'totaal' AND dimension_type = 'samenstelling'",
+    unit: 'huishoudens',
   },
   woningen: {
     table: 'data_woningen',
     dimCol: 'tenure_type',
     dimFilter: "AND dwelling_type = 'totaal' AND tenure_type != 'totaal'",
     grandTotalFilter: "AND tenure_type = 'totaal' AND dwelling_type = 'totaal'",
+    unit: 'woningen',
   },
   woningtekort: {
     table: 'data_woningtekort',
     dimCol: 'metric',
-    dimFilter: "AND metric != 'tekort'",  // Show individual metrics, not the computed tekort
+    dimFilter: "AND metric != 'tekort'",
     grandTotalFilter: "AND metric = 'tekort'",
+    unit: '%',
+    totalLabel: 'Woningtekort',
+  },
+  energie: {
+    table: 'data_energie',
+    dimCol: 'fuel_type',
+    dimFilter: "AND sector = 'woningen' AND fuel_type != 'totaal'",
+    grandTotalFilter: "AND sector = 'woningen' AND fuel_type = 'totaal'",
+    unit: 'TJ',
+    totalLabel: 'Totaal energieverbruik woningen',
+    breakdownLabel: 'Uitsplitsing naar brandstof',
+  },
+  emissies: {
+    table: 'data_emissies',
+    dimCol: 'emission_type',
+    dimFilter: "AND sector = 'totaal' AND emission_type != 'co2'",
+    grandTotalFilter: "AND sector = 'totaal' AND emission_type = 'co2'",
+    unit: 'ton CO2-eq',
+    totalLabel: 'CO2-uitstoot',
+    breakdownLabel: 'Overige broeikasgassen',
+  },
+  hernieuwbaar: {
+    table: 'data_hernieuwbaar',
+    dimCol: 'metric',
+    dimFilter: "AND energy_source = 'zonnepanelen' AND metric NOT IN ('totaal', 'aantal_installaties')",
+    grandTotalFilter: "AND energy_source = 'zonnepanelen' AND metric = 'aantal_installaties'",
+    unit: '',
+    totalLabel: 'Zonnepanelen (installaties)',
+    breakdownLabel: 'Overige indicatoren',
+  },
+  afval: {
+    table: 'data_afval',
+    dimCol: 'waste_type',
+    dimFilter: "AND metric = 'kg_per_inwoner' AND waste_type != 'totaal'",
+    grandTotalFilter: "AND metric = 'kg_per_inwoner' AND waste_type = 'totaal'",
+    unit: 'kg per inwoner',
+    totalLabel: 'Totaal huishoudelijk afval',
+    breakdownLabel: 'Uitsplitsing naar afvalsoort',
   },
 };
 
@@ -61,6 +105,7 @@ export async function generateReport(config: ReportConfig): Promise<{
   generatedAt: string;
   geoCode: string;
   year: number;
+  unit: string;
   sections: ReportSection[];
 }> {
   const sourceConfig = SOURCE_CONFIGS[config.source];
@@ -112,13 +157,13 @@ export async function generateReport(config: ReportConfig): Promise<{
     {
       title: 'Overzicht',
       data: [{
-        label: 'Totaal',
+        label: sourceConfig.totalLabel ?? 'Totaal',
         value: grandTotal,
         change: compareGrandTotal !== undefined ? grandTotal - compareGrandTotal : undefined,
       }],
     },
     {
-      title: `Uitsplitsing naar ${sourceConfig.dimCol.replace(/_/g, ' ')}`,
+      title: sourceConfig.breakdownLabel ?? `Uitsplitsing naar ${sourceConfig.dimCol.replace(/_/g, ' ')}`,
       data: currentResult.rows.map(row => ({
         label: row.dimension || 'Onbekend',
         value: Number(row.total),
@@ -138,6 +183,7 @@ export async function generateReport(config: ReportConfig): Promise<{
     generatedAt: new Date().toISOString(),
     geoCode: config.geoCode,
     year: config.year,
+    unit: sourceConfig.unit,
     sections,
   };
 }
