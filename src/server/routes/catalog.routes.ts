@@ -263,7 +263,7 @@ router.get('/subscriptions/mine', authenticate, async (req: Request, res: Respon
 
   const result = await query(`
     SELECT ds.key, ds.name, ds.supercategory, ds.cbs_table_id, ds.unit,
-           sub.subscribed_at, sub.sync_enabled, sub.custom_filters
+           sub.subscribed_at, sub.sync_enabled
     FROM data_source_subscriptions sub
     JOIN data_sources ds ON ds.key = sub.data_source_key
     WHERE sub.organization_id = $1 AND sub.sync_enabled = true
