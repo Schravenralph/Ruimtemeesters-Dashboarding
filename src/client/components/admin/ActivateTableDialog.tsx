@@ -4,6 +4,7 @@ import { X, Zap, CheckCircle, Map, Calendar, Layers, AlertTriangle } from 'lucid
 import { api } from '../../services/api/client';
 import { Button } from '../ui/Button';
 import { useThemes } from '../../contexts/ThemeContext';
+import { GEO_LEVEL_LABELS } from '../../utils/geo';
 
 interface CbsDimension {
   Identifier: string;
@@ -38,18 +39,6 @@ interface ActivateTableDialogProps {
   onClose: () => void;
   onActivated: () => void;
 }
-
-const GEO_LEVEL_LABELS: Record<string, string> = {
-  land: 'Nederland',
-  landsdeel: 'Landsdeel',
-  provincie: 'Provincie',
-  corop: 'COROP',
-  gemeente: 'Gemeente',
-  wijk: 'Wijk',
-  buurt: 'Buurt',
-  postcode4: 'Postcode (PC4)',
-  postcode6: 'Postcode (PC6)',
-};
 
 export function ActivateTableDialog({ identifier, title, onClose, onActivated }: ActivateTableDialogProps) {
   const [dimensions, setDimensions] = useState<CbsDimension[]>([]);
@@ -214,9 +203,10 @@ export function ActivateTableDialog({ identifier, title, onClose, onActivated }:
                     <div className="mt-2 flex items-start gap-1.5 text-xs text-amber-700">
                       <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
                       <span>
-                        Deze tabel bevat geen gemeente-data. Een gemeente-choropleth wordt automatisch overgeslagen;
-                        de kaart-tegel zal gebruikmaken van het beschikbare niveau (
-                        {GEO_LEVEL_LABELS[metadata.geoLevels[0]] || metadata.geoLevels[0]}).
+                        Deze tabel bevat geen gemeente-data. De kaart-tegel wordt niet aangemaakt.
+                        De data blijft beschikbaar op niveau{' '}
+                        <strong>{GEO_LEVEL_LABELS[metadata.geoLevels[0]] || metadata.geoLevels[0]}</strong>
+                        {' '}voor tabel- en trend-tegels.
                       </span>
                     </div>
                   )}
