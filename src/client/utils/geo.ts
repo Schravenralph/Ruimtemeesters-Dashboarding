@@ -2,15 +2,25 @@
  * Geographic utility functions for the dashboard.
  */
 
+// Strict parent → child drill-down hierarchy. Used by getParentLevel /
+// getChildLevel for dashboard navigation. Deliberately a subset of all CBS
+// geo levels: landsdeel (cross-cuts provincies) and postcode4/postcode6
+// (cross-cut gemeenten) don't fit a clean parent/child chain.
 export const GEO_LEVEL_ORDER = ['land', 'provincie', 'corop', 'gemeente', 'wijk', 'buurt'] as const;
 
+// Labels for every CBS geo level that downstream UI may need to display,
+// including ones outside GEO_LEVEL_ORDER. Keep in sync with the metadata
+// inspector's GeoLevel type in cbs-catalog-metadata.ts.
 export const GEO_LEVEL_LABELS: Record<string, string> = {
   land: 'Nederland',
+  landsdeel: 'Landsdeel',
   provincie: 'Provincie',
   corop: 'COROP-regio',
   gemeente: 'Gemeente',
   wijk: 'Wijk',
   buurt: 'Buurt',
+  postcode4: 'Postcode (PC4)',
+  postcode6: 'Postcode (PC6)',
 };
 
 export const PROVINCE_CODES: Record<string, string> = {
