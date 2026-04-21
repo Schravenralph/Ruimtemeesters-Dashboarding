@@ -134,7 +134,7 @@ const REGION_PREFIXES: Array<{ match: RegExp; level: GeoLevel }> = [
   { match: /^NL\d{2}$/, level: 'land' },
   { match: /^LD\d{2}$/, level: 'landsdeel' },
   { match: /^PV\d{2}$/, level: 'provincie' },
-  { match: /^CR\d{4}$/, level: 'corop' },
+  { match: /^CR\d{2}$/, level: 'corop' },
   { match: /^GM\d{4}$/, level: 'gemeente' },
   { match: /^WK\d{6}$/, level: 'wijk' },
   { match: /^BU\d{8}$/, level: 'buurt' },
