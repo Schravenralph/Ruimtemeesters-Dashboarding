@@ -58,7 +58,7 @@ async function main() {
   });
   process.stdout.write('\n');
 
-  console.log(`[Inspect] done in ${(summary.durationMs / 1000).toFixed(1)}s: ok=${summary.ok} error=${summary.error} partial=${summary.partial}`);
+  console.log(`[Inspect] done in ${(summary.durationMs / 1000).toFixed(1)}s: ok=${summary.ok} error=${summary.error}`);
   if (summary.errors.length) {
     console.log(`[Inspect] first ${Math.min(10, summary.errors.length)} errors:`);
     for (const e of summary.errors.slice(0, 10)) {

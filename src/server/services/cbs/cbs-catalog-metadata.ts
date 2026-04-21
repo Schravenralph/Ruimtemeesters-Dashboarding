@@ -125,7 +125,6 @@ export interface InspectSummary {
   total: number;
   ok: number;
   error: number;
-  partial: number;
   durationMs: number;
   errors: Array<{ identifier: string; error: string }>;
 }
@@ -141,7 +140,7 @@ const REGION_PREFIXES: Array<{ match: RegExp; level: GeoLevel }> = [
   { match: /^BU\d{8}$/, level: 'buurt' },
   { match: /^PC\d{4}$/, level: 'postcode4' },
   { match: /^\d{4}$/, level: 'postcode4' },
-  { match: /^PC\d{6}$/, level: 'postcode6' },
+  { match: /^PC\d{4}[A-Z]{2}$/i, level: 'postcode6' },
   { match: /^\d{4}[A-Z]{2}$/i, level: 'postcode6' },
 ];
 
@@ -328,7 +327,7 @@ export async function inspectOne(identifier: string): Promise<CatalogueTableMeta
 async function persistOne(
   identifier: string,
   result: { ok: true; metadata: CatalogueTableMetadata }
-           | { ok: false; error: string; partial?: CatalogueTableMetadata },
+           | { ok: false; error: string },
 ) {
   if (result.ok) {
     await query(
@@ -341,15 +340,9 @@ async function persistOne(
   } else {
     await query(
       `UPDATE cbs_catalog
-         SET metadata = COALESCE($3, metadata), inspected_at = NOW(),
-             inspection_status = $2, inspection_error = $4
+         SET inspected_at = NOW(), inspection_status = 'error', inspection_error = $2
        WHERE identifier = $1`,
-      [
-        identifier,
-        result.partial ? 'partial' : 'error',
-        result.partial ?? null,
-        result.error.slice(0, 4000),
-      ],
+      [identifier, result.error.slice(0, 4000)],
     );
   }
 }
@@ -365,7 +358,7 @@ export async function inspectAll(options: InspectOptions = {}): Promise<InspectS
   const rows = await selectTargets(options);
   const total = rows.length;
   const errors: InspectSummary['errors'] = [];
-  let ok = 0, error = 0, partial = 0, done = 0;
+  let ok = 0, error = 0, done = 0;
 
   // Tiny inline concurrency pool so we don't add a dep.
   const queue = rows.slice();
@@ -392,7 +385,7 @@ export async function inspectAll(options: InspectOptions = {}): Promise<InspectS
   const workers = Array.from({ length: Math.min(concurrency, total) }, () => worker());
   await Promise.all(workers);
 
-  return { total, ok, error, partial, durationMs: Date.now() - started, errors };
+  return { total, ok, error, durationMs: Date.now() - started, errors };
 }
 
 async function selectTargets(options: InspectOptions): Promise<Array<{ identifier: string }>> {
