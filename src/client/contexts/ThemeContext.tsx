@@ -40,10 +40,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         if (themesRes.themes.length > 0) {
           setActiveTheme(themesRes.themes[0]);
         }
+        setError(null);
       }
-      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Laden mislukt');
+      // Initial load: surface the failure via shared `error` state so
+      //   consumers can show a fallback.
+      // Background refresh: don't touch shared error state (a transient
+      //   refresh failure shouldn't surface as a load failure across the
+      //   whole app when the existing data in memory is still valid).
+      //   Re-throw so the caller's .catch() can react locally.
+      if (initial) setError(err instanceof Error ? err.message : 'Laden mislukt');
+      else throw err;
     } finally {
       if (initial) setIsLoading(false);
     }
