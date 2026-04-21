@@ -227,37 +227,61 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
     // Remove any existing tiles for this theme (re-activation replaces them)
     await client.query('DELETE FROM tiles WHERE theme_id = $1', [themeId]);
 
-    // Shape-aware default tiles. Each tile is only generated when the CBS
-    // table has the data to back it — otherwise activation produces empty
-    // choropleths / flat lines that look broken to end users.
-    const hasTimeDim =
-      !!meta?.periodRange ||
-      !!meta?.dimensions?.some(d => d.kind === 'TimeDimension');
-    const hasGemeente = geoLevels.includes('gemeente');
+    // Shape-aware default tiles when metadata is available. When metadata
+    // is missing (never-inspected table), fall back to the historical
+    // always-generate-all-four behaviour so the dashboard is never worse
+    // off than before this feature landed.
     const firstBarDim = dimColumns.length > 0 ? dimColumns[0] : null;
-    const firstBarDimInfo = firstBarDim
-      ? meta?.dimensions?.find(d => d.name.toLowerCase() === firstBarDim.toLowerCase())
+    // The metadata dimension lookup must use the CBS identifier (e.g.
+    // 'SoortMisdrijf'), NOT the user-editable target column (e.g.
+    // 'soort_misdrijf'). targetColumn may be renamed arbitrarily.
+    const firstCbsDim = dimensionMappings[0]?.cbsDimension ?? null;
+    const firstBarDimInfo = firstCbsDim
+      ? meta?.dimensions?.find(d => d.name === firstCbsDim)
       : undefined;
     // Bar tiles for dimensions with hundreds of values (e.g. Leeftijd 0..120)
     // are unreadable — skip them. 30 is a rough readability threshold.
+    // Only applies when we have metadata to check against; without metadata
+    // we can't tell, so permit the tile.
     const MAX_BAR_DIM_VALUES = 30;
     const barDimUsable =
-      firstBarDim && (!firstBarDimInfo || firstBarDimInfo.valueCount <= MAX_BAR_DIM_VALUES);
+      !!firstBarDim
+      && (!firstBarDimInfo || firstBarDimInfo.valueCount <= MAX_BAR_DIM_VALUES);
 
     const defaultTiles: Array<{ title: string; chartType: string; dims: string[] }> = [];
-    if (hasTimeDim) {
+    if (meta) {
+      // Shape-aware: only emit tiles the table can actually back.
+      const hasTimeDim =
+        !!meta.periodRange ||
+        !!meta.dimensions?.some(d => d.kind === 'TimeDimension');
+      const hasGemeente = geoLevels.includes('gemeente');
+
+      if (hasTimeDim) {
+        defaultTiles.push({ title: `${name} trend`, chartType: 'line', dims: [] });
+      }
+      if (barDimUsable && firstBarDim) {
+        defaultTiles.push({ title: `${name} per ${firstBarDim}`, chartType: 'bar', dims: [firstBarDim] });
+      }
+      if (hasGemeente) {
+        defaultTiles.push({ title: `${name} per gemeente`, chartType: 'choropleth', dims: [] });
+      }
+    } else {
+      // No metadata — can't judge shape, so generate the historical tile
+      // set unconditionally. Tables render fine even without time/region
+      // data; worst case is an empty-looking chart that's still clickable.
       defaultTiles.push({ title: `${name} trend`, chartType: 'line', dims: [] });
-    }
-    if (barDimUsable && firstBarDim) {
-      defaultTiles.push({ title: `${name} per ${firstBarDim}`, chartType: 'bar', dims: [firstBarDim] });
-    }
-    if (hasGemeente) {
+      if (firstBarDim) {
+        defaultTiles.push({ title: `${name} per ${firstBarDim}`, chartType: 'bar', dims: [firstBarDim] });
+      }
       defaultTiles.push({ title: `${name} per gemeente`, chartType: 'choropleth', dims: [] });
     }
+    // Table tile is always included and always carries the first dim when
+    // one exists. Tables can render many values fine — the ≤30 threshold
+    // only applies to bar charts.
     defaultTiles.push({
       title: `${name} tabel`,
       chartType: 'table',
-      dims: firstBarDim && barDimUsable ? [firstBarDim] : [],
+      dims: firstBarDim ? [firstBarDim] : [],
     });
 
     for (let i = 0; i < defaultTiles.length; i++) {
