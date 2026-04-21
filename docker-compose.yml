@@ -34,6 +34,11 @@ services:
     networks:
       - default
       - ruimtemeesters-shared
+      # Shared MCP ↔ service fabric. dashboarding-app multi-homes here
+      # so rm-mcp-dashboarding can reach it at DNS name dashboarding-app:5022
+      # without host.docker.internal. Only the API joins — the DB stays
+      # on the default network. See Platform ADR-0006.
+      - rm-network
 
   db:
     image: postgres:16-alpine
@@ -62,3 +67,6 @@ volumes:
 networks:
   ruimtemeesters-shared:
     external: true
+  rm-network:
+    external: true
+    name: rm-network
