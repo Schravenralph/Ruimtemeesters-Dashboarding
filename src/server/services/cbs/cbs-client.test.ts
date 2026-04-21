@@ -19,11 +19,23 @@ describe('parseCbsRegion', () => {
   });
 
   it('maps 4-digit PC4 postcode', () => {
-    expect(parseCbsRegion('1011')).toEqual({ code: 'PC1011', level: 'postcode' });
+    expect(parseCbsRegion('1011')).toEqual({ code: 'PC1011', level: 'postcode4' });
   });
 
-  it('maps PC-prefixed postcode', () => {
-    expect(parseCbsRegion('PC1011')).toEqual({ code: 'PC1011', level: 'postcode' });
+  it('maps PC-prefixed PC4 postcode', () => {
+    expect(parseCbsRegion('PC1011')).toEqual({ code: 'PC1011', level: 'postcode4' });
+  });
+
+  it('maps 6-position postcode (4 digits + 2 letters) to postcode6', () => {
+    expect(parseCbsRegion('1011AB')).toEqual({ code: 'PC1011AB', level: 'postcode6' });
+  });
+
+  it('maps PC-prefixed PC6 postcode', () => {
+    expect(parseCbsRegion('PC1011AB')).toEqual({ code: 'PC1011AB', level: 'postcode6' });
+  });
+
+  it('maps LD02 to landsdeel', () => {
+    expect(parseCbsRegion('LD02')).toEqual({ code: 'LD02', level: 'landsdeel' });
   });
 
   it('returns null for undefined (no crash)', () => {

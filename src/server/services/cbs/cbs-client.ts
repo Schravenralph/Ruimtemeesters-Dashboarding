@@ -168,15 +168,20 @@ export function parseCbsRegion(code: string | undefined | null): { code: string;
   const trimmed = code.trim();
   if (!trimmed) return null;
   if (trimmed === 'NL01' || trimmed === 'NL00') return { code: 'NL', level: 'land' };
+  if (/^LD\d{2}$/.test(trimmed)) return { code: trimmed, level: 'landsdeel' };
   if (trimmed.startsWith('PV')) return { code: `NL-${trimmed.substring(2)}`, level: 'provincie' };
   if (trimmed.startsWith('CR')) return { code: trimmed, level: 'corop' };
   if (trimmed.startsWith('GM')) return { code: trimmed, level: 'gemeente' };
   if (trimmed.startsWith('WK')) return { code: trimmed, level: 'wijk' };
   if (trimmed.startsWith('BU')) return { code: trimmed, level: 'buurt' };
-  // PC-prefixed postcode (4-digit), e.g. "PC1011". Keep the canonical PC-prefixed form.
-  if (/^PC\d{4}$/.test(trimmed)) return { code: trimmed, level: 'postcode' };
-  // Bare 4-digit numeric postcode (PC4) — normalise to PC-prefixed.
-  if (/^\d{4}$/.test(trimmed)) return { code: `PC${trimmed}`, level: 'postcode' };
+  // 6-position postcode (4 digits + 2 letters) — check before PC4 so
+  // "PC1011AB" doesn't accidentally match the PC4 regex prefix.
+  if (/^PC\d{4}[A-Z]{2}$/i.test(trimmed)) return { code: trimmed, level: 'postcode6' };
+  if (/^\d{4}[A-Z]{2}$/i.test(trimmed)) return { code: `PC${trimmed}`, level: 'postcode6' };
+  // 4-position postcode (just digits). PC-prefixed stays canonical;
+  // bare 4-digit is normalised to PC-prefixed.
+  if (/^PC\d{4}$/.test(trimmed)) return { code: trimmed, level: 'postcode4' };
+  if (/^\d{4}$/.test(trimmed)) return { code: `PC${trimmed}`, level: 'postcode4' };
   return null;
 }
 
