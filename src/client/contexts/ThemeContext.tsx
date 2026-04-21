@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { ThemeConfig, Supercategory } from '@shared/api/contracts';
 import { listThemes } from '../services/api/themes';
 import { listSupercategories } from '../services/api/supercategories';
@@ -12,6 +12,9 @@ interface ThemeContextValue {
   setActiveSupercategory: (key: string) => void;
   isLoading: boolean;
   error: string | null;
+  /** Re-fetch themes + supercategories. Call after mutations (e.g. CBS table
+   *  activation) so newly-created themes appear without a full page reload. */
+  refresh: () => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -24,27 +27,44 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    Promise.all([listThemes(), listSupercategories()])
-      .then(([themesRes, scRes]) => {
-        setThemes(themesRes.themes);
-        setSupercategories(scRes.supercategories);
+  const load = useCallback(async (initial: boolean) => {
+    if (initial) setIsLoading(true);
+    try {
+      const [themesRes, scRes] = await Promise.all([listThemes(), listSupercategories()]);
+      setThemes(themesRes.themes);
+      setSupercategories(scRes.supercategories);
+      if (initial) {
         if (scRes.supercategories.length > 0) {
           setActiveSupercategory(scRes.supercategories[0].key);
         }
         if (themesRes.themes.length > 0) {
           setActiveTheme(themesRes.themes[0]);
         }
-      })
-      .catch(err => setError(err.message))
-      .finally(() => setIsLoading(false));
+        setError(null);
+      }
+    } catch (err) {
+      // Initial load: surface the failure via shared `error` state so
+      //   consumers can show a fallback.
+      // Background refresh: don't touch shared error state (a transient
+      //   refresh failure shouldn't surface as a load failure across the
+      //   whole app when the existing data in memory is still valid).
+      //   Re-throw so the caller's .catch() can react locally.
+      if (initial) setError(err instanceof Error ? err.message : 'Laden mislukt');
+      else throw err;
+    } finally {
+      if (initial) setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => { void load(true); }, [load]);
+
+  const refresh = useCallback(() => load(false), [load]);
 
   return (
     <ThemeContext.Provider value={{
       themes, activeTheme, setActiveTheme,
       supercategories, activeSupercategory, setActiveSupercategory,
-      isLoading, error,
+      isLoading, error, refresh,
     }}>
       {children}
     </ThemeContext.Provider>

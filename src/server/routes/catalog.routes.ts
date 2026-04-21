@@ -52,7 +52,10 @@ router.post('/sync', authenticate, requireRole('admin'), async (_req: Request, r
     .catch(err => console.error('[CBS Catalog] Sync failed:', err));
 });
 
-// GET /api/catalog/:identifier — get details for a specific CBS table
+// GET /api/catalog/:identifier — get details for a specific CBS table.
+// Returns both the raw CBS dimensions payload (for dialogs that still want
+// untouched CBS metadata) and the inspected `metadata` JSONB so callers can
+// show shape previews and apply smart defaults without a round-trip to CBS.
 router.get('/:identifier', authenticate, async (req: Request, res: Response) => {
   const result = await query(
     'SELECT * FROM cbs_catalog WHERE identifier = $1',
@@ -66,18 +69,27 @@ router.get('/:identifier', authenticate, async (req: Request, res: Response) => 
 
   const row = result.rows[0];
 
-  // Also fetch the CBS table's dimensions/measures for preview
+  // Prefer inspected metadata when present; fall back to a live CBS
+  // dimension fetch so the dialog still works for never-inspected rows.
   let dimensions: unknown[] = [];
-  try {
-    const dimResponse = await fetch(
-      `https://datasets.cbs.nl/odata/v1/CBS/${row.identifier}/Dimensions`,
-      { signal: AbortSignal.timeout(10000) },
-    );
-    if (dimResponse.ok) {
-      const dimData = await dimResponse.json() as { value: unknown[] };
-      dimensions = dimData.value || [];
-    }
-  } catch { /* CBS might be slow */ }
+  if (row.metadata && Array.isArray(row.metadata.dimensions)) {
+    dimensions = row.metadata.dimensions.map((d: { name: string; title: string; kind: string }) => ({
+      Identifier: d.name,
+      Title: d.title,
+      Kind: d.kind,
+    }));
+  } else {
+    try {
+      const dimResponse = await fetch(
+        `https://datasets.cbs.nl/odata/v1/CBS/${row.identifier}/Dimensions`,
+        { signal: AbortSignal.timeout(10000) },
+      );
+      if (dimResponse.ok) {
+        const dimData = await dimResponse.json() as { value: unknown[] };
+        dimensions = dimData.value || [];
+      }
+    } catch { /* CBS might be slow */ }
+  }
 
   res.json({
     ...row,
@@ -117,6 +129,35 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
   const tableName = `data_${key.replace(/[^a-z0-9_]/g, '_')}`;
   const dimColumns = dimensionMappings.map(d => d.targetColumn);
 
+  // Pull inspected metadata so we can pick sane defaults for geo level,
+  // allowed sync levels, and tile generation. Activation still works when
+  // metadata is missing; we just fall back to the historical defaults.
+  type InspectedMetadata = {
+    geoLevels?: string[];
+    periodRange?: { min: number; max: number } | null;
+    dimensions?: Array<{ name: string; valueCount: number; kind?: string }>;
+    recommendedDefaults?: { regionDim?: string | null };
+  };
+  const metaResult = await query<{ metadata: InspectedMetadata | null }>(
+    'SELECT metadata FROM cbs_catalog WHERE identifier = $1',
+    [identifier],
+  );
+  const meta = metaResult.rows[0]?.metadata ?? null;
+  const geoLevels = meta?.geoLevels ?? [];
+
+  // Default geo level: prefer gemeente → postcode4 → provincie → land.
+  // Falls back to 'gemeente' when metadata is absent (historical behaviour).
+  const GEO_PREFERENCE = ['gemeente', 'postcode4', 'provincie', 'land'] as const;
+  const defaultGeoLevel =
+    GEO_PREFERENCE.find(l => geoLevels.includes(l))
+    ?? (geoLevels[0] as string | undefined)
+    ?? 'gemeente';
+
+  // Sync engine's allowedLevels: accept every geo level the CBS table actually
+  // publishes. Without this, an activation on e.g. a postcode-only table would
+  // silently drop every row (default is gemeente+land).
+  const syncAllowedLevels = geoLevels.length > 0 ? geoLevels : undefined;
+
   // Build sync_config for the generic sync engine
   const syncConfig = {
     cbsTable: identifier,
@@ -124,6 +165,8 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
     filter: filter || `Measure eq '${measureCode}'`,
     measureCode,
     dimensionMappings: dimensionMappings || [],
+    ...(syncAllowedLevels ? { allowedLevels: syncAllowedLevels } : {}),
+    ...(meta?.recommendedDefaults?.regionDim ? { regionDimension: meta.recommendedDefaults.regionDim } : {}),
   };
 
   const client = await (await import('../db/pool.js')).getClient();
@@ -184,19 +227,69 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
     // Remove any existing tiles for this theme (re-activation replaces them)
     await client.query('DELETE FROM tiles WHERE theme_id = $1', [themeId]);
 
-    // Default tiles: trend line, dimension bar chart, data table
-    const defaultTiles = [
-      { title: `${name} trend`, chartType: 'line', dims: [] as string[], order: 0 },
-      ...(dimColumns.length > 0 ? [{ title: `${name} per ${dimColumns[0]}`, chartType: 'bar', dims: [dimColumns[0]], order: 1 }] : []),
-      { title: `${name} per gemeente`, chartType: 'choropleth', dims: [] as string[], order: dimColumns.length > 0 ? 2 : 1 },
-      { title: `${name} tabel`, chartType: 'table', dims: dimColumns.slice(0, 1), order: dimColumns.length > 0 ? 3 : 2 },
-    ];
+    // Shape-aware default tiles when metadata is available. When metadata
+    // is missing (never-inspected table), fall back to the historical
+    // always-generate-all-four behaviour so the dashboard is never worse
+    // off than before this feature landed.
+    const firstBarDim = dimColumns.length > 0 ? dimColumns[0] : null;
+    // The metadata dimension lookup must use the CBS identifier (e.g.
+    // 'SoortMisdrijf'), NOT the user-editable target column (e.g.
+    // 'soort_misdrijf'). targetColumn may be renamed arbitrarily.
+    const firstCbsDim = dimensionMappings[0]?.cbsDimension ?? null;
+    const firstBarDimInfo = firstCbsDim
+      ? meta?.dimensions?.find(d => d.name === firstCbsDim)
+      : undefined;
+    // Bar tiles for dimensions with hundreds of values (e.g. Leeftijd 0..120)
+    // are unreadable — skip them. 30 is a rough readability threshold.
+    // Only applies when we have metadata to check against; without metadata
+    // we can't tell, so permit the tile.
+    const MAX_BAR_DIM_VALUES = 30;
+    const barDimUsable =
+      !!firstBarDim
+      && (!firstBarDimInfo || firstBarDimInfo.valueCount <= MAX_BAR_DIM_VALUES);
 
-    for (const tile of defaultTiles) {
+    const defaultTiles: Array<{ title: string; chartType: string; dims: string[] }> = [];
+    if (meta) {
+      // Shape-aware: only emit tiles the table can actually back.
+      const hasTimeDim =
+        !!meta.periodRange ||
+        !!meta.dimensions?.some(d => d.kind === 'TimeDimension');
+      const hasGemeente = geoLevels.includes('gemeente');
+
+      if (hasTimeDim) {
+        defaultTiles.push({ title: `${name} trend`, chartType: 'line', dims: [] });
+      }
+      if (barDimUsable && firstBarDim) {
+        defaultTiles.push({ title: `${name} per ${firstBarDim}`, chartType: 'bar', dims: [firstBarDim] });
+      }
+      if (hasGemeente) {
+        defaultTiles.push({ title: `${name} per gemeente`, chartType: 'choropleth', dims: [] });
+      }
+    } else {
+      // No metadata — can't judge shape, so generate the historical tile
+      // set unconditionally. Tables render fine even without time/region
+      // data; worst case is an empty-looking chart that's still clickable.
+      defaultTiles.push({ title: `${name} trend`, chartType: 'line', dims: [] });
+      if (firstBarDim) {
+        defaultTiles.push({ title: `${name} per ${firstBarDim}`, chartType: 'bar', dims: [firstBarDim] });
+      }
+      defaultTiles.push({ title: `${name} per gemeente`, chartType: 'choropleth', dims: [] });
+    }
+    // Table tile is always included and always carries the first dim when
+    // one exists. Tables can render many values fine — the ≤30 threshold
+    // only applies to bar charts.
+    defaultTiles.push({
+      title: `${name} tabel`,
+      chartType: 'table',
+      dims: firstBarDim ? [firstBarDim] : [],
+    });
+
+    for (let i = 0; i < defaultTiles.length; i++) {
+      const tile = defaultTiles[i];
       await client.query(`
         INSERT INTO tiles (theme_id, title, chart_type, data_source, dimensions, default_geo_level, "order")
-        VALUES ($1, $2, $3, $4, $5, 'gemeente', $6)
-      `, [themeId, tile.title, tile.chartType, key, tile.dims, tile.order]);
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [themeId, tile.title, tile.chartType, key, tile.dims, defaultGeoLevel, i]);
     }
 
     await client.query('COMMIT');
@@ -235,6 +328,8 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
       dimensionColumns: dimColumns,
       themeSlug: key,
       tilesCreated: defaultTiles.length,
+      defaultGeoLevel,
+      geoLevels,
       message: `Tabel geactiveerd. Thema "${name}" aangemaakt met ${defaultTiles.length} tegels. Data sync gestart op de achtergrond.`,
     });
   } catch (err) {
