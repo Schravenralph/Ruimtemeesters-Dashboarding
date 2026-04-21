@@ -462,10 +462,14 @@ async function selectTargets(options: InspectOptions): Promise<Array<{ identifie
   }
   const clauses: string[] = [];
   if (options.onlyStale) {
-    // Re-inspect when CBS says the table was modified after our last
-    // inspection, or when we have never inspected it.
+    // Re-inspect when:
+    //   - we have never inspected the row
+    //   - the last attempt failed outright ('error')
+    //   - the last attempt was 'partial' (transient sub-resource failure —
+    //     worth retrying; next crawl might get a complete payload)
+    //   - CBS says the table was modified since our last inspection
     clauses.push(`(inspection_status IS NULL
-                   OR inspection_status = 'error'
+                   OR inspection_status IN ('error', 'partial')
                    OR (modified IS NOT NULL AND inspected_at IS NOT NULL
                        AND modified > inspected_at))`);
   }
