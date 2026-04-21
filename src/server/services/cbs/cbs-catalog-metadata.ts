@@ -110,6 +110,15 @@ export interface CatalogueTableMetadata {
     totalDimValues: Record<string, string>;
   };
   inspectedAt: string;
+  /** Parts of the metadata we couldn't fetch fully. Callers that rely on
+   *  exhaustive measure/dimension-value lists should treat a non-empty array
+   *  as a signal to re-inspect. `inspection_status = 'partial'` is set when
+   *  any field is populated. */
+  missing: {
+    measures: boolean;
+    measureGroups: boolean;
+    dimensions: string[];
+  };
   truncated: { dimensions: string[] };
 }
 
@@ -125,6 +134,7 @@ export interface InspectSummary {
   total: number;
   ok: number;
   error: number;
+  partial: number;
   durationMs: number;
   errors: Array<{ identifier: string; error: string }>;
 }
@@ -226,13 +236,29 @@ export async function inspectOne(identifier: string): Promise<CatalogueTableMeta
     `${CBS_V4_BASE}/${identifier}/Dimensions?$format=json`,
   );
 
+  // Measures and measure-groups can transiently fail (CBS sporadically 500s
+  // on /MeasureCodes under load). We tolerate empty results but track whether
+  // the empty-ness is genuine or a fetch failure so the persisted status can
+  // be 'partial' instead of silently 'ok'.
+  //
+  // IMPORTANT: CBS returns 404 on /MeasureGroups for tables that have no
+  // group hierarchy (common — most simple tables). 404 means "empty by
+  // design," not "fetch failed." Only non-404 errors should count as missing.
+  const isFetchFailure = (err: unknown): boolean => {
+    const msg = err instanceof Error ? err.message : String(err);
+    return !/HTTP 404 /.test(msg);
+  };
+  let measuresMissing = false;
+  let measureGroupsMissing = false;
+  const dimensionsMissing: string[] = [];
+
   const measuresRaw = await fetchJson<ODataWrapper<RawMeasure>>(
     `${CBS_V4_BASE}/${identifier}/MeasureCodes?$format=json`,
-  ).catch(() => ({ value: [] as RawMeasure[] }));
+  ).catch((err) => { if (isFetchFailure(err)) measuresMissing = true; return { value: [] as RawMeasure[] }; });
 
   const measureGroupsRaw = await fetchJson<ODataWrapper<RawMeasureGroup>>(
     `${CBS_V4_BASE}/${identifier}/MeasureGroups?$format=json`,
-  ).catch(() => ({ value: [] as RawMeasureGroup[] }));
+  ).catch((err) => { if (isFetchFailure(err)) measureGroupsMissing = true; return { value: [] as RawMeasureGroup[] }; });
   const measureGroupMap = new Map(measureGroupsRaw.value.map(g => [g.Id, g.Title]));
 
   const dimensionValues: Record<string, DimensionValue[]> = {};
@@ -245,7 +271,24 @@ export async function inspectOne(identifier: string): Promise<CatalogueTableMeta
 
   for (const dim of dims.value) {
     if (!dim.CodesUrl) continue;
-    const codes = await fetchAllPages<RawCode>(dim.CodesUrl);
+    let codes: RawCode[];
+    try {
+      codes = await fetchAllPages<RawCode>(dim.CodesUrl);
+    } catch (err) {
+      // 404 = genuinely empty dim; other errors = fetch failure (track it).
+      // Either way we record a minimal summary so downstream consumers see
+      // the dim in the list.
+      if (isFetchFailure(err)) dimensionsMissing.push(dim.Identifier);
+      dimensions.push({
+        name: dim.Identifier,
+        title: (dim.Title || dim.Identifier).trim(),
+        kind: dim.Kind === 'GeoDimension' || dim.Kind === 'TimeDimension' ? dim.Kind : 'Dimension',
+        valueCount: 0,
+        hasTotal: false,
+      });
+      dimensionValues[dim.Identifier] = [];
+      continue;
+    }
     const valueCount = codes.length;
     const total = findTotalId(codes);
     if (total) totalDimValues[dim.Identifier] = total;
@@ -319,8 +362,18 @@ export async function inspectOne(identifier: string): Promise<CatalogueTableMeta
       totalDimValues,
     },
     inspectedAt: new Date().toISOString(),
+    missing: {
+      measures: measuresMissing,
+      measureGroups: measureGroupsMissing,
+      dimensions: dimensionsMissing,
+    },
     truncated: { dimensions: truncated },
   };
+}
+
+/** True when any fetched sub-resource failed and the metadata is incomplete. */
+function isPartial(m: CatalogueTableMetadata): boolean {
+  return m.missing.measures || m.missing.measureGroups || m.missing.dimensions.length > 0;
 }
 
 /** Persist metadata (or error) for one catalogue row. */
@@ -330,12 +383,22 @@ async function persistOne(
            | { ok: false; error: string },
 ) {
   if (result.ok) {
+    const partial = isPartial(result.metadata);
+    const note = partial
+      ? [
+          result.metadata.missing.measures ? 'measures' : null,
+          result.metadata.missing.measureGroups ? 'measureGroups' : null,
+          result.metadata.missing.dimensions.length
+            ? `dims:${result.metadata.missing.dimensions.join(',')}`
+            : null,
+        ].filter(Boolean).join(' | ')
+      : null;
     await query(
       `UPDATE cbs_catalog
          SET metadata = $2, inspected_at = NOW(),
-             inspection_status = 'ok', inspection_error = NULL
+             inspection_status = $3, inspection_error = $4
        WHERE identifier = $1`,
-      [identifier, result.metadata],
+      [identifier, result.metadata, partial ? 'partial' : 'ok', note],
     );
   } else {
     await query(
@@ -358,7 +421,7 @@ export async function inspectAll(options: InspectOptions = {}): Promise<InspectS
   const rows = await selectTargets(options);
   const total = rows.length;
   const errors: InspectSummary['errors'] = [];
-  let ok = 0, error = 0, done = 0;
+  let ok = 0, error = 0, partial = 0, done = 0;
 
   // Tiny inline concurrency pool so we don't add a dep.
   const queue = rows.slice();
@@ -370,7 +433,8 @@ export async function inspectAll(options: InspectOptions = {}): Promise<InspectS
       try {
         const metadata = await inspectOne(id);
         await persistOne(id, { ok: true, metadata });
-        ok++;
+        if (isPartial(metadata)) partial++;
+        else ok++;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         await persistOne(id, { ok: false, error: msg }).catch(() => { /* swallow */ });
@@ -385,7 +449,7 @@ export async function inspectAll(options: InspectOptions = {}): Promise<InspectS
   const workers = Array.from({ length: Math.min(concurrency, total) }, () => worker());
   await Promise.all(workers);
 
-  return { total, ok, error, durationMs: Date.now() - started, errors };
+  return { total, ok, error, partial, durationMs: Date.now() - started, errors };
 }
 
 async function selectTargets(options: InspectOptions): Promise<Array<{ identifier: string }>> {
