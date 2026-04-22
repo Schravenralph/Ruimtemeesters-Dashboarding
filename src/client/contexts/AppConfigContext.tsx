@@ -37,11 +37,15 @@ const AppConfigContext = createContext<AppConfigContextValue | null>(null);
 export function AppConfigProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
-  const [isLoading, setIsLoading] = useState(false);
+  // Start true so consumers can wait for either the GET to settle or for
+  // auth to resolve as "not signed in". Flipping to false happens in both
+  // branches of the effect below.
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!isAuthenticated) {
       setConfig(defaultConfig);
+      setIsLoading(false);
       return;
     }
 
