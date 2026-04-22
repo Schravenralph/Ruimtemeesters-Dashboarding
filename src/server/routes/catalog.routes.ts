@@ -99,8 +99,11 @@ router.get('/:identifier', authenticate, async (req: Request, res: Response) => 
 
 // --- Activation routes (admin configures a CBS table for data sync) ---
 
-// POST /api/catalog/activate — activate a CBS table for data sync (admin only)
-router.post('/activate', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
+// POST /api/catalog/activate — activate a CBS table for data sync.
+// Per project invariant (data pull is global): any authenticated user can
+// request that a CBS table be pulled; activation/sync runs once globally
+// and every org gets access via the normal subscription/viewing layer.
+router.post('/activate', authenticate, async (req: Request, res: Response) => {
   const {
     identifier,       // CBS table ID, e.g. '83648NED'
     key,              // Local data source key, e.g. 'criminaliteit'
@@ -126,8 +129,69 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
     return;
   }
 
-  const tableName = `data_${key.replace(/[^a-z0-9_]/g, '_')}`;
-  const dimColumns = dimensionMappings.map(d => d.targetColumn);
+  // The activate endpoint is no longer admin-gated (per the global-pull
+  // invariant), so every identifier that flows into DDL must be validated
+  // server-side. Previously admin trust was the only thing between a
+  // malformed `targetColumn` and our CREATE TABLE statement.
+  //
+  // Postgres silently truncates identifiers at 63 chars, which would turn
+  // distinct long safeKeys into collisions after prefixing. Budget the
+  // max-length checks so the LONGEST downstream identifier still fits:
+  //   data_${safeKey}                       → 5  + safeKey
+  //   idx_${safeKey}_geo_year               → 13 + safeKey   (tightest)
+  //   ${safeColumn} or _${safeColumn}       → 1  + safeColumn (only when digit-led)
+  const PG_IDENT_MAX = 63;
+  const KEY_MAX = PG_IDENT_MAX - 'idx__geo_year'.length;  // = 50
+  const COLUMN_MAX = PG_IDENT_MAX - 1;                    // = 62
+  const baseClean = (raw: unknown, field: string, max: number): string => {
+    if (typeof raw !== 'string') throw new Error(`${field} must be a string`);
+    const cleaned = raw.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (!cleaned) throw new Error(`${field} produces an empty identifier`);
+    if (cleaned.length > max) throw new Error(`${field} exceeds ${max} chars after sanitisation`);
+    return cleaned;
+  };
+  // Keys can start with digits. They only appear in DDL prefixed by
+  // 'data_' / 'idx_' and as parameterised string values elsewhere, so
+  // leading digits are safe. Stripping them would collapse every CBS
+  // *NED table into 'ned' and silently overwrite prior activations.
+  const toSafeKey = (raw: unknown, field: string): string => baseClean(raw, field, KEY_MAX);
+  // Column names get interpolated unquoted into CREATE TABLE, so Postgres
+  // requires them to start with a letter or underscore. When a sanitised
+  // column happens to start with a digit (rare: CBS dims are PascalCase,
+  // but e.g. a '3-kind' -> '3_kind'), auto-prefix an underscore.
+  const toSafeColumn = (raw: unknown, field: string): string => {
+    const cleaned = baseClean(raw, field, COLUMN_MAX);
+    return /^[0-9]/.test(cleaned) ? `_${cleaned}` : cleaned;
+  };
+
+  let safeKey: string;
+  let safeDimMappings: Array<{ cbsDimension: string; targetColumn: string; valueMap: Record<string, string> }>;
+  try {
+    safeKey = toSafeKey(key, 'key');
+    safeDimMappings = (dimensionMappings ?? []).map((d, i) => ({
+      cbsDimension: String(d.cbsDimension ?? ''),
+      targetColumn: toSafeColumn(d.targetColumn, `dimensionMappings[${i}].targetColumn`),
+      valueMap: d.valueMap && typeof d.valueMap === 'object' ? d.valueMap : {},
+    }));
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid identifier' });
+    return;
+  }
+
+  const tableName = `data_${safeKey}`;
+  const dimColumns = safeDimMappings.map(d => d.targetColumn);
+
+  // Validate that the CBS identifier actually exists in our catalogue before
+  // spending any DDL on it. Without this, any authenticated user could POST
+  // arbitrary identifier+key pairs and create unbounded empty tables.
+  const catalogueCheck = await query<{ identifier: string }>(
+    'SELECT identifier FROM cbs_catalog WHERE identifier = $1',
+    [identifier],
+  );
+  if (catalogueCheck.rows.length === 0) {
+    res.status(404).json({ error: `Unknown CBS table identifier: ${identifier}` });
+    return;
+  }
 
   // Pull inspected metadata so we can pick sane defaults for geo level,
   // allowed sync levels, and tile generation. Activation still works when
@@ -158,13 +222,15 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
   // silently drop every row (default is gemeente+land).
   const syncAllowedLevels = geoLevels.length > 0 ? geoLevels : undefined;
 
-  // Build sync_config for the generic sync engine
+  // Build sync_config for the generic sync engine. Use the sanitised
+  // dimension mappings so the sync engine never sees untrusted
+  // targetColumn strings.
   const syncConfig = {
     cbsTable: identifier,
     targetTable: tableName,
     filter: filter || `Measure eq '${measureCode}'`,
     measureCode,
-    dimensionMappings: dimensionMappings || [],
+    dimensionMappings: safeDimMappings,
     ...(syncAllowedLevels ? { allowedLevels: syncAllowedLevels } : {}),
     ...(meta?.recommendedDefaults?.regionDim ? { regionDimension: meta.recommendedDefaults.regionDim } : {}),
   };
@@ -172,6 +238,45 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
   const client = await (await import('../db/pool.js')).getClient();
   try {
     await client.query('BEGIN');
+
+    // 0. Serialise concurrent activations on the same key via a txn-scoped
+    // advisory lock. Two requests racing with the same safeKey will queue
+    // instead of both passing a pre-txn SELECT and overwriting each other
+    // through ON CONFLICT DO UPDATE.
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended('activate:' || $1, 0))", [safeKey]);
+
+    // 0b. Now under the lock, re-check the existing row. This is the
+    // transactionally-safe version of the idempotency / key-collision guard.
+    const existing = await client.query<{ cbs_table_id: string | null }>(
+      'SELECT cbs_table_id FROM data_sources WHERE key = $1',
+      [safeKey],
+    );
+    if (existing.rows.length > 0) {
+      const existingTableId = existing.rows[0].cbs_table_id;
+      await client.query('ROLLBACK');
+      // Idempotent only when the existing row is for the SAME CBS table.
+      // A null cbs_table_id means the key is occupied by a non-CBS data
+      // source (manual/seeded) — rejecting with 409 prevents the CBS
+      // activation from implicitly claiming that key.
+      if (existingTableId !== identifier) {
+        res.status(409).json({
+          error: existingTableId
+            ? `Key "${safeKey}" is already activated for CBS table ${existingTableId}. Pick a different key or deactivate the existing source first.`
+            : `Key "${safeKey}" is already in use by a non-CBS data source. Pick a different key.`,
+        });
+        return;
+      }
+      res.json({
+        status: 'already_activated',
+        key: safeKey,
+        tableName,
+        dimensionColumns: dimColumns,
+        themeSlug: safeKey,
+        tilesCreated: 0,
+        message: `Tabel was al geactiveerd als "${safeKey}".`,
+      });
+      return;
+    }
 
     // 1. Create the data table dynamically.
     // No FK to geo_areas: CBS publishes many region granularities (PC4, CR, BU,
@@ -195,22 +300,24 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
         UNIQUE(${uniqueCols})
       )
     `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_${key}_geo_year ON ${tableName}(geo_code, year)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_${safeKey}_geo_year ON ${tableName}(geo_code, year)`);
 
-    // 2. Register in data_sources
+    // 2. Register in data_sources — use the sanitised key everywhere so
+    // the stored row can never carry an unsafe identifier for downstream
+    // consumers.
     await client.query(`
       INSERT INTO data_sources (key, name, supercategory, table_name, dimension_columns, value_column, unit, cbs_table_id, sync_config, sort_order)
       VALUES ($1, $2, $3, $4, $5, 'value', $6, $7, $8,
               (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM data_sources))
       ON CONFLICT (key) DO UPDATE SET
         name = EXCLUDED.name, sync_config = EXCLUDED.sync_config, cbs_table_id = EXCLUDED.cbs_table_id
-    `, [key, name, supercategory, tableName, dimColumns, unit, identifier, JSON.stringify(syncConfig)]);
+    `, [safeKey, name, supercategory, tableName, dimColumns, unit, identifier, JSON.stringify(syncConfig)]);
 
     // 3. Mark as activated in catalog
     await client.query(`
       UPDATE cbs_catalog SET is_activated = true, data_source_key = $1
       WHERE identifier = $2
-    `, [key, identifier]);
+    `, [safeKey, identifier]);
 
     // 4. Auto-create a theme with default tiles
     // Use slug-based upsert to get the ID back (works whether theme is new or existing)
@@ -221,7 +328,7 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
               true, $4)
       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description
       RETURNING id
-    `, [key, name, `CBS tabel ${identifier} — ${name}`, supercategory]);
+    `, [safeKey, name, `CBS tabel ${identifier} — ${name}`, supercategory]);
     const themeId = themeResult.rows[0].id;
 
     // Remove any existing tiles for this theme (re-activation replaces them)
@@ -235,7 +342,7 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
     // The metadata dimension lookup must use the CBS identifier (e.g.
     // 'SoortMisdrijf'), NOT the user-editable target column (e.g.
     // 'soort_misdrijf'). targetColumn may be renamed arbitrarily.
-    const firstCbsDim = dimensionMappings[0]?.cbsDimension ?? null;
+    const firstCbsDim = safeDimMappings[0]?.cbsDimension ?? null;
     const firstBarDimInfo = firstCbsDim
       ? meta?.dimensions?.find(d => d.name === firstCbsDim)
       : undefined;
@@ -289,7 +396,7 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
       await client.query(`
         INSERT INTO tiles (theme_id, title, chart_type, data_source, dimensions, default_geo_level, "order")
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [themeId, tile.title, tile.chartType, key, tile.dims, defaultGeoLevel, i]);
+      `, [themeId, tile.title, tile.chartType, safeKey, tile.dims, defaultGeoLevel, i]);
     }
 
     await client.query('COMMIT');
@@ -303,7 +410,7 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
       try {
         const dsResult = await query(
           'SELECT key, sync_config FROM data_sources WHERE key = $1 AND sync_config IS NOT NULL',
-          [key],
+          [safeKey],
         );
         if (dsResult.rows.length > 0) {
           const { syncGeneric } = await import('../services/cbs/cbs-generic-sync.js');
@@ -311,22 +418,22 @@ router.post('/activate', authenticate, requireRole('admin'), async (req: Request
             trigger: 'activation',
             triggeredBy: req.user?.id ?? null,
           });
-          console.log(`[Catalog] Auto-sync ${key}: ${result.rowsInserted}/${result.rowsFetched} rows in ${result.duration}ms`);
+          console.log(`[Catalog] Auto-sync ${safeKey}: ${result.rowsInserted}/${result.rowsFetched} rows in ${result.duration}ms`);
           if (result.errors.length > 0) {
-            console.error(`[Catalog] Auto-sync ${key} reported errors: ${result.errors.join(' | ')}`);
+            console.error(`[Catalog] Auto-sync ${safeKey} reported errors: ${result.errors.join(' | ')}`);
           }
         }
       } catch (err) {
-        console.error(`[Catalog] Auto-sync ${key} failed:`, err);
+        console.error(`[Catalog] Auto-sync ${safeKey} failed:`, err);
       }
     })();
 
     res.json({
       status: 'activated',
-      key,
+      key: safeKey,
       tableName,
       dimensionColumns: dimColumns,
-      themeSlug: key,
+      themeSlug: safeKey,
       tilesCreated: defaultTiles.length,
       defaultGeoLevel,
       geoLevels,

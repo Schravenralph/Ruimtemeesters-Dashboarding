@@ -163,6 +163,16 @@ export function CustomDashboardEditorPage() {
           themes={availableThemes}
           onSelect={handleAddTile}
           onClose={() => setShowPicker(false)}
+          onThemesChanged={async () => {
+            // The catalogue tab inside TilePicker just activated a new CBS
+            // table; re-fetch themes so the new system theme + its auto-
+            // generated tiles become selectable without a page reload.
+            // Return the fresh array so callers don't have to rely on the
+            // re-rendered prop (closure-capture pitfall).
+            const { themes } = await listThemes();
+            setAvailableThemes(themes);
+            return themes;
+          }}
         />
       )}
     </div>
