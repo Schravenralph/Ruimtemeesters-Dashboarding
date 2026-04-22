@@ -52,11 +52,12 @@ export function SettingsPage() {
         {/* Dashboard Defaults */}
         <Card>
           <CardHeader title="Dashboard standaardwaarden" />
-          <div className="space-y-3">
+          <div className={`space-y-3 ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}>
             <Select
               label="Standaard thema"
               value={config.defaultTheme}
               onChange={(e) => updateConfig({ defaultTheme: e.target.value })}
+              disabled={isLoading}
               options={[
                 { value: '', label: '— Kies een thema —' },
                 ...themes.map(t => ({ value: t.slug, label: t.name })),
@@ -66,6 +67,7 @@ export function SettingsPage() {
               label="Standaard jaar"
               value={String(config.defaultYear)}
               onChange={(e) => updateConfig({ defaultYear: parseInt(e.target.value, 10) })}
+              disabled={isLoading}
               options={YEAR_OPTIONS.map(y => ({ value: String(y), label: String(y) }))}
             />
           </div>
@@ -74,12 +76,13 @@ export function SettingsPage() {
         {/* Display */}
         <Card>
           <CardHeader title="Weergave" />
-          <div className="space-y-3">
+          <div className={`space-y-3 ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}>
             <label className="flex items-center justify-between py-2">
               <span className="text-sm text-gray-700">Compacte getallen (1.5M i.p.v. 1.500.000)</span>
               <input
                 type="checkbox"
                 checked={config.compactNumbers}
+                disabled={isLoading}
                 onChange={(e) => updateConfig({ compactNumbers: e.target.checked })}
                 className="h-4 w-4 rounded border-gray-300 text-blue-600"
               />
@@ -89,6 +92,7 @@ export function SettingsPage() {
               <input
                 type="checkbox"
                 checked={config.chartAnimations}
+                disabled={isLoading}
                 onChange={(e) => updateConfig({ chartAnimations: e.target.checked })}
                 className="h-4 w-4 rounded border-gray-300 text-blue-600"
               />
@@ -98,6 +102,7 @@ export function SettingsPage() {
               <input
                 type="checkbox"
                 checked={config.autoRefresh}
+                disabled={isLoading}
                 onChange={(e) => updateConfig({ autoRefresh: e.target.checked })}
                 className="h-4 w-4 rounded border-gray-300 text-blue-600"
               />
