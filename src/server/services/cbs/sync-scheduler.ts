@@ -9,7 +9,7 @@
 
 import cron, { type ScheduledTask } from 'node-cron';
 import { query } from '../../db/pool.js';
-import { syncGeneric, classifySyncStatus, type GenericSyncConfig } from './cbs-generic-sync.js';
+import { syncGeneric, classifySyncStatus, type GenericSyncConfig, type SubsetFilters } from './cbs-generic-sync.js';
 import { notifySyncFinished, type NotifyOn } from './sync-notifier.js';
 
 interface ScheduleRow {
@@ -18,6 +18,7 @@ interface ScheduleRow {
   cron_expression: string;
   timezone: string;
   year_filter: number | null;
+  subset_filters: SubsetFilters | null;
   is_enabled: boolean;
   notify_email: boolean;
   notify_in_app: boolean;
@@ -33,6 +34,7 @@ let started = false;
 async function loadSchedules(): Promise<ScheduleRow[]> {
   const r = await query(`
     SELECT s.id, s.data_source_key, s.cron_expression, s.timezone, s.year_filter,
+           s.subset_filters,
            s.is_enabled, s.notify_email, s.notify_in_app, s.notify_on, s.created_by,
            ds.name AS source_name, ds.sync_config
     FROM sync_schedules s
@@ -51,6 +53,7 @@ async function runScheduled(schedule: ScheduleRow): Promise<void> {
 
   const result = await syncGeneric(schedule.data_source_key, schedule.sync_config, {
     yearFilter: schedule.year_filter ?? undefined,
+    subsetFilters: schedule.subset_filters ?? undefined,
     trigger: 'scheduled',
     triggeredBy: schedule.created_by,
   });
@@ -151,6 +154,7 @@ export function stopSyncScheduler(): void {
 export async function runScheduleNow(scheduleId: string): Promise<void> {
   const r = await query(`
     SELECT s.id, s.data_source_key, s.cron_expression, s.timezone, s.year_filter,
+           s.subset_filters,
            s.is_enabled, s.notify_email, s.notify_in_app, s.notify_on, s.created_by,
            ds.name AS source_name, ds.sync_config
     FROM sync_schedules s

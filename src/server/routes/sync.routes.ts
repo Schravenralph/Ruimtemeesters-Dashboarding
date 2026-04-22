@@ -189,6 +189,7 @@ router.get('/forecast/status', authenticate, requireRole('admin'), async (_req: 
 router.get('/schedules', authenticate, requireRole('admin'), async (_req: Request, res: Response) => {
   const result = await query(`
     SELECT s.id, s.data_source_key, s.cron_expression, s.timezone, s.year_filter,
+           s.subset_filters,
            s.is_enabled, s.notify_email, s.notify_in_app, s.notify_on,
            s.last_run_at, s.last_run_status, s.created_at, s.updated_at,
            ds.name AS source_name
@@ -199,14 +200,82 @@ router.get('/schedules', authenticate, requireRole('admin'), async (_req: Reques
   res.json({ schedules: result.rows });
 });
 
+/**
+ * Shape-validate a subset_filters payload from the client. Returns the
+ * sanitised object (with only well-formed fields), or null to clear.
+ * Rejects structurally invalid input instead of silently persisting garbage.
+ */
+function sanitiseSubsetFilters(raw: unknown): Record<string, unknown> | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('subsetFilters must be an object');
+  }
+  const input = raw as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+
+  if (input.yearRange !== undefined && input.yearRange !== null) {
+    if (typeof input.yearRange !== 'object' || Array.isArray(input.yearRange)) {
+      throw new Error('subsetFilters.yearRange must be an object');
+    }
+    const yr = input.yearRange as Record<string, unknown>;
+    const clean: Record<string, number> = {};
+    if (yr.min != null) {
+      const n = Number(yr.min);
+      if (!Number.isFinite(n) || n < 1900 || n > 2100) throw new Error('yearRange.min out of range');
+      clean.min = Math.floor(n);
+    }
+    if (yr.max != null) {
+      const n = Number(yr.max);
+      if (!Number.isFinite(n) || n < 1900 || n > 2100) throw new Error('yearRange.max out of range');
+      clean.max = Math.floor(n);
+    }
+    if (clean.min != null && clean.max != null && clean.min > clean.max) {
+      throw new Error('yearRange.min > yearRange.max');
+    }
+    if (clean.min != null || clean.max != null) out.yearRange = clean;
+  }
+
+  if (input.regionLevels !== undefined && input.regionLevels !== null) {
+    if (!Array.isArray(input.regionLevels)) throw new Error('regionLevels must be an array');
+    const VALID_LEVELS = new Set([
+      'land', 'landsdeel', 'provincie', 'corop',
+      'gemeente', 'wijk', 'buurt', 'postcode4', 'postcode6',
+    ]);
+    const lvls = input.regionLevels
+      .map(p => String(p).trim())
+      .filter(p => p.length > 0);
+    for (const lvl of lvls) {
+      if (!VALID_LEVELS.has(lvl)) throw new Error(`regionLevels contains unknown level: "${lvl}"`);
+    }
+    // Dedup via Set round-trip so UI duplicates don't pollute the stored blob.
+    if (lvls.length > 0) out.regionLevels = Array.from(new Set(lvls));
+  }
+
+  if (input.dimensionValues !== undefined && input.dimensionValues !== null) {
+    if (typeof input.dimensionValues !== 'object' || Array.isArray(input.dimensionValues)) {
+      throw new Error('dimensionValues must be an object');
+    }
+    const dv: Record<string, string[]> = {};
+    for (const [dim, values] of Object.entries(input.dimensionValues as Record<string, unknown>)) {
+      if (!Array.isArray(values)) throw new Error(`dimensionValues.${dim} must be an array`);
+      const clean = values.map(v => String(v).trim()).filter(v => v.length > 0);
+      if (clean.length > 0) dv[dim] = clean;
+    }
+    if (Object.keys(dv).length > 0) out.dimensionValues = dv;
+  }
+
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 // POST /api/sync/schedules — create a schedule
 router.post('/schedules', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
   const {
-    dataSourceKey, cronExpression, timezone, yearFilter,
+    dataSourceKey, cronExpression, timezone, yearFilter, subsetFilters,
     notifyEmail, notifyInApp, notifyOn, isEnabled,
   } = req.body as {
     dataSourceKey: string; cronExpression: string; timezone?: string;
-    yearFilter?: number | null; notifyEmail?: boolean; notifyInApp?: boolean;
+    yearFilter?: number | null; subsetFilters?: unknown;
+    notifyEmail?: boolean; notifyInApp?: boolean;
     notifyOn?: 'always' | 'failure' | 'never'; isEnabled?: boolean;
   };
 
@@ -216,6 +285,13 @@ router.post('/schedules', authenticate, requireRole('admin'), async (req: Reques
   }
   if (!cron.validate(cronExpression)) {
     res.status(400).json({ error: `Invalid cron expression: "${cronExpression}"` });
+    return;
+  }
+  let cleanSubset: Record<string, unknown> | null = null;
+  try {
+    cleanSubset = sanitiseSubsetFilters(subsetFilters);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid subsetFilters' });
     return;
   }
   // Ensure the data source exists and has a sync_config.
@@ -234,12 +310,13 @@ router.post('/schedules', authenticate, requireRole('admin'), async (req: Reques
 
   const result = await query(
     `INSERT INTO sync_schedules
-       (data_source_key, cron_expression, timezone, year_filter,
+       (data_source_key, cron_expression, timezone, year_filter, subset_filters,
         notify_email, notify_in_app, notify_on, is_enabled, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      ON CONFLICT (data_source_key, cron_expression) DO UPDATE SET
        timezone = EXCLUDED.timezone,
        year_filter = EXCLUDED.year_filter,
+       subset_filters = EXCLUDED.subset_filters,
        notify_email = EXCLUDED.notify_email,
        notify_in_app = EXCLUDED.notify_in_app,
        notify_on = EXCLUDED.notify_on,
@@ -248,7 +325,7 @@ router.post('/schedules', authenticate, requireRole('admin'), async (req: Reques
      RETURNING *`,
     [
       dataSourceKey, cronExpression, timezone || 'Europe/Amsterdam',
-      yearFilter ?? null,
+      yearFilter ?? null, cleanSubset,
       notifyEmail ?? true, notifyInApp ?? true, notifyOn ?? 'failure',
       isEnabled ?? true, req.user?.id ?? null,
     ],
@@ -285,6 +362,19 @@ router.patch('/schedules/:id', authenticate, requireRole('admin'), async (req: R
     if (body[apiKey] !== undefined) {
       params.push(body[apiKey]);
       sets.push(`${col} = $${params.length}`);
+    }
+  }
+  // subsetFilters is handled separately so we can sanitise it before
+  // persisting (unlike the other fields, it's a JSONB blob that we own the
+  // shape of; clients should never write raw arbitrary JSON into it).
+  if (body.subsetFilters !== undefined) {
+    try {
+      const cleaned = sanitiseSubsetFilters(body.subsetFilters);
+      params.push(cleaned);
+      sets.push(`subset_filters = $${params.length}`);
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid subsetFilters' });
+      return;
     }
   }
   if (sets.length === 0) {
