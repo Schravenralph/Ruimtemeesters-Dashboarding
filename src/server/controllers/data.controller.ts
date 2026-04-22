@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
 import { safeIdent } from '../db/sql-utils.js';
 import { DataQueryParams } from '../../shared/api/contracts.js';
-import { getDataSource } from '../services/data-source-registry.js';
+import { getDataSource, getDataSources } from '../services/data-source-registry.js';
 
 // Tables that have confidence_lower/confidence_upper columns (migration 011)
 const TABLES_WITH_CONFIDENCE = ['data_bevolking', 'data_huishoudens', 'data_woningen', 'data_woningtekort'];
@@ -326,6 +326,19 @@ export async function getAvailableYears(req: Request, res: Response): Promise<vo
   );
 
   res.json({ years: result.rows.map(r => r.year) });
+}
+
+export async function listSources(_req: Request, res: Response): Promise<void> {
+  const sources = await getDataSources();
+  res.json({
+    sources: Object.values(sources).map(s => ({
+      key: s.key,
+      name: s.name,
+      supercategory: s.supercategory,
+      unit: s.unit,
+      cbsTableId: s.cbsTableId,
+    })),
+  });
 }
 
 export async function getDimensions(req: Request, res: Response): Promise<void> {

@@ -1,6 +1,6 @@
 import { Router, type Router as RouterType } from 'express';
 import type { Request, Response } from 'express';
-import { queryData, queryTimeSeries, getAvailableYears, getDimensions } from '../controllers/data.controller.js';
+import { queryData, queryTimeSeries, getAvailableYears, getDimensions, listSources } from '../controllers/data.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { checkDataAccess } from '../middleware/abac-data.js';
 import { query } from '../db/pool.js';
@@ -9,6 +9,7 @@ const router: RouterType = Router();
 
 router.get('/query', authenticate, checkDataAccess, queryData);
 router.get('/timeseries', authenticate, checkDataAccess, queryTimeSeries);
+router.get('/sources', authenticate, listSources);
 router.get('/years/:source', authenticate, checkDataAccess, getAvailableYears);
 router.get('/dimensions/:source', authenticate, checkDataAccess, getDimensions);
 

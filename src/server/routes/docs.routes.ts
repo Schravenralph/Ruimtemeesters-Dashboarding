@@ -20,6 +20,7 @@ router.get('/', (_req: Request, res: Response) => {
       },
       data: {
         'GET /api/data/query': 'Query data with filters (source, geoCode, year, dimension)',
+        'GET /api/data/sources': 'List all data sources (key, name, supercategory, unit, cbsTableId)',
         'GET /api/data/years/:source': 'Get available years for a data source',
         'GET /api/data/dimensions/:source': 'Get available dimensions for a data source',
       },
