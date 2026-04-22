@@ -1,33 +1,92 @@
-import { useState } from 'react';
-import { Download, FileText, Table, FileSpreadsheet } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Download, FileText, Table, AlertTriangle } from 'lucide-react';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import { useToast } from '../components/ui/Toast';
 import { useFilters } from '../contexts/FilterContext';
-
-const dataSources = [
-  { value: 'bevolking', label: 'Bevolking', description: 'Bevolkingsgegevens per leeftijdsgroep en geslacht (incl. TSA prognose)', category: 'Wonen' },
-  { value: 'huishoudens', label: 'Huishoudens', description: 'Huishoudenssamenstelling per type', category: 'Wonen' },
-  { value: 'woningen', label: 'Woningen', description: 'Woningvoorraad naar eigendom en type', category: 'Wonen' },
-  { value: 'woningtekort', label: 'Woningtekort', description: 'Woningtekort, vraag en aanbod', category: 'Wonen' },
-  { value: 'energie', label: 'Energie', description: 'Energieverbruik per sector en brandstof (incl. TSA prognose)', category: 'Duurzaamheid' },
-  { value: 'hernieuwbaar', label: 'Hernieuwbare Energie', description: 'Capaciteit hernieuwbare energiebronnen (incl. TSA prognose)', category: 'Duurzaamheid' },
-  { value: 'afval', label: 'Afval & Circulair', description: 'Afvalproductie en recycling per type (incl. TSA prognose)', category: 'Duurzaamheid' },
-];
+import {
+  listDataSources,
+  getAvailableYears,
+  type DataSourceSummary,
+} from '../services/api/data';
 
 const formats = [
   { value: 'csv', label: 'CSV', icon: FileText, description: 'Komma-gescheiden waarden (puntkomma voor NL)' },
   { value: 'json', label: 'JSON', icon: Table, description: 'JavaScript Object Notation' },
 ];
 
+const SUPERCATEGORY_LABELS: Record<string, string> = {
+  wonen: 'Wonen',
+  duurzaamheid: 'Duurzaamheid',
+  economie: 'Economie',
+  mobiliteit: 'Mobiliteit',
+  gezondheid: 'Gezondheid',
+};
+
 export function DataDownloadPage() {
   const { filters } = useFilters();
   const { showToast } = useToast();
+  const [sources, setSources] = useState<DataSourceSummary[] | null>(null);
+  const [sourcesError, setSourcesError] = useState(false);
   const [selectedSource, setSelectedSource] = useState('bevolking');
   const [selectedFormat, setSelectedFormat] = useState('csv');
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [yearsLoaded, setYearsLoaded] = useState(false);
   const [year, setYear] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
+
+  useEffect(() => {
+    listDataSources()
+      .then(r => {
+        setSources(r.sources);
+        setSourcesError(false);
+        if (r.sources.length > 0 && !r.sources.some(s => s.key === selectedSource)) {
+          setSelectedSource(r.sources[0]!.key);
+        }
+      })
+      .catch(() => {
+        setSources([]);
+        setSourcesError(true);
+      });
+    // selectedSource intentionally excluded — we only want to reconcile once on first load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!selectedSource) return;
+    let cancelled = false;
+    setYearsLoaded(false);
+    getAvailableYears(selectedSource)
+      .then(r => {
+        if (cancelled) return;
+        const ys = [...r.years].sort((a, b) => a - b);
+        setAvailableYears(ys);
+        setYearsLoaded(true);
+        if (year && !ys.includes(Number(year))) setYear('');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAvailableYears([]);
+        setYearsLoaded(true);
+      });
+    return () => { cancelled = true; };
+    // year intentionally excluded — we only re-validate against new lists here
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSource]);
+
+  const grouped = useMemo(() => {
+    if (!sources) return [] as [string, DataSourceSummary[]][];
+    const order = ['wonen', 'duurzaamheid', 'economie', 'mobiliteit', 'gezondheid'];
+    const bucket: Record<string, DataSourceSummary[]> = {};
+    for (const s of sources) {
+      (bucket[s.supercategory] ??= []).push(s);
+    }
+    const keys = Object.keys(bucket).sort(
+      (a, b) => (order.indexOf(a) < 0 ? 99 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 99 : order.indexOf(b)),
+    );
+    return keys.map(k => [k, bucket[k]!] as [string, DataSourceSummary[]]);
+  }, [sources]);
 
   async function handleDownload() {
     setIsDownloading(true);
@@ -71,15 +130,30 @@ export function DataDownloadPage() {
       {/* Source Selection */}
       <Card className="mb-4">
         <CardHeader title="Databron" subtitle="Selecteer de dataset die je wilt downloaden" />
-        {['Wonen', 'Duurzaamheid'].map(cat => (
+        {sourcesError && (
+          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 mb-3">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <p className="text-sm text-red-700">Databronnen konden niet worden geladen.</p>
+          </div>
+        )}
+        {!sources && !sourcesError && (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-16 rounded-lg bg-gray-100 animate-pulse" />
+            ))}
+          </div>
+        )}
+        {grouped.map(([cat, list]) => (
           <div key={cat} className="mb-3">
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1.5">{cat}</p>
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1.5">
+              {SUPERCATEGORY_LABELS[cat] ?? cat}
+            </p>
             <div className="space-y-2">
-              {dataSources.filter(s => s.category === cat).map(source => (
+              {list.map(source => (
                 <label
-                  key={source.value}
+                  key={source.key}
                   className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                    selectedSource === source.value
+                    selectedSource === source.key
                       ? 'border-blue-300 bg-blue-50'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
@@ -87,14 +161,17 @@ export function DataDownloadPage() {
                   <input
                     type="radio"
                     name="source"
-                    value={source.value}
-                    checked={selectedSource === source.value}
+                    value={source.key}
+                    checked={selectedSource === source.key}
                     onChange={(e) => setSelectedSource(e.target.value)}
                     className="mt-0.5"
                   />
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{source.label}</p>
-                    <p className="text-xs text-gray-500">{source.description}</p>
+                    <p className="text-sm font-medium text-gray-900">{source.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {source.unit !== 'aantal' && source.unit !== '' ? `Eenheid: ${source.unit}` : 'Kerncijfers'}
+                      {source.cbsTableId && ` · CBS ${source.cbsTableId}`}
+                    </p>
                   </div>
                 </label>
               ))}
@@ -107,18 +184,27 @@ export function DataDownloadPage() {
       <Card className="mb-4">
         <CardHeader title="Filters" subtitle="Optioneel: beperk de export" />
         <div className="flex gap-4">
-          <Select
-            label="Jaar (optioneel)"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            options={[
-              { value: '', label: 'Alle jaren' },
-              ...Array.from({ length: 21 }, (_, i) => ({
-                value: String(2020 + i),
-                label: String(2020 + i),
-              })),
-            ]}
-          />
+          {!yearsLoaded ? (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-700">Jaar (optioneel)</label>
+              <div className="h-[38px] w-36 rounded-lg bg-gray-100 animate-pulse" />
+            </div>
+          ) : availableYears.length > 0 ? (
+            <Select
+              label="Jaar (optioneel)"
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+              options={[
+                { value: '', label: 'Alle jaren' },
+                ...availableYears.map(y => ({
+                  value: String(y),
+                  label: y > new Date().getFullYear() ? `${y} (prognose)` : String(y),
+                })),
+              ]}
+            />
+          ) : (
+            <p className="text-sm text-gray-500">Geen jaren beschikbaar voor deze bron.</p>
+          )}
         </div>
         {filters.geoCode !== 'NL' && (
           <p className="text-xs text-blue-600 mt-2">
@@ -161,7 +247,12 @@ export function DataDownloadPage() {
       </Card>
 
       {/* Download Button */}
-      <Button onClick={handleDownload} disabled={isDownloading} size="lg" className="w-full">
+      <Button
+        onClick={handleDownload}
+        disabled={isDownloading || !sources || sources.length === 0}
+        size="lg"
+        className="w-full"
+      >
         <Download className="h-5 w-5" />
         {isDownloading ? 'Downloaden...' : `${selectedSource} downloaden als ${selectedFormat.toUpperCase()}`}
       </Button>

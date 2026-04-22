@@ -29,6 +29,18 @@ export async function getAvailableYears(source: string): Promise<{ years: number
   return api.get(`/data/years/${source}`);
 }
 
+export interface DataSourceSummary {
+  key: string;
+  name: string;
+  supercategory: string;
+  unit: string;
+  cbsTableId: string | null;
+}
+
+export async function listDataSources(): Promise<{ sources: DataSourceSummary[] }> {
+  return api.get('/data/sources');
+}
+
 export async function getDimensions(source: string): Promise<{ dimensions: Dimension[] }> {
   return api.get(`/data/dimensions/${source}`);
 }
