@@ -206,18 +206,24 @@ export async function syncGeneric(
       return m.size > 0 ? m : null;
     })();
 
+    // Only tighten to JJ00 when the new yearRange filter is in play.
+    // Rationale: yearRange uses ge/lt comparisons that would pull MM rows
+    // alongside JJ rows, and they aggregate into the same year bucket →
+    // double-counting on dual-frequency tables. Legacy sync paths (no
+    // year constraint, or the exact-match yearFilter) don't have this
+    // failure mode, so keep them permissive — some CBS tables publish
+    // only monthly and legacy consumers rely on summing them.
+    const restrictToYearly = options.subsetFilters?.yearRange != null;
+
     for (const obs of observations) {
       if (obs.Value === null || obs.Value === undefined) continue;
 
-      // Only accept yearly observations. The target schema is annualised
-      // (year INTEGER) and the aggregation key below only carries year —
-      // summing monthly/quarterly rows into the same bucket would
-      // double-count. Skipping them silently at this layer matches what
-      // the legacy single-year exact-match filter achieved.
       const perioden = obs.Perioden as string | undefined;
-      if (!perioden || !/JJ00$/.test(perioden)) { nonYearlySkipCount++; continue; }
+      if (restrictToYearly && (!perioden || !/JJ00$/.test(perioden))) {
+        nonYearlySkipCount++; continue;
+      }
 
-      const year = parseCbsPeriod(perioden);
+      const year = parseCbsPeriod(perioden as string);
       const region = noRegion
         ? { code: 'NL', level: 'land' }
         : parseCbsRegion(obs[regionDim] as string | undefined);
