@@ -133,15 +133,19 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
   // invariant), so every identifier that flows into DDL must be validated
   // server-side. Previously admin trust was the only thing between a
   // malformed `targetColumn` and our CREATE TABLE statement.
-  const IDENT_MAX_LEN = 50;
+  //
+  // Leading digits are PERMITTED. CBS table IDs like '83648NED' produce a
+  // key '83648ned' — DDL always prefixes it ('data_', 'idx_') before it
+  // appears unquoted, so leading digits are safe. Stripping them would
+  // collapse every *NED table into the same 'ned' key and silently
+  // overwrite prior activations.
+  const IDENT_MAX_LEN = 63; // Postgres identifier cap
   const toSafeIdent = (raw: string, field: string): string => {
     if (typeof raw !== 'string') throw new Error(`${field} must be a string`);
-    // Lowercase, replace non-[a-z0-9_] with '_', and strip a leading non-
-    // alpha char if the result would otherwise start with a digit/underscore.
-    const cleaned = raw.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^[0-9]+/, '');
+    const cleaned = raw.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     if (!cleaned) throw new Error(`${field} produces an empty identifier`);
     if (cleaned.length > IDENT_MAX_LEN) throw new Error(`${field} exceeds ${IDENT_MAX_LEN} chars`);
-    if (!/^[a-z_][a-z0-9_]*$/.test(cleaned)) throw new Error(`${field} is not a valid SQL identifier`);
+    if (!/^[a-z0-9_]+$/.test(cleaned)) throw new Error(`${field} is not a valid SQL identifier`);
     return cleaned;
   };
 
@@ -161,6 +165,36 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
 
   const tableName = `data_${safeKey}`;
   const dimColumns = safeDimMappings.map(d => d.targetColumn);
+
+  // Idempotency guard. Two scenarios this prevents:
+  //   (a) Same CBS table activated twice — no-op, return existing slug
+  //       instead of re-running DDL + tile DELETE/INSERT.
+  //   (b) Key collision — someone tries to activate table X but key `foo`
+  //       is already bound to table Y. Reject with 409 so we don't
+  //       overwrite Y's data_source and tiles.
+  const existing = await query<{ cbs_table_id: string | null }>(
+    'SELECT cbs_table_id FROM data_sources WHERE key = $1',
+    [safeKey],
+  );
+  if (existing.rows.length > 0) {
+    const existingTableId = existing.rows[0].cbs_table_id;
+    if (existingTableId && existingTableId !== identifier) {
+      res.status(409).json({
+        error: `Key "${safeKey}" is already activated for CBS table ${existingTableId}. Pick a different key or deactivate the existing source first.`,
+      });
+      return;
+    }
+    res.json({
+      status: 'already_activated',
+      key: safeKey,
+      tableName,
+      dimensionColumns: dimColumns,
+      themeSlug: safeKey,
+      tilesCreated: 0,
+      message: `Tabel was al geactiveerd als "${safeKey}".`,
+    });
+    return;
+  }
 
   // Pull inspected metadata so we can pick sane defaults for geo level,
   // allowed sync levels, and tile generation. Activation still works when
