@@ -55,6 +55,20 @@ export function ReportPage() {
       .catch(() => setYears([]));
   }, [source]);
 
+  // If year ends up equal to compareYear (degenerate same-year compare),
+  // reactively pick a neighboring year instead. Two synchronous setter
+  // calls can't do this safely: FilterContext's updater closes over the
+  // current presentation snapshot, so the second call would overwrite
+  // the first.
+  useEffect(() => {
+    if (compareYear === null || compareYear === undefined) return;
+    if (compareYear !== currentYear) return;
+    if (years.length < 2) return;
+    const idx = years.indexOf(currentYear);
+    const neighbor = years[idx - 1] ?? years[idx + 1];
+    setCompareYear(neighbor ?? null);
+  }, [currentYear, compareYear, years, setCompareYear]);
+
   function loadReport() {
     setIsLoading(true);
     api.get<Report>(`/reports/${source}`, {
@@ -138,15 +152,7 @@ export function ReportPage() {
           <Select
             label="Jaar"
             value={String(currentYear)}
-            onChange={(e) => {
-              const y = parseInt(e.target.value, 10);
-              setYear(y);
-              // Avoid year === compareYear (degenerate same-year compare).
-              if (compareYear === y) {
-                const fallback = years.find(other => other !== y);
-                setCompareYear(fallback ?? null);
-              }
-            }}
+            onChange={(e) => setYear(parseInt(e.target.value, 10))}
             options={years.map(y => ({
               value: String(y),
               label: y > new Date().getFullYear() ? `${y} (prognose)` : String(y),
@@ -161,8 +167,14 @@ export function ReportPage() {
               if (isComparing) {
                 setCompareYear(null);
               } else {
-                const fallback = years.find(y => y !== currentYear);
-                if (fallback !== undefined) setCompareYear(fallback);
+                // Default compare target = year immediately before currentYear
+                // (or after, if currentYear is the earliest available).
+                const idx = years.indexOf(currentYear);
+                const neighbor =
+                  (idx > 0 ? years[idx - 1] : undefined) ??
+                  (idx >= 0 && idx < years.length - 1 ? years[idx + 1] : undefined) ??
+                  years.find(y => y !== currentYear);
+                if (neighbor !== undefined) setCompareYear(neighbor);
               }
             }}
             disabled={years.length < 2}
