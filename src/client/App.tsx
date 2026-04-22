@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ClerkProvider, Show } from '@clerk/react';
 import { AuthProvider } from './contexts/AuthContext';
-import { AppConfigProvider } from './contexts/AppConfigContext';
+import { AppConfigProvider, useAppConfig } from './contexts/AppConfigContext';
 import { ThemeProvider, useThemes } from './contexts/ThemeContext';
 import { PresentationProvider } from './contexts/PresentationContext';
 import { FilterProvider } from './contexts/FilterContext';
@@ -45,9 +45,15 @@ function NotSignedIn() {
 }
 
 function DashboardRedirect() {
-  const { themes, isLoading } = useThemes();
+  const { themes, isLoading: themesLoading } = useThemes();
+  const { config, isLoading: configLoading } = useAppConfig();
 
-  if (isLoading) return <LoadingOverlay message="Laden..." />;
+  if (themesLoading || configLoading) return <LoadingOverlay message="Laden..." />;
+
+  // User's saved default theme takes precedence when it still exists.
+  if (config.defaultTheme && themes.some(t => t.slug === config.defaultTheme)) {
+    return <Navigate to={`/dashboard/${config.defaultTheme}`} replace />;
+  }
 
   const overview = themes.find(t => t.isOverview);
   const fallback = overview?.slug || themes[0]?.slug || 'overzicht';
