@@ -367,7 +367,9 @@ export function SyncScheduleManager() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {schedules.map((s) => (
+              {schedules.map((s) => {
+                const subsetSummary = s.subset_filters ? summariseSubsetFilters(s.subset_filters) : null;
+                return (
                 <tr key={s.id} className={s.is_enabled ? '' : 'bg-gray-50 opacity-50'}>
                   <td className="px-3 py-2">
                     <div className="font-medium text-gray-900">{s.source_name}</div>
@@ -376,9 +378,9 @@ export function SyncScheduleManager() {
                   <td className="px-3 py-2 font-mono text-xs">
                     {s.cron_expression}
                     {s.year_filter != null && <span className="ml-1 text-gray-400">· {s.year_filter}</span>}
-                    {s.subset_filters && summariseSubsetFilters(s.subset_filters) && (
+                    {subsetSummary && (
                       <div className="mt-1 text-[10px] text-purple-700 bg-purple-50 inline-block px-1.5 py-0.5 rounded">
-                        {summariseSubsetFilters(s.subset_filters)}
+                        {subsetSummary}
                       </div>
                     )}
                   </td>
@@ -421,7 +423,8 @@ export function SyncScheduleManager() {
                     </button>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
