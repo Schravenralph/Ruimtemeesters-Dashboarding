@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { TileConfig, LayoutItem } from '@shared/api/contracts';
+import type { TileConfig, LayoutItem, DataPoint } from '@shared/api/contracts';
 import { DashboardTile } from './DashboardTile';
 import { exportTile } from '../../utils/export';
 
@@ -55,10 +55,10 @@ export function TileGrid({ tiles, layout, editable = false, onLayoutChange, onRe
     setDraggedTile(null);
   }, [editable, draggedTile, effectiveLayout, onLayoutChange]);
 
-  const handleExport = useCallback((tileId: string, format: string) => {
+  const handleExport = useCallback((tileId: string, format: string, data: DataPoint[]) => {
     const tile = tiles.find(t => t.id === tileId);
     if (tile) {
-      exportTile(tile, format);
+      exportTile(tile, format, data);
     }
   }, [tiles]);
 
@@ -92,7 +92,7 @@ export function TileGrid({ tiles, layout, editable = false, onLayoutChange, onRe
             <DashboardTile
               tile={tile}
               onRemove={editable ? () => onRemoveTile?.(tile.id) : undefined}
-              onExport={(format) => handleExport(tile.id, format)}
+              onExport={(format, data) => handleExport(tile.id, format, data)}
             />
           </div>
         );

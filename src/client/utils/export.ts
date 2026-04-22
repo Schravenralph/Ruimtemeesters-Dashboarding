@@ -1,9 +1,9 @@
-import type { TileConfig } from '@shared/api/contracts';
+import type { TileConfig, DataPoint } from '@shared/api/contracts';
 
-export function exportTile(tile: TileConfig, format: string) {
+export function exportTile(tile: TileConfig, format: string, data?: DataPoint[]) {
   switch (format) {
     case 'csv':
-      exportAsCsv(tile);
+      exportAsCsv(tile, data);
       break;
     case 'png':
       exportAsPng(tile);
@@ -12,38 +12,58 @@ export function exportTile(tile: TileConfig, format: string) {
       exportAsPdf(tile);
       break;
     case 'excel':
-      exportAsExcel(tile);
+      exportAsExcel(tile, data);
       break;
     default:
       console.warn(`Unknown export format: ${format}`);
   }
 }
 
-async function fetchTileData(tile: TileConfig) {
-  const res = await fetch(`/api/data/query?source=${tile.dataSource}`);
-  const { data } = await res.json();
-  return data as Record<string, unknown>[] | undefined;
+function toExportRows(data?: DataPoint[]): Record<string, unknown>[] {
+  if (!data || data.length === 0) return [];
+  const hasDimension = data.some(d => d.dimensionValue !== undefined && d.dimensionValue !== null);
+  const hasConfidence = data.some(
+    d =>
+      (d.confidenceLower !== undefined && d.confidenceLower !== null) ||
+      (d.confidenceUpper !== undefined && d.confidenceUpper !== null),
+  );
+  return data.map(d => {
+    const row: Record<string, unknown> = {
+      year: d.year,
+      geo_code: d.geoCode,
+      geo_name: d.geoName,
+      value: d.value,
+      source: d.source ?? '',
+    };
+    if (hasDimension) {
+      row.dimension = d.dimensionValue ?? '';
+    }
+    if (hasConfidence) {
+      row.confidence_lower = d.confidenceLower ?? '';
+      row.confidence_upper = d.confidenceUpper ?? '';
+    }
+    return row;
+  });
 }
 
-function exportAsCsv(tile: TileConfig) {
-  fetchTileData(tile).then(data => {
-    if (!data || data.length === 0) return;
+function exportAsCsv(tile: TileConfig, data?: DataPoint[]) {
+  const rows = toExportRows(data);
+  if (rows.length === 0) return;
 
-    const headers = Object.keys(data[0]);
-    const csv = [
-      headers.join(';'),
-      ...data.map(row =>
-        headers.map(h => {
-          const v = row[h];
-          if (v === null || v === undefined) return '';
-          const str = String(v).replace(/"/g, '""');
-          return str.includes(';') || str.includes('"') || str.includes('\n') ? `"${str}"` : str;
-        }).join(';')
-      ),
-    ].join('\n');
+  const headers = Object.keys(rows[0]!);
+  const csv = [
+    headers.join(';'),
+    ...rows.map(row =>
+      headers.map(h => {
+        const v = row[h];
+        if (v === null || v === undefined) return '';
+        const str = String(v).replace(/"/g, '""');
+        return str.includes(';') || str.includes('"') || str.includes('\n') ? `"${str}"` : str;
+      }).join(';'),
+    ),
+  ].join('\n');
 
-    downloadFile(csv, `${tile.title}.csv`, 'text/csv;charset=utf-8');
-  });
+  downloadFile(csv, `${tile.title}.csv`, 'text/csv;charset=utf-8');
 }
 
 async function exportAsPng(tile: TileConfig) {
@@ -95,12 +115,12 @@ async function exportAsPdf(tile: TileConfig) {
   doc.save(`${tile.title}.pdf`);
 }
 
-async function exportAsExcel(tile: TileConfig) {
-  const data = await fetchTileData(tile);
-  if (!data || data.length === 0) return;
+async function exportAsExcel(tile: TileConfig, data?: DataPoint[]) {
+  const rows = toExportRows(data);
+  if (rows.length === 0) return;
 
   const XLSX = await import('xlsx');
-  const ws = XLSX.utils.json_to_sheet(data);
+  const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   const sheetName = tile.title.replace(/[\\/*?:\[\]]/g, '-').slice(0, 31);
   XLSX.utils.book_append_sheet(wb, ws, sheetName);

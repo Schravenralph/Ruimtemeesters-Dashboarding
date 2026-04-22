@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Download, Maximize2, MoreVertical, X } from 'lucide-react';
-import type { TileConfig, ChartType } from '@shared/api/contracts';
+import type { TileConfig, ChartType, DataPoint } from '@shared/api/contracts';
 import { ChartRenderer } from '../charts/ChartRenderer';
 import { useDataQuery } from '../../hooks/useDataQuery';
 import { useTimeSeriesQuery } from '../../hooks/useTimeSeriesQuery';
@@ -9,7 +9,7 @@ import { useFilters } from '../../contexts/FilterContext';
 interface DashboardTileProps {
   tile: TileConfig;
   onRemove?: () => void;
-  onExport?: (format: string) => void;
+  onExport?: (format: string, data: DataPoint[]) => void;
 }
 
 export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) {
@@ -80,25 +80,25 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
               {showMenu && (
                 <div className="absolute right-0 top-full mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg z-20">
                   <button
-                    onClick={() => { onExport?.('png'); setShowMenu(false); }}
+                    onClick={() => { onExport?.('png', data); setShowMenu(false); }}
                     className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     <Download className="h-3.5 w-3.5" /> PNG
                   </button>
                   <button
-                    onClick={() => { onExport?.('csv'); setShowMenu(false); }}
+                    onClick={() => { onExport?.('csv', data); setShowMenu(false); }}
                     className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     <Download className="h-3.5 w-3.5" /> CSV
                   </button>
                   <button
-                    onClick={() => { onExport?.('excel'); setShowMenu(false); }}
+                    onClick={() => { onExport?.('excel', data); setShowMenu(false); }}
                     className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     <Download className="h-3.5 w-3.5" /> Excel
                   </button>
                   <button
-                    onClick={() => { onExport?.('pdf'); setShowMenu(false); }}
+                    onClick={() => { onExport?.('pdf', data); setShowMenu(false); }}
                     className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     <Download className="h-3.5 w-3.5" /> PDF
