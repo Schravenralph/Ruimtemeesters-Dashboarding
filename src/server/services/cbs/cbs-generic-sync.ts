@@ -189,6 +189,7 @@ export async function syncGeneric(
     let dimMissCount = 0;
     let levelSkipCount = 0;
     let subsetSkipCount = 0;
+    let nonYearlySkipCount = 0;
     const aggregated = new Map<string, Record<string, unknown>>();
 
     const regionLevelWhitelist = options.subsetFilters?.regionLevels?.length
@@ -208,7 +209,15 @@ export async function syncGeneric(
     for (const obs of observations) {
       if (obs.Value === null || obs.Value === undefined) continue;
 
-      const year = parseCbsPeriod(obs.Perioden as string);
+      // Only accept yearly observations. The target schema is annualised
+      // (year INTEGER) and the aggregation key below only carries year —
+      // summing monthly/quarterly rows into the same bucket would
+      // double-count. Skipping them silently at this layer matches what
+      // the legacy single-year exact-match filter achieved.
+      const perioden = obs.Perioden as string | undefined;
+      if (!perioden || !/JJ00$/.test(perioden)) { nonYearlySkipCount++; continue; }
+
+      const year = parseCbsPeriod(perioden);
       const region = noRegion
         ? { code: 'NL', level: 'land' }
         : parseCbsRegion(obs[regionDim] as string | undefined);
@@ -262,11 +271,11 @@ export async function syncGeneric(
       }
     }
 
-    if (regionMissCount || dimMissCount || levelSkipCount || subsetSkipCount) {
+    if (regionMissCount || dimMissCount || levelSkipCount || subsetSkipCount || nonYearlySkipCount) {
       console.log(
         `[GenericSync] ${key}: skipped ${regionMissCount} unparsed regions, ` +
         `${levelSkipCount} out-of-scope levels, ${dimMissCount} unmapped dimensions, ` +
-        `${subsetSkipCount} subset-filtered`,
+        `${subsetSkipCount} subset-filtered, ${nonYearlySkipCount} non-yearly periods`,
       );
     }
 
