@@ -213,7 +213,10 @@ function CatalogTab({
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<CatalogRow[]>([]);
   const [total, setTotal] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
+  // Start true so the first paint shows the skeleton, not "Geen resultaten".
+  // The search effect fires the actual load; this just hides the initial
+  // empty-state flash between mount and effect-run.
+  const [isLoading, setIsLoading] = useState(true);
   const [activateTarget, setActivateTarget] = useState<CatalogRow | null>(null);
 
   useEffect(() => {
@@ -271,20 +274,32 @@ function CatalogTab({
     setActivateTarget(row);
   }, [jumpToExistingTheme]);
 
-  const handleActivated = useCallback(async (result: { themeSlug: string }) => {
+  const handleActivated = useCallback((result: { themeSlug: string }) => {
+    // QuickActivateDialog's onActivated prop is typed sync, so we can't
+    // await directly. Wrap the async work so any rejection from
+    // onThemesChanged (listThemes failure) lands in a visible toast
+    // instead of an unhandled-promise-rejection console warning.
     setActivateTarget(null);
     showToast('success', 'Tabel geactiveerd. Data sync loopt op de achtergrond — tegel vult zich binnen 5–30s.');
-    // onThemesChanged returns the fresh themes array. We use it directly
-    // instead of relying on the `themes` prop, which is the closure-at-
-    // creation snapshot and hasn't re-rendered yet with the new theme.
-    // `themeSlug` is authoritative (server safeKey), not whatever the
-    // client proposed — ensures lookup matches even if the server
-    // sanitiser diverges from the client's pre-submit cleaning.
-    const fresh = (await onThemesChanged?.()) ?? [];
-    const newTheme = fresh.find(t => t.slug === result.themeSlug);
-    if (newTheme) setSelectedTheme(newTheme.id);
-    else setSelectedTheme(null); // fall back to "all themes" view
-    setTab('themes');
+    void (async () => {
+      try {
+        // onThemesChanged returns the fresh themes array. We use it
+        // directly instead of relying on the `themes` prop, which is the
+        // closure-at-creation snapshot and hasn't re-rendered yet with
+        // the new theme. `themeSlug` is authoritative (server safeKey),
+        // not whatever the client proposed — ensures lookup matches even
+        // if the server sanitiser diverges from the client's pre-submit
+        // cleaning.
+        const fresh = (await onThemesChanged?.()) ?? [];
+        const newTheme = fresh.find(t => t.slug === result.themeSlug);
+        if (newTheme) setSelectedTheme(newTheme.id);
+        else setSelectedTheme(null); // fall back to "all themes" view
+        setTab('themes');
+      } catch {
+        showToast('error', 'Thema\'s verversen mislukt. Herlaad de pagina om het nieuwe thema te zien.');
+        setTab('themes');
+      }
+    })();
   }, [showToast, onThemesChanged, setSelectedTheme, setTab]);
 
   return (
