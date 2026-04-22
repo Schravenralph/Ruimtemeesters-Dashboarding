@@ -15,9 +15,11 @@ interface TilePickerProps {
   themes: ThemeConfig[];
   onSelect: (tile: TileConfig) => void;
   onClose: () => void;
-  /** Optional — called after a catalogue activation succeeds so the parent
-   *  can re-fetch themes and surface the newly-created theme's tiles. */
-  onThemesChanged?: () => Promise<void> | void;
+  /** Called after a catalogue activation succeeds so the parent can
+   *  re-fetch themes. Must return the fresh themes array — relying on the
+   *  re-rendered `themes` prop inside a setTimeout closure reads the stale
+   *  pre-activation list (closures capture at creation, not execution). */
+  onThemesChanged?: () => Promise<ThemeConfig[]>;
 }
 
 interface CatalogRow {
@@ -206,7 +208,7 @@ function CatalogTab({
   setSelectedTheme: (id: string | null) => void;
   setTab: (t: 'themes' | 'catalog') => void;
   showToast: (type: 'success' | 'error' | 'info', msg: string) => void;
-  onThemesChanged?: () => Promise<void> | void;
+  onThemesChanged?: () => Promise<ThemeConfig[]>;
 }) {
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<CatalogRow[]>([]);
@@ -229,25 +231,26 @@ function CatalogTab({
     return () => clearTimeout(t);
   }, [search]);
 
-  const jumpToExistingTheme = useCallback((dataSourceKey: string) => {
+  const jumpToExistingTheme = useCallback(async (dataSourceKey: string) => {
     // `data_source_key` on cbs_catalog matches the theme slug set by the
-    // activation endpoint. Find the matching theme, select it in the
-    // Themes tab, and close this tab so the user sees its tiles.
-    const matched = themes.find(t => t.slug === dataSourceKey);
-    if (matched) {
-      setSelectedTheme(matched.id);
+    // activation endpoint. Look in current themes first; if missing, ask
+    // the parent to refresh and use the returned list directly (don't
+    // trust the closure to see the re-rendered prop).
+    const local = themes.find(t => t.slug === dataSourceKey);
+    if (local) {
+      setSelectedTheme(local.id);
       setTab('themes');
-    } else {
-      // Theme list hasn't refreshed yet — ask parent to refresh and retry.
-      Promise.resolve(onThemesChanged?.()).then(() => {
-        setTab('themes');
-      });
+      return;
     }
+    const fresh = (await onThemesChanged?.()) ?? [];
+    const matched = fresh.find(t => t.slug === dataSourceKey);
+    if (matched) setSelectedTheme(matched.id);
+    setTab('themes');
   }, [themes, setSelectedTheme, setTab, onThemesChanged]);
 
   const handleRowClick = useCallback((row: CatalogRow) => {
     if (row.isActivated && row.dataSourceKey) {
-      jumpToExistingTheme(row.dataSourceKey);
+      void jumpToExistingTheme(row.dataSourceKey);
       return;
     }
     setActivateTarget(row);
@@ -256,18 +259,15 @@ function CatalogTab({
   const handleActivated = useCallback(async (result: { themeSlug: string; key: string }) => {
     setActivateTarget(null);
     showToast('success', 'Tabel geactiveerd. Data sync loopt op de achtergrond — tegel vult zich binnen 5–30s.');
-    await onThemesChanged?.();
-    // After the parent refreshes, `themes` prop updates on the next render
-    // and the matching theme becomes selectable. Switch to the Themes tab
-    // so the user can pick from the newly generated tiles.
-    setSelectedTheme(null); // reset filter
-    // Defer tab switch one tick so parent's state update has propagated.
-    setTimeout(() => {
-      const newTheme = themes.find(t => t.slug === result.key);
-      if (newTheme) setSelectedTheme(newTheme.id);
-      setTab('themes');
-    }, 100);
-  }, [showToast, onThemesChanged, themes, setSelectedTheme, setTab]);
+    // onThemesChanged returns the fresh themes array. We use it directly
+    // instead of relying on the `themes` prop, which is the closure-at-
+    // creation snapshot and hasn't re-rendered yet with the new theme.
+    const fresh = (await onThemesChanged?.()) ?? [];
+    const newTheme = fresh.find(t => t.slug === result.key);
+    if (newTheme) setSelectedTheme(newTheme.id);
+    else setSelectedTheme(null); // fall back to "all themes" view
+    setTab('themes');
+  }, [showToast, onThemesChanged, setSelectedTheme, setTab]);
 
   return (
     <>

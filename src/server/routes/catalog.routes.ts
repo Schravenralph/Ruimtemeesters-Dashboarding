@@ -129,8 +129,38 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
     return;
   }
 
-  const tableName = `data_${key.replace(/[^a-z0-9_]/g, '_')}`;
-  const dimColumns = dimensionMappings.map(d => d.targetColumn);
+  // The activate endpoint is no longer admin-gated (per the global-pull
+  // invariant), so every identifier that flows into DDL must be validated
+  // server-side. Previously admin trust was the only thing between a
+  // malformed `targetColumn` and our CREATE TABLE statement.
+  const IDENT_MAX_LEN = 50;
+  const toSafeIdent = (raw: string, field: string): string => {
+    if (typeof raw !== 'string') throw new Error(`${field} must be a string`);
+    // Lowercase, replace non-[a-z0-9_] with '_', and strip a leading non-
+    // alpha char if the result would otherwise start with a digit/underscore.
+    const cleaned = raw.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^[0-9]+/, '');
+    if (!cleaned) throw new Error(`${field} produces an empty identifier`);
+    if (cleaned.length > IDENT_MAX_LEN) throw new Error(`${field} exceeds ${IDENT_MAX_LEN} chars`);
+    if (!/^[a-z_][a-z0-9_]*$/.test(cleaned)) throw new Error(`${field} is not a valid SQL identifier`);
+    return cleaned;
+  };
+
+  let safeKey: string;
+  let safeDimMappings: Array<{ cbsDimension: string; targetColumn: string; valueMap: Record<string, string> }>;
+  try {
+    safeKey = toSafeIdent(key, 'key');
+    safeDimMappings = (dimensionMappings ?? []).map((d, i) => ({
+      cbsDimension: String(d.cbsDimension ?? ''),
+      targetColumn: toSafeIdent(d.targetColumn, `dimensionMappings[${i}].targetColumn`),
+      valueMap: d.valueMap && typeof d.valueMap === 'object' ? d.valueMap : {},
+    }));
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid identifier' });
+    return;
+  }
+
+  const tableName = `data_${safeKey}`;
+  const dimColumns = safeDimMappings.map(d => d.targetColumn);
 
   // Pull inspected metadata so we can pick sane defaults for geo level,
   // allowed sync levels, and tile generation. Activation still works when
@@ -161,13 +191,15 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
   // silently drop every row (default is gemeente+land).
   const syncAllowedLevels = geoLevels.length > 0 ? geoLevels : undefined;
 
-  // Build sync_config for the generic sync engine
+  // Build sync_config for the generic sync engine. Use the sanitised
+  // dimension mappings so the sync engine never sees untrusted
+  // targetColumn strings.
   const syncConfig = {
     cbsTable: identifier,
     targetTable: tableName,
     filter: filter || `Measure eq '${measureCode}'`,
     measureCode,
-    dimensionMappings: dimensionMappings || [],
+    dimensionMappings: safeDimMappings,
     ...(syncAllowedLevels ? { allowedLevels: syncAllowedLevels } : {}),
     ...(meta?.recommendedDefaults?.regionDim ? { regionDimension: meta.recommendedDefaults.regionDim } : {}),
   };
@@ -198,22 +230,24 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
         UNIQUE(${uniqueCols})
       )
     `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_${key}_geo_year ON ${tableName}(geo_code, year)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_${safeKey}_geo_year ON ${tableName}(geo_code, year)`);
 
-    // 2. Register in data_sources
+    // 2. Register in data_sources — use the sanitised key everywhere so
+    // the stored row can never carry an unsafe identifier for downstream
+    // consumers.
     await client.query(`
       INSERT INTO data_sources (key, name, supercategory, table_name, dimension_columns, value_column, unit, cbs_table_id, sync_config, sort_order)
       VALUES ($1, $2, $3, $4, $5, 'value', $6, $7, $8,
               (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM data_sources))
       ON CONFLICT (key) DO UPDATE SET
         name = EXCLUDED.name, sync_config = EXCLUDED.sync_config, cbs_table_id = EXCLUDED.cbs_table_id
-    `, [key, name, supercategory, tableName, dimColumns, unit, identifier, JSON.stringify(syncConfig)]);
+    `, [safeKey, name, supercategory, tableName, dimColumns, unit, identifier, JSON.stringify(syncConfig)]);
 
     // 3. Mark as activated in catalog
     await client.query(`
       UPDATE cbs_catalog SET is_activated = true, data_source_key = $1
       WHERE identifier = $2
-    `, [key, identifier]);
+    `, [safeKey, identifier]);
 
     // 4. Auto-create a theme with default tiles
     // Use slug-based upsert to get the ID back (works whether theme is new or existing)
@@ -224,7 +258,7 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
               true, $4)
       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description
       RETURNING id
-    `, [key, name, `CBS tabel ${identifier} — ${name}`, supercategory]);
+    `, [safeKey, name, `CBS tabel ${identifier} — ${name}`, supercategory]);
     const themeId = themeResult.rows[0].id;
 
     // Remove any existing tiles for this theme (re-activation replaces them)
@@ -238,7 +272,7 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
     // The metadata dimension lookup must use the CBS identifier (e.g.
     // 'SoortMisdrijf'), NOT the user-editable target column (e.g.
     // 'soort_misdrijf'). targetColumn may be renamed arbitrarily.
-    const firstCbsDim = dimensionMappings[0]?.cbsDimension ?? null;
+    const firstCbsDim = safeDimMappings[0]?.cbsDimension ?? null;
     const firstBarDimInfo = firstCbsDim
       ? meta?.dimensions?.find(d => d.name === firstCbsDim)
       : undefined;
@@ -292,7 +326,7 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
       await client.query(`
         INSERT INTO tiles (theme_id, title, chart_type, data_source, dimensions, default_geo_level, "order")
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [themeId, tile.title, tile.chartType, key, tile.dims, defaultGeoLevel, i]);
+      `, [themeId, tile.title, tile.chartType, safeKey, tile.dims, defaultGeoLevel, i]);
     }
 
     await client.query('COMMIT');
@@ -306,7 +340,7 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
       try {
         const dsResult = await query(
           'SELECT key, sync_config FROM data_sources WHERE key = $1 AND sync_config IS NOT NULL',
-          [key],
+          [safeKey],
         );
         if (dsResult.rows.length > 0) {
           const { syncGeneric } = await import('../services/cbs/cbs-generic-sync.js');
@@ -314,22 +348,22 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
             trigger: 'activation',
             triggeredBy: req.user?.id ?? null,
           });
-          console.log(`[Catalog] Auto-sync ${key}: ${result.rowsInserted}/${result.rowsFetched} rows in ${result.duration}ms`);
+          console.log(`[Catalog] Auto-sync ${safeKey}: ${result.rowsInserted}/${result.rowsFetched} rows in ${result.duration}ms`);
           if (result.errors.length > 0) {
-            console.error(`[Catalog] Auto-sync ${key} reported errors: ${result.errors.join(' | ')}`);
+            console.error(`[Catalog] Auto-sync ${safeKey} reported errors: ${result.errors.join(' | ')}`);
           }
         }
       } catch (err) {
-        console.error(`[Catalog] Auto-sync ${key} failed:`, err);
+        console.error(`[Catalog] Auto-sync ${safeKey} failed:`, err);
       }
     })();
 
     res.json({
       status: 'activated',
-      key,
+      key: safeKey,
       tableName,
       dimensionColumns: dimColumns,
-      themeSlug: key,
+      themeSlug: safeKey,
       tilesCreated: defaultTiles.length,
       defaultGeoLevel,
       geoLevels,
