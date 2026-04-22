@@ -99,8 +99,11 @@ router.get('/:identifier', authenticate, async (req: Request, res: Response) => 
 
 // --- Activation routes (admin configures a CBS table for data sync) ---
 
-// POST /api/catalog/activate — activate a CBS table for data sync (admin only)
-router.post('/activate', authenticate, requireRole('admin'), async (req: Request, res: Response) => {
+// POST /api/catalog/activate — activate a CBS table for data sync.
+// Per project invariant (data pull is global): any authenticated user can
+// request that a CBS table be pulled; activation/sync runs once globally
+// and every org gets access via the normal subscription/viewing layer.
+router.post('/activate', authenticate, async (req: Request, res: Response) => {
   const {
     identifier,       // CBS table ID, e.g. '83648NED'
     key,              // Local data source key, e.g. 'criminaliteit'
