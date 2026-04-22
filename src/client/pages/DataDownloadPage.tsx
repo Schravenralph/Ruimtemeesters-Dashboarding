@@ -32,6 +32,7 @@ export function DataDownloadPage() {
   const [selectedSource, setSelectedSource] = useState('bevolking');
   const [selectedFormat, setSelectedFormat] = useState('csv');
   const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [yearsLoaded, setYearsLoaded] = useState(false);
   const [year, setYear] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -54,14 +55,22 @@ export function DataDownloadPage() {
 
   useEffect(() => {
     if (!selectedSource) return;
+    let cancelled = false;
+    setYearsLoaded(false);
     getAvailableYears(selectedSource)
       .then(r => {
+        if (cancelled) return;
         const ys = [...r.years].sort((a, b) => a - b);
         setAvailableYears(ys);
-        // Reset selected year if it's no longer in the list.
+        setYearsLoaded(true);
         if (year && !ys.includes(Number(year))) setYear('');
       })
-      .catch(() => setAvailableYears([]));
+      .catch(() => {
+        if (cancelled) return;
+        setAvailableYears([]);
+        setYearsLoaded(true);
+      });
+    return () => { cancelled = true; };
     // year intentionally excluded — we only re-validate against new lists here
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSource]);
@@ -175,7 +184,12 @@ export function DataDownloadPage() {
       <Card className="mb-4">
         <CardHeader title="Filters" subtitle="Optioneel: beperk de export" />
         <div className="flex gap-4">
-          {availableYears.length > 0 ? (
+          {!yearsLoaded ? (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-700">Jaar (optioneel)</label>
+              <div className="h-[38px] w-36 rounded-lg bg-gray-100 animate-pulse" />
+            </div>
+          ) : availableYears.length > 0 ? (
             <Select
               label="Jaar (optioneel)"
               value={year}
