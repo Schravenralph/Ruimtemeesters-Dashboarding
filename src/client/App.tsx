@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ClerkProvider, Show } from '@clerk/react';
 import { AuthProvider } from './contexts/AuthContext';
+import { AppConfigProvider } from './contexts/AppConfigContext';
 import { ThemeProvider, useThemes } from './contexts/ThemeContext';
 import { PresentationProvider } from './contexts/PresentationContext';
 import { FilterProvider } from './contexts/FilterContext';
@@ -56,6 +57,7 @@ function DashboardRedirect() {
 function AuthenticatedApp() {
   return (
     <AuthProvider>
+      <AppConfigProvider>
       <ThemeProvider>
         <PresentationProvider>
         <FilterProvider>
@@ -88,6 +90,7 @@ function AuthenticatedApp() {
         </FilterProvider>
         </PresentationProvider>
       </ThemeProvider>
+      </AppConfigProvider>
     </AuthProvider>
   );
 }
