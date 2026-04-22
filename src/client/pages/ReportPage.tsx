@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, Printer, Download } from 'lucide-react';
+import { FileText, Printer, Download, ToggleLeft, ToggleRight } from 'lucide-react';
 import { ComposedChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card } from '../components/ui/Card';
 import { Select } from '../components/ui/Select';
@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/ui/Spinner';
 import { useFilters } from '../contexts/FilterContext';
 import { api } from '../services/api/client';
+import { getAvailableYears } from '../services/api/data';
 import { formatNumber, formatCompact } from '../utils/format';
 
 interface ReportSection {
@@ -37,11 +38,22 @@ const SOURCE_OPTIONS = [
 
 export function ReportPage() {
   const [searchParams] = useSearchParams();
-  const { filters } = useFilters();
+  const { filters, setYear, setCompareYear } = useFilters();
   const [source, setSource] = useState(searchParams.get('source') || 'bevolking');
   const [report, setReport] = useState<Report | null>(null);
   const [trend, setTrend] = useState<{ year: number; value: number; source: string; confidenceLower?: number; confidenceUpper?: number }[]>([]);
+  const [years, setYears] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  const currentYear = filters.period.year;
+  const compareYear = filters.period.compareYear;
+  const isComparing = compareYear !== null && compareYear !== undefined;
+
+  useEffect(() => {
+    getAvailableYears(source)
+      .then(r => setYears(r.years.sort((a, b) => a - b)))
+      .catch(() => setYears([]));
+  }, [source]);
 
   function loadReport() {
     setIsLoading(true);
@@ -114,14 +126,61 @@ export function ReportPage() {
         </div>
       </div>
 
-      {/* Source selector */}
-      <div className="mb-6">
+      {/* Source + period selectors */}
+      <div className="mb-6 flex flex-wrap items-end gap-4 print:hidden">
         <Select
           label="Databron"
           value={source}
           onChange={(e) => setSource(e.target.value)}
           options={SOURCE_OPTIONS}
         />
+        {years.length > 0 && (
+          <Select
+            label="Jaar"
+            value={String(currentYear)}
+            onChange={(e) => setYear(parseInt(e.target.value, 10))}
+            options={years.map(y => ({
+              value: String(y),
+              label: y > new Date().getFullYear() ? `${y} (prognose)` : String(y),
+            }))}
+          />
+        )}
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Vergelijken</label>
+          <button
+            type="button"
+            onClick={() => {
+              if (isComparing) {
+                setCompareYear(null);
+              } else {
+                const fallback = years.find(y => y !== currentYear);
+                if (fallback !== undefined) setCompareYear(fallback);
+              }
+            }}
+            disabled={years.length < 2}
+            className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isComparing ? (
+              <ToggleRight className="h-5 w-5 text-blue-600" />
+            ) : (
+              <ToggleLeft className="h-5 w-5 text-gray-400" />
+            )}
+            {isComparing ? 'Aan' : 'Uit'}
+          </button>
+        </div>
+        {isComparing && years.length > 1 && (
+          <Select
+            label="Vergelijk met"
+            value={String(compareYear)}
+            onChange={(e) => setCompareYear(parseInt(e.target.value, 10))}
+            options={years
+              .filter(y => y !== currentYear)
+              .map(y => ({
+                value: String(y),
+                label: y > new Date().getFullYear() ? `${y} (prognose)` : String(y),
+              }))}
+          />
+        )}
       </div>
 
       {isLoading && <LoadingOverlay message="Rapport genereren..." />}
@@ -134,6 +193,11 @@ export function ReportPage() {
               <FileText className="h-6 w-6 text-blue-500 mt-0.5" />
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{report.title}</h2>
+                {isComparing && (
+                  <p className="text-sm font-medium text-blue-700 mt-0.5">
+                    Vergeleken met {compareYear}
+                  </p>
+                )}
                 <p className="text-sm text-gray-500 mt-1">
                   Gegenereerd op {new Date(report.generatedAt).toLocaleString('nl-NL')}
                 </p>
@@ -202,24 +266,36 @@ export function ReportPage() {
                 );
               })()}
               <div className="space-y-2">
-                {section.data.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                    <span className="text-sm text-gray-700">{item.label}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-semibold text-gray-900 font-mono">
-                        {formatNumber(item.value)}
-                        {report.unit && <span className="ml-1 text-xs font-normal text-gray-500">{report.unit}</span>}
-                      </span>
-                      {item.change !== undefined && (
-                        <span className={`text-xs font-medium ${
-                          item.change > 0 ? 'text-green-600' : item.change < 0 ? 'text-red-600' : 'text-gray-500'
-                        }`}>
-                          {item.change > 0 ? '+' : ''}{formatNumber(item.change)}
+                {section.data.map((item, i) => {
+                  const prior = item.change !== undefined ? item.value - item.change : undefined;
+                  const pct = prior !== undefined && prior !== 0 ? (item.change! / prior) * 100 : undefined;
+                  return (
+                    <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                      <span className="text-sm text-gray-700">{item.label}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-gray-900 font-mono">
+                          {formatNumber(item.value)}
+                          {report.unit && <span className="ml-1 text-xs font-normal text-gray-500">{report.unit}</span>}
                         </span>
-                      )}
+                        {item.change !== undefined && (
+                          <span
+                            className={`text-xs font-medium tabular-nums ${
+                              item.change > 0 ? 'text-green-600' : item.change < 0 ? 'text-red-600' : 'text-gray-500'
+                            }`}
+                            title={isComparing ? `vs. ${compareYear}` : undefined}
+                          >
+                            {item.change > 0 ? '+' : ''}{formatNumber(item.change)}
+                            {pct !== undefined && Number.isFinite(pct) && (
+                              <span className="ml-1 opacity-75">
+                                ({pct > 0 ? '+' : ''}{pct.toFixed(1)}%)
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </Card>
           ))}
