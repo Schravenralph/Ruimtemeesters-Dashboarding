@@ -35,7 +35,7 @@ interface AppConfigContextValue {
 const AppConfigContext = createContext<AppConfigContextValue | null>(null);
 
 export function AppConfigProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
   // Start true so consumers can wait for either the GET to settle or for
   // auth to resolve as "not signed in". Flipping to false happens in both
@@ -43,6 +43,11 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Don't short-circuit to "unauthenticated" while auth is still resolving,
+    // otherwise a consumer that gates on `isLoading` will see a false
+    // "loaded with defaults" state before the real preferences arrive.
+    if (authLoading) return;
+
     if (!isAuthenticated) {
       setConfig(defaultConfig);
       setIsLoading(false);
@@ -54,7 +59,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
       .then(setConfig)
       .catch(() => setConfig(defaultConfig))
       .finally(() => setIsLoading(false));
-  }, [isAuthenticated]);
+  }, [isAuthenticated, authLoading]);
 
   async function updateConfig(updates: Partial<AppConfig>) {
     const newConfig = { ...config, ...updates };
