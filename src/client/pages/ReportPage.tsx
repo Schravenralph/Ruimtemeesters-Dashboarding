@@ -55,19 +55,32 @@ export function ReportPage() {
       .catch(() => setYears([]));
   }, [source]);
 
-  // If year ends up equal to compareYear (degenerate same-year compare),
-  // reactively pick a neighboring year instead. Two synchronous setter
-  // calls can't do this safely: FilterContext's updater closes over the
-  // current presentation snapshot, so the second call would overwrite
-  // the first.
+  // Keep year + compareYear in sync with the selected source's year list.
+  // Each branch calls at most one setter per render — FilterContext's
+  // updater closes over the current presentation snapshot, so chained
+  // synchronous setters would clobber each other.
   useEffect(() => {
-    if (compareYear === null || compareYear === undefined) return;
-    if (compareYear !== currentYear) return;
-    if (years.length < 2) return;
-    const idx = years.indexOf(currentYear);
-    const neighbor = years[idx - 1] ?? years[idx + 1];
-    setCompareYear(neighbor ?? null);
-  }, [currentYear, compareYear, years, setCompareYear]);
+    if (years.length === 0) return;
+
+    // 1) Drop currentYear out of range → clamp to the latest available year.
+    if (!years.includes(currentYear)) {
+      setYear(years[years.length - 1]!);
+      return;
+    }
+
+    // 2) Drop compareYear out of range → clear compare mode.
+    if (compareYear !== null && compareYear !== undefined && !years.includes(compareYear)) {
+      setCompareYear(null);
+      return;
+    }
+
+    // 3) Degenerate same-year compare → move to a neighbor.
+    if (compareYear === currentYear && years.length >= 2) {
+      const idx = years.indexOf(currentYear);
+      const neighbor = years[idx - 1] ?? years[idx + 1];
+      setCompareYear(neighbor ?? null);
+    }
+  }, [currentYear, compareYear, years, setYear, setCompareYear]);
 
   function loadReport() {
     setIsLoading(true);
