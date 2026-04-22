@@ -8,10 +8,15 @@
 --
 -- Shape:
 --   {
---     "yearRange":   { "min": 2020, "max": 2024 },          -- both optional
---     "regionPrefixes": ["GM", "PV", "NL"],                 -- match startswith
---     "dimensionValues": { "Geslacht": ["T001038"], ... }   -- whitelist per dim
+--     "yearRange":       { "min": 2020, "max": 2024 },          -- both optional
+--     "regionLevels":    ["gemeente", "land"],                  -- parsed-level whitelist
+--     "dimensionValues": { "Geslacht": ["T001038"], ... }       -- whitelist per dim
 --   }
+--
+-- regionLevels uses the parseCbsRegion vocabulary (land/landsdeel/provincie/
+-- corop/gemeente/wijk/buurt/postcode4/postcode6). Matching against the parsed
+-- level — not raw CBS prefixes — avoids subtle normalisation bugs (e.g. 'PV20'
+-- becoming 'NL-20', bare '1011' getting a 'PC' prefix).
 --
 -- Invariant: subset_filters are GLOBAL — they scope the single canonical pull
 -- for the entire platform. Never add org_id here. See

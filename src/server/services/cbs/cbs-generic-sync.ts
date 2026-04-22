@@ -48,9 +48,14 @@ export interface SubsetFilters {
   /** Inclusive year range. Both bounds optional (set one to cap only on
    *  that side). Pushed down to CBS as an OData `$filter` on Perioden. */
   yearRange?: { min?: number; max?: number };
-  /** Accept only observations whose region code starts with one of these
-   *  prefixes (e.g. `['GM', 'PV', 'NL']`). Post-filtered server-side. */
-  regionPrefixes?: string[];
+  /** Whitelist of parsed geo levels to accept. Uses the same vocabulary as
+   *  parseCbsRegion / metadata.geoLevels:
+   *  'land' | 'landsdeel' | 'provincie' | 'corop' | 'gemeente' | 'wijk' |
+   *  'buurt' | 'postcode4' | 'postcode6'. Matching happens after
+   *  parseCbsRegion normalises the raw CBS code, so e.g. bare '1011'
+   *  (→ postcode4) and 'PV20' (→ provincie) are correctly classified
+   *  without brittle raw-prefix string matching. */
+  regionLevels?: string[];
   /** Whitelist of allowed values per CBS dimension identifier (e.g.
    *  `{ "Geslacht": ["T001038"] }`). Rows with dim values outside the
    *  whitelist are dropped. Post-filtered server-side. */
@@ -186,8 +191,8 @@ export async function syncGeneric(
     let subsetSkipCount = 0;
     const aggregated = new Map<string, Record<string, unknown>>();
 
-    const regionPrefixes = options.subsetFilters?.regionPrefixes?.length
-      ? options.subsetFilters.regionPrefixes
+    const regionLevelWhitelist = options.subsetFilters?.regionLevels?.length
+      ? new Set(options.subsetFilters.regionLevels)
       : null;
     // Build per-dim value sets once so the hot loop is O(1) per row.
     const dimWhitelist: Map<string, Set<string>> | null = (() => {
@@ -211,12 +216,12 @@ export async function syncGeneric(
       if (!region) { regionMissCount++; continue; }
       if (!noRegion && !allowedLevels.has(region.level)) { levelSkipCount++; continue; }
 
-      // Region-prefix subset filter. Matches on the raw CBS code (not the
-      // canonical form) so callers can target CBS-native prefixes like
-      // 'GM', 'PV', 'NL', 'CR', 'PC'.
-      if (regionPrefixes && !noRegion) {
-        const rawCode = String(obs[regionDim] ?? '').trim();
-        if (!regionPrefixes.some(p => rawCode.startsWith(p))) {
+      // Region-level subset filter. Compares against the PARSED level
+      // (gemeente, postcode4, ...) not the raw prefix, so bare postcode
+      // codes ('1011') and provincie codes normalised to 'NL-XX' are
+      // classified correctly.
+      if (regionLevelWhitelist && !noRegion) {
+        if (!regionLevelWhitelist.has(region.level)) {
           subsetSkipCount++; continue;
         }
       }

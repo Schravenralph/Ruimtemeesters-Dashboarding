@@ -235,12 +235,20 @@ function sanitiseSubsetFilters(raw: unknown): Record<string, unknown> | null {
     if (clean.min != null || clean.max != null) out.yearRange = clean;
   }
 
-  if (input.regionPrefixes !== undefined && input.regionPrefixes !== null) {
-    if (!Array.isArray(input.regionPrefixes)) throw new Error('regionPrefixes must be an array');
-    const pfx = input.regionPrefixes
+  if (input.regionLevels !== undefined && input.regionLevels !== null) {
+    if (!Array.isArray(input.regionLevels)) throw new Error('regionLevels must be an array');
+    const VALID_LEVELS = new Set([
+      'land', 'landsdeel', 'provincie', 'corop',
+      'gemeente', 'wijk', 'buurt', 'postcode4', 'postcode6',
+    ]);
+    const lvls = input.regionLevels
       .map(p => String(p).trim())
-      .filter(p => p.length > 0 && p.length <= 10);
-    if (pfx.length > 0) out.regionPrefixes = pfx;
+      .filter(p => p.length > 0);
+    for (const lvl of lvls) {
+      if (!VALID_LEVELS.has(lvl)) throw new Error(`regionLevels contains unknown level: "${lvl}"`);
+    }
+    // Dedup via Set round-trip so UI duplicates don't pollute the stored blob.
+    if (lvls.length > 0) out.regionLevels = Array.from(new Set(lvls));
   }
 
   if (input.dimensionValues !== undefined && input.dimensionValues !== null) {

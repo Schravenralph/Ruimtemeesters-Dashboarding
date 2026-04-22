@@ -5,7 +5,7 @@ import { Button } from '../ui/Button.js';
 
 interface SubsetFilters {
   yearRange?: { min?: number; max?: number };
-  regionPrefixes?: string[];
+  regionLevels?: string[];
   dimensionValues?: Record<string, string[]>;
 }
 
@@ -34,7 +34,7 @@ function summariseSubsetFilters(sf: SubsetFilters): string | null {
   if (yr?.min != null && yr?.max != null) parts.push(`${yr.min}–${yr.max}`);
   else if (yr?.min != null) parts.push(`≥${yr.min}`);
   else if (yr?.max != null) parts.push(`≤${yr.max}`);
-  if (sf.regionPrefixes?.length) parts.push(sf.regionPrefixes.join('/'));
+  if (sf.regionLevels?.length) parts.push(sf.regionLevels.join('/'));
   const dimKeys = Object.keys(sf.dimensionValues ?? {});
   if (dimKeys.length) {
     const counts = dimKeys
@@ -45,15 +45,19 @@ function summariseSubsetFilters(sf: SubsetFilters): string | null {
   return parts.length > 0 ? `subset: ${parts.join(' · ')}` : null;
 }
 
-const REGION_PREFIX_CHOICES: Array<{ value: string; label: string }> = [
-  { value: 'NL', label: 'Nederland (NL)' },
-  { value: 'LD', label: 'Landsdeel (LD)' },
-  { value: 'PV', label: 'Provincie (PV)' },
-  { value: 'CR', label: 'COROP (CR)' },
-  { value: 'GM', label: 'Gemeente (GM)' },
-  { value: 'WK', label: 'Wijk (WK)' },
-  { value: 'BU', label: 'Buurt (BU)' },
-  { value: 'PC', label: 'Postcode (PC)' },
+// Values here match the parsed-level vocabulary returned by parseCbsRegion
+// and persisted in cbs_catalog.metadata.geoLevels. Keep in sync with
+// GEO_LEVEL_LABELS (../../utils/geo.ts).
+const REGION_LEVEL_CHOICES: Array<{ value: string; label: string }> = [
+  { value: 'land', label: 'Nederland' },
+  { value: 'landsdeel', label: 'Landsdeel' },
+  { value: 'provincie', label: 'Provincie' },
+  { value: 'corop', label: 'COROP' },
+  { value: 'gemeente', label: 'Gemeente' },
+  { value: 'wijk', label: 'Wijk' },
+  { value: 'buurt', label: 'Buurt' },
+  { value: 'postcode4', label: 'Postcode (PC4)' },
+  { value: 'postcode6', label: 'Postcode (PC6)' },
 ];
 
 interface DataSource {
@@ -92,7 +96,7 @@ export function SyncScheduleManager() {
     yearFilter: '',
     yearMin: '',
     yearMax: '',
-    regionPrefixes: [] as string[],
+    regionLevels: [] as string[],
     notifyEmail: true,
     notifyInApp: true,
     notifyOn: 'failure' as 'always' | 'failure' | 'never',
@@ -129,11 +133,11 @@ export function SyncScheduleManager() {
       if (form.yearMin) yr.min = parseInt(form.yearMin, 10);
       if (form.yearMax) yr.max = parseInt(form.yearMax, 10);
       const subsetFilters: SubsetFilters | null = (
-        Object.keys(yr).length > 0 || form.regionPrefixes.length > 0
+        Object.keys(yr).length > 0 || form.regionLevels.length > 0
       )
         ? {
             ...(Object.keys(yr).length > 0 ? { yearRange: yr } : {}),
-            ...(form.regionPrefixes.length > 0 ? { regionPrefixes: form.regionPrefixes } : {}),
+            ...(form.regionLevels.length > 0 ? { regionLevels: form.regionLevels } : {}),
           }
         : null;
       await api.post('/sync/schedules', {
@@ -149,7 +153,7 @@ export function SyncScheduleManager() {
       setMessage({ type: 'success', text: 'Schema aangemaakt.' });
       // Callback form avoids discarding concurrent edits to other fields
       // that happened while the POST was in flight.
-      setForm(prev => ({ ...prev, dataSourceKey: '', yearFilter: '', yearMin: '', yearMax: '', regionPrefixes: [] }));
+      setForm(prev => ({ ...prev, dataSourceKey: '', yearFilter: '', yearMin: '', yearMax: '', regionLevels: [] }));
       await load();
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Aanmaken mislukt' });
@@ -294,8 +298,8 @@ export function SyncScheduleManager() {
             <div className="md:col-span-2 space-y-1">
               <span className="text-gray-600">Regio-niveaus om te syncen</span>
               <div className="flex flex-wrap gap-2">
-                {REGION_PREFIX_CHOICES.map((c) => {
-                  const checked = form.regionPrefixes.includes(c.value);
+                {REGION_LEVEL_CHOICES.map((c) => {
+                  const checked = form.regionLevels.includes(c.value);
                   return (
                     <label
                       key={c.value}
@@ -309,9 +313,9 @@ export function SyncScheduleManager() {
                         onChange={(e) => {
                           setForm(prev => ({
                             ...prev,
-                            regionPrefixes: e.target.checked
-                              ? [...prev.regionPrefixes, c.value]
-                              : prev.regionPrefixes.filter(p => p !== c.value),
+                            regionLevels: e.target.checked
+                              ? [...prev.regionLevels, c.value]
+                              : prev.regionLevels.filter(p => p !== c.value),
                           }));
                         }}
                         className="sr-only"
