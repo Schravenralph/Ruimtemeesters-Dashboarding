@@ -254,9 +254,15 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
     if (existing.rows.length > 0) {
       const existingTableId = existing.rows[0].cbs_table_id;
       await client.query('ROLLBACK');
-      if (existingTableId && existingTableId !== identifier) {
+      // Idempotent only when the existing row is for the SAME CBS table.
+      // A null cbs_table_id means the key is occupied by a non-CBS data
+      // source (manual/seeded) — rejecting with 409 prevents the CBS
+      // activation from implicitly claiming that key.
+      if (existingTableId !== identifier) {
         res.status(409).json({
-          error: `Key "${safeKey}" is already activated for CBS table ${existingTableId}. Pick a different key or deactivate the existing source first.`,
+          error: existingTableId
+            ? `Key "${safeKey}" is already activated for CBS table ${existingTableId}. Pick a different key or deactivate the existing source first.`
+            : `Key "${safeKey}" is already in use by a non-CBS data source. Pick a different key.`,
         });
         return;
       }
