@@ -3,6 +3,12 @@ import { Calendar, Plus, Trash2, Play, AlertCircle, CheckCircle } from 'lucide-r
 import { api } from '../../services/api/client.js';
 import { Button } from '../ui/Button.js';
 
+interface SubsetFilters {
+  yearRange?: { min?: number; max?: number };
+  regionPrefixes?: string[];
+  dimensionValues?: Record<string, string[]>;
+}
+
 interface Schedule {
   id: string;
   data_source_key: string;
@@ -10,6 +16,7 @@ interface Schedule {
   cron_expression: string;
   timezone: string;
   year_filter: number | null;
+  subset_filters: SubsetFilters | null;
   is_enabled: boolean;
   notify_email: boolean;
   notify_in_app: boolean;
@@ -19,6 +26,35 @@ interface Schedule {
   created_at: string;
   updated_at: string;
 }
+
+/** Human-readable one-line summary of a subset_filters blob, or null when empty. */
+function summariseSubsetFilters(sf: SubsetFilters): string | null {
+  const parts: string[] = [];
+  const yr = sf.yearRange;
+  if (yr?.min != null && yr?.max != null) parts.push(`${yr.min}–${yr.max}`);
+  else if (yr?.min != null) parts.push(`≥${yr.min}`);
+  else if (yr?.max != null) parts.push(`≤${yr.max}`);
+  if (sf.regionPrefixes?.length) parts.push(sf.regionPrefixes.join('/'));
+  const dimKeys = Object.keys(sf.dimensionValues ?? {});
+  if (dimKeys.length) {
+    const counts = dimKeys
+      .map(k => `${k}:${(sf.dimensionValues?.[k] ?? []).length}`)
+      .join(',');
+    parts.push(counts);
+  }
+  return parts.length > 0 ? `subset: ${parts.join(' · ')}` : null;
+}
+
+const REGION_PREFIX_CHOICES: Array<{ value: string; label: string }> = [
+  { value: 'NL', label: 'Nederland (NL)' },
+  { value: 'LD', label: 'Landsdeel (LD)' },
+  { value: 'PV', label: 'Provincie (PV)' },
+  { value: 'CR', label: 'COROP (CR)' },
+  { value: 'GM', label: 'Gemeente (GM)' },
+  { value: 'WK', label: 'Wijk (WK)' },
+  { value: 'BU', label: 'Buurt (BU)' },
+  { value: 'PC', label: 'Postcode (PC)' },
+];
 
 interface DataSource {
   key: string;
@@ -54,6 +90,9 @@ export function SyncScheduleManager() {
     cronExpression: '0 3 * * *',
     timezone: 'Europe/Amsterdam',
     yearFilter: '',
+    yearMin: '',
+    yearMax: '',
+    regionPrefixes: [] as string[],
     notifyEmail: true,
     notifyInApp: true,
     notifyOn: 'failure' as 'always' | 'failure' | 'never',
@@ -84,11 +123,25 @@ export function SyncScheduleManager() {
     setCreating(true);
     setMessage(null);
     try {
+      // Compose subset_filters from the narrowing form fields. null when
+      // nothing was entered, so the server doesn't persist an empty object.
+      const yr: { min?: number; max?: number } = {};
+      if (form.yearMin) yr.min = parseInt(form.yearMin, 10);
+      if (form.yearMax) yr.max = parseInt(form.yearMax, 10);
+      const subsetFilters: SubsetFilters | null = (
+        Object.keys(yr).length > 0 || form.regionPrefixes.length > 0
+      )
+        ? {
+            ...(Object.keys(yr).length > 0 ? { yearRange: yr } : {}),
+            ...(form.regionPrefixes.length > 0 ? { regionPrefixes: form.regionPrefixes } : {}),
+          }
+        : null;
       await api.post('/sync/schedules', {
         dataSourceKey: form.dataSourceKey,
         cronExpression: form.cronExpression,
         timezone: form.timezone,
         yearFilter: form.yearFilter ? parseInt(form.yearFilter, 10) : null,
+        subsetFilters,
         notifyEmail: form.notifyEmail,
         notifyInApp: form.notifyInApp,
         notifyOn: form.notifyOn,
@@ -96,7 +149,7 @@ export function SyncScheduleManager() {
       setMessage({ type: 'success', text: 'Schema aangemaakt.' });
       // Callback form avoids discarding concurrent edits to other fields
       // that happened while the POST was in flight.
-      setForm(prev => ({ ...prev, dataSourceKey: '', yearFilter: '' }));
+      setForm(prev => ({ ...prev, dataSourceKey: '', yearFilter: '', yearMin: '', yearMax: '', regionPrefixes: [] }));
       await load();
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Aanmaken mislukt' });
@@ -189,7 +242,7 @@ export function SyncScheduleManager() {
             </div>
           </label>
           <label className="text-sm space-y-1">
-            <span className="text-gray-600">Jaar filter (optioneel)</span>
+            <span className="text-gray-600">Jaar filter (één jaar, optioneel)</span>
             <input
               type="number" min={2000} max={2060}
               value={form.yearFilter}
@@ -211,6 +264,70 @@ export function SyncScheduleManager() {
             </select>
           </label>
         </div>
+        {/* Subset filters — narrow the global pull. Every field is optional;
+            leave blank to pull the full dataset for this schedule. */}
+        <details className="text-sm">
+          <summary className="cursor-pointer font-medium text-gray-700 select-none">
+            Subset filters <span className="text-gray-400 font-normal">(beperk welke rijen gesynct worden — optioneel)</span>
+          </summary>
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 pl-4">
+            <label className="space-y-1">
+              <span className="text-gray-600">Jaar-bereik (vanaf)</span>
+              <input
+                type="number" min={1900} max={2100}
+                value={form.yearMin}
+                onChange={(e) => setForm({ ...form, yearMin: e.target.value })}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded-md"
+                placeholder="geen ondergrens"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-gray-600">Jaar-bereik (t/m)</span>
+              <input
+                type="number" min={1900} max={2100}
+                value={form.yearMax}
+                onChange={(e) => setForm({ ...form, yearMax: e.target.value })}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded-md"
+                placeholder="geen bovengrens"
+              />
+            </label>
+            <div className="md:col-span-2 space-y-1">
+              <span className="text-gray-600">Regio-niveaus om te syncen</span>
+              <div className="flex flex-wrap gap-2">
+                {REGION_PREFIX_CHOICES.map((c) => {
+                  const checked = form.regionPrefixes.includes(c.value);
+                  return (
+                    <label
+                      key={c.value}
+                      className={`inline-flex items-center gap-1.5 px-2 py-1 border rounded-md text-xs cursor-pointer ${
+                        checked ? 'bg-blue-50 border-blue-300 text-blue-800' : 'bg-white border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          setForm(prev => ({
+                            ...prev,
+                            regionPrefixes: e.target.checked
+                              ? [...prev.regionPrefixes, c.value]
+                              : prev.regionPrefixes.filter(p => p !== c.value),
+                          }));
+                        }}
+                        className="sr-only"
+                      />
+                      {c.label}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-gray-400">
+                Laat leeg om alle regio-niveaus te accepteren (binnen de grenzen van de databron).
+              </p>
+            </div>
+          </div>
+        </details>
+
         <div className="flex items-center gap-4 text-sm text-gray-600">
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={form.notifyEmail} onChange={(e) => setForm({ ...form, notifyEmail: e.target.checked })} />
@@ -255,6 +372,11 @@ export function SyncScheduleManager() {
                   <td className="px-3 py-2 font-mono text-xs">
                     {s.cron_expression}
                     {s.year_filter != null && <span className="ml-1 text-gray-400">· {s.year_filter}</span>}
+                    {s.subset_filters && summariseSubsetFilters(s.subset_filters) && (
+                      <div className="mt-1 text-[10px] text-purple-700 bg-purple-50 inline-block px-1.5 py-0.5 rounded">
+                        {summariseSubsetFilters(s.subset_filters)}
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-xs text-gray-500">{s.timezone}</td>
                   <td className="px-3 py-2 text-xs">

@@ -39,8 +39,27 @@ export interface SyncResult {
   syncRunId?: string;
 }
 
+/**
+ * Global pull narrowing applied at sync time. All three fields are optional;
+ * set only the constraints you want to enforce. These are GLOBAL — they
+ * scope the one canonical pull, not anything per-org.
+ */
+export interface SubsetFilters {
+  /** Inclusive year range. Both bounds optional (set one to cap only on
+   *  that side). Pushed down to CBS as an OData `$filter` on Perioden. */
+  yearRange?: { min?: number; max?: number };
+  /** Accept only observations whose region code starts with one of these
+   *  prefixes (e.g. `['GM', 'PV', 'NL']`). Post-filtered server-side. */
+  regionPrefixes?: string[];
+  /** Whitelist of allowed values per CBS dimension identifier (e.g.
+   *  `{ "Geslacht": ["T001038"] }`). Rows with dim values outside the
+   *  whitelist are dropped. Post-filtered server-side. */
+  dimensionValues?: Record<string, string[]>;
+}
+
 export interface SyncOptions {
   yearFilter?: number;
+  subsetFilters?: SubsetFilters;
   trigger?: 'manual' | 'scheduled' | 'activation';
   triggeredBy?: string | null;
 }
@@ -130,7 +149,16 @@ export async function syncGeneric(
 
   try {
     let filter = config.filter || `Measure eq '${config.measureCode}'`;
-    if (yearFilter) {
+    // yearRange from subset_filters takes precedence over legacy yearFilter.
+    // We push year constraints down to CBS to minimise bytes on the wire.
+    const yr = options.subsetFilters?.yearRange;
+    if (yr?.min != null && yr?.max != null) {
+      filter += ` and Perioden ge '${yr.min}JJ00' and Perioden le '${yr.max}JJ00'`;
+    } else if (yr?.min != null) {
+      filter += ` and Perioden ge '${yr.min}JJ00'`;
+    } else if (yr?.max != null) {
+      filter += ` and Perioden le '${yr.max}JJ00'`;
+    } else if (yearFilter) {
       filter += ` and Perioden eq '${yearFilter}JJ00'`;
     }
 
@@ -142,7 +170,22 @@ export async function syncGeneric(
     let regionMissCount = 0;
     let dimMissCount = 0;
     let levelSkipCount = 0;
+    let subsetSkipCount = 0;
     const aggregated = new Map<string, Record<string, unknown>>();
+
+    const regionPrefixes = options.subsetFilters?.regionPrefixes?.length
+      ? options.subsetFilters.regionPrefixes
+      : null;
+    // Build per-dim value sets once so the hot loop is O(1) per row.
+    const dimWhitelist: Map<string, Set<string>> | null = (() => {
+      const entries = Object.entries(options.subsetFilters?.dimensionValues ?? {});
+      if (!entries.length) return null;
+      const m = new Map<string, Set<string>>();
+      for (const [dim, values] of entries) {
+        if (Array.isArray(values) && values.length > 0) m.set(dim, new Set(values));
+      }
+      return m.size > 0 ? m : null;
+    })();
 
     for (const obs of observations) {
       if (obs.Value === null || obs.Value === undefined) continue;
@@ -154,6 +197,28 @@ export async function syncGeneric(
       if (!year) continue;
       if (!region) { regionMissCount++; continue; }
       if (!noRegion && !allowedLevels.has(region.level)) { levelSkipCount++; continue; }
+
+      // Region-prefix subset filter. Matches on the raw CBS code (not the
+      // canonical form) so callers can target CBS-native prefixes like
+      // 'GM', 'PV', 'NL', 'CR', 'PC'.
+      if (regionPrefixes && !noRegion) {
+        const rawCode = String(obs[regionDim] ?? '').trim();
+        if (!regionPrefixes.some(p => rawCode.startsWith(p))) {
+          subsetSkipCount++; continue;
+        }
+      }
+
+      // Dimension-value whitelist subset filter. Compared against the
+      // pre-mapping CBS identifier (e.g. 'T001038'), not the mapped
+      // target-column value.
+      if (dimWhitelist) {
+        let accepted = true;
+        for (const [dim, allowed] of dimWhitelist) {
+          const v = obs[dim] as string | undefined;
+          if (!v || !allowed.has(String(v).trim())) { accepted = false; break; }
+        }
+        if (!accepted) { subsetSkipCount++; continue; }
+      }
 
       const dims: Record<string, string> = {};
       let skip = false;
@@ -179,10 +244,11 @@ export async function syncGeneric(
       }
     }
 
-    if (regionMissCount || dimMissCount || levelSkipCount) {
+    if (regionMissCount || dimMissCount || levelSkipCount || subsetSkipCount) {
       console.log(
         `[GenericSync] ${key}: skipped ${regionMissCount} unparsed regions, ` +
-        `${levelSkipCount} out-of-scope levels, ${dimMissCount} unmapped dimensions`,
+        `${levelSkipCount} out-of-scope levels, ${dimMissCount} unmapped dimensions, ` +
+        `${subsetSkipCount} subset-filtered`,
       );
     }
 
