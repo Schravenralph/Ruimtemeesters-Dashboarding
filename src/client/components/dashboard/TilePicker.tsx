@@ -271,14 +271,17 @@ function CatalogTab({
     setActivateTarget(row);
   }, [jumpToExistingTheme]);
 
-  const handleActivated = useCallback(async (result: { themeSlug: string; key: string }) => {
+  const handleActivated = useCallback(async (result: { themeSlug: string }) => {
     setActivateTarget(null);
     showToast('success', 'Tabel geactiveerd. Data sync loopt op de achtergrond — tegel vult zich binnen 5–30s.');
     // onThemesChanged returns the fresh themes array. We use it directly
     // instead of relying on the `themes` prop, which is the closure-at-
     // creation snapshot and hasn't re-rendered yet with the new theme.
+    // `themeSlug` is authoritative (server safeKey), not whatever the
+    // client proposed — ensures lookup matches even if the server
+    // sanitiser diverges from the client's pre-submit cleaning.
     const fresh = (await onThemesChanged?.()) ?? [];
-    const newTheme = fresh.find(t => t.slug === result.key);
+    const newTheme = fresh.find(t => t.slug === result.themeSlug);
     if (newTheme) setSelectedTheme(newTheme.id);
     else setSelectedTheme(null); // fall back to "all themes" view
     setTab('themes');

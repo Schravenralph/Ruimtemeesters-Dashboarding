@@ -28,8 +28,9 @@ interface QuickActivateDialogProps {
   onClose: () => void;
   /** Fires after the server returns a successful activation response (the
    *  actual data sync continues in the background). Parent is expected to
-   *  refresh themes and show a "sync in progress" toast. */
-  onActivated: (result: { themeSlug: string; key: string }) => void;
+   *  refresh themes and show a "sync in progress" toast. `themeSlug` is
+   *  the server-authoritative slug (after safeKey sanitisation). */
+  onActivated: (result: { themeSlug: string }) => void;
 }
 
 // Map CBS high-level themes → existing platform supercategories.
@@ -88,10 +89,13 @@ export function QuickActivateDialog({
           targetColumn: d.name.toLowerCase().replace(/[^a-z0-9]/g, '_'),
           valueMap: {},
         }));
-      const key = identifier.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      // Proposal key — the server re-sanitises this with its own rules and
+      // returns the authoritative themeSlug. We intentionally don't rely on
+      // the client-computed key after the request completes.
+      const proposedKey = identifier.toLowerCase().replace(/[^a-z0-9]/g, '_');
       const result = await api.post<{ themeSlug: string; message: string }>('/catalog/activate', {
         identifier,
-        key,
+        key: proposedKey,
         name: displayName,
         supercategory: guessSupercategory(themes),
         unit: metadata.measures.find(m => m.id === metadata.recommendedDefaults.measure)?.unit || 'aantal',
@@ -99,7 +103,7 @@ export function QuickActivateDialog({
         filter: `Measure eq '${metadata.recommendedDefaults.measure}'`,
         dimensionMappings: mappings,
       });
-      onActivated({ themeSlug: result.themeSlug, key });
+      onActivated({ themeSlug: result.themeSlug });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Activatie mislukt');
     } finally {

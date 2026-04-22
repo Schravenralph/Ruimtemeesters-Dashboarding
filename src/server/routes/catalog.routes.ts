@@ -181,33 +181,15 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
   const tableName = `data_${safeKey}`;
   const dimColumns = safeDimMappings.map(d => d.targetColumn);
 
-  // Idempotency guard. Two scenarios this prevents:
-  //   (a) Same CBS table activated twice — no-op, return existing slug
-  //       instead of re-running DDL + tile DELETE/INSERT.
-  //   (b) Key collision — someone tries to activate table X but key `foo`
-  //       is already bound to table Y. Reject with 409 so we don't
-  //       overwrite Y's data_source and tiles.
-  const existing = await query<{ cbs_table_id: string | null }>(
-    'SELECT cbs_table_id FROM data_sources WHERE key = $1',
-    [safeKey],
+  // Validate that the CBS identifier actually exists in our catalogue before
+  // spending any DDL on it. Without this, any authenticated user could POST
+  // arbitrary identifier+key pairs and create unbounded empty tables.
+  const catalogueCheck = await query<{ identifier: string }>(
+    'SELECT identifier FROM cbs_catalog WHERE identifier = $1',
+    [identifier],
   );
-  if (existing.rows.length > 0) {
-    const existingTableId = existing.rows[0].cbs_table_id;
-    if (existingTableId && existingTableId !== identifier) {
-      res.status(409).json({
-        error: `Key "${safeKey}" is already activated for CBS table ${existingTableId}. Pick a different key or deactivate the existing source first.`,
-      });
-      return;
-    }
-    res.json({
-      status: 'already_activated',
-      key: safeKey,
-      tableName,
-      dimensionColumns: dimColumns,
-      themeSlug: safeKey,
-      tilesCreated: 0,
-      message: `Tabel was al geactiveerd als "${safeKey}".`,
-    });
+  if (catalogueCheck.rows.length === 0) {
+    res.status(404).json({ error: `Unknown CBS table identifier: ${identifier}` });
     return;
   }
 
@@ -256,6 +238,39 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
   const client = await (await import('../db/pool.js')).getClient();
   try {
     await client.query('BEGIN');
+
+    // 0. Serialise concurrent activations on the same key via a txn-scoped
+    // advisory lock. Two requests racing with the same safeKey will queue
+    // instead of both passing a pre-txn SELECT and overwriting each other
+    // through ON CONFLICT DO UPDATE.
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended('activate:' || $1, 0))", [safeKey]);
+
+    // 0b. Now under the lock, re-check the existing row. This is the
+    // transactionally-safe version of the idempotency / key-collision guard.
+    const existing = await client.query<{ cbs_table_id: string | null }>(
+      'SELECT cbs_table_id FROM data_sources WHERE key = $1',
+      [safeKey],
+    );
+    if (existing.rows.length > 0) {
+      const existingTableId = existing.rows[0].cbs_table_id;
+      await client.query('ROLLBACK');
+      if (existingTableId && existingTableId !== identifier) {
+        res.status(409).json({
+          error: `Key "${safeKey}" is already activated for CBS table ${existingTableId}. Pick a different key or deactivate the existing source first.`,
+        });
+        return;
+      }
+      res.json({
+        status: 'already_activated',
+        key: safeKey,
+        tableName,
+        dimensionColumns: dimColumns,
+        themeSlug: safeKey,
+        tilesCreated: 0,
+        message: `Tabel was al geactiveerd als "${safeKey}".`,
+      });
+      return;
+    }
 
     // 1. Create the data table dynamically.
     // No FK to geo_areas: CBS publishes many region granularities (PC4, CR, BU,
