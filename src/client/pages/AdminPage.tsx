@@ -1,18 +1,19 @@
 import { useState } from 'react';
-import { Shield, Users, Database, ClipboardList, Upload, Palette, Key, Webhook, BarChart3, RefreshCw } from 'lucide-react';
+import { Shield, Users, Database, ClipboardList, Upload, Palette, Key, Webhook, BarChart3, RefreshCw, Activity } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { UserManagement } from '../components/admin/UserManagement';
 import { PolicyEditor } from '../components/admin/PolicyEditor';
 import { AuditLog } from '../components/admin/AuditLog';
 import { DataSourceManager } from '../components/admin/DataSourceManager';
 import { DataImportPanel } from '../components/admin/DataImportPanel';
+import { DataQualityPanel } from '../components/admin/DataQualityPanel';
 import { ThemeManager } from '../components/admin/ThemeManager';
 import { ApiKeyManager } from '../components/admin/ApiKeyManager';
 import { WebhookManager } from '../components/admin/WebhookManager';
 import { AnalyticsDashboard } from '../components/admin/AnalyticsDashboard';
 import { DataSyncPanel } from '../components/admin/DataSyncPanel';
 
-type Tab = 'policies' | 'users' | 'themes' | 'data' | 'import' | 'sync' | 'audit' | 'apikeys' | 'webhooks' | 'analytics';
+type Tab = 'policies' | 'users' | 'themes' | 'data' | 'quality' | 'import' | 'sync' | 'audit' | 'apikeys' | 'webhooks' | 'analytics';
 
 export function AdminPage() {
   const { user } = useAuth();
@@ -31,6 +32,7 @@ export function AdminPage() {
     { key: 'users', label: 'Gebruikers', icon: Users },
     { key: 'themes', label: 'Thema\'s', icon: Palette },
     { key: 'data', label: 'Databronnen', icon: Database },
+    { key: 'quality', label: 'Datakwaliteit', icon: Activity },
     { key: 'import', label: 'Data import', icon: Upload },
     { key: 'sync', label: 'CBS Sync', icon: RefreshCw },
     { key: 'audit', label: 'Audit Log', icon: ClipboardList },
@@ -69,6 +71,7 @@ export function AdminPage() {
       {activeTab === 'users' && <UserManagement />}
       {activeTab === 'themes' && <ThemeManager />}
       {activeTab === 'data' && <DataSourceManager />}
+      {activeTab === 'quality' && <DataQualityPanel />}
       {activeTab === 'import' && <DataImportPanel />}
       {activeTab === 'sync' && <DataSyncPanel />}
       {activeTab === 'audit' && <AuditLog />}
