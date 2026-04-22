@@ -151,13 +151,26 @@ export async function syncGeneric(
     let filter = config.filter || `Measure eq '${config.measureCode}'`;
     // yearRange from subset_filters takes precedence over legacy yearFilter.
     // We push year constraints down to CBS to minimise bytes on the wire.
+    //
+    // CBS period identifiers are strings like '2024JJ00' (yearly),
+    // '2024MM03' (monthly), '2024KW1' (quarterly). The OData comparison
+    // is lexicographic, and in ASCII 'K' and 'M' > 'J', so
+    //   Perioden le '2024JJ00'
+    // silently excludes 2024's monthly and quarterly rows.
+    //
+    // Use a half-open upper bound on the next year's JJ00 sentinel instead:
+    //   Perioden lt '2025JJ00'
+    // '2024MM12' lt '2025JJ00' compares digit-by-digit and correctly passes;
+    // '2025JJ00' lt '2025JJ00' correctly fails. No asymmetry.
     const yr = options.subsetFilters?.yearRange;
-    if (yr?.min != null && yr?.max != null) {
-      filter += ` and Perioden ge '${yr.min}JJ00' and Perioden le '${yr.max}JJ00'`;
-    } else if (yr?.min != null) {
-      filter += ` and Perioden ge '${yr.min}JJ00'`;
-    } else if (yr?.max != null) {
-      filter += ` and Perioden le '${yr.max}JJ00'`;
+    const minSentinel = yr?.min != null ? `${yr.min}JJ00` : null;
+    const maxExclusive = yr?.max != null ? `${yr.max + 1}JJ00` : null;
+    if (minSentinel && maxExclusive) {
+      filter += ` and Perioden ge '${minSentinel}' and Perioden lt '${maxExclusive}'`;
+    } else if (minSentinel) {
+      filter += ` and Perioden ge '${minSentinel}'`;
+    } else if (maxExclusive) {
+      filter += ` and Perioden lt '${maxExclusive}'`;
     } else if (yearFilter) {
       filter += ` and Perioden eq '${yearFilter}JJ00'`;
     }
