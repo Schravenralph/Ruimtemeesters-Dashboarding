@@ -133,25 +133,34 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
   // invariant), so every identifier that flows into DDL must be validated
   // server-side. Previously admin trust was the only thing between a
   // malformed `targetColumn` and our CREATE TABLE statement.
-  const IDENT_MAX_LEN = 63; // Postgres identifier cap
-  const baseClean = (raw: unknown, field: string): string => {
+  //
+  // Postgres silently truncates identifiers at 63 chars, which would turn
+  // distinct long safeKeys into collisions after prefixing. Budget the
+  // max-length checks so the LONGEST downstream identifier still fits:
+  //   data_${safeKey}                       → 5  + safeKey
+  //   idx_${safeKey}_geo_year               → 13 + safeKey   (tightest)
+  //   ${safeColumn} or _${safeColumn}       → 1  + safeColumn (only when digit-led)
+  const PG_IDENT_MAX = 63;
+  const KEY_MAX = PG_IDENT_MAX - 'idx__geo_year'.length;  // = 50
+  const COLUMN_MAX = PG_IDENT_MAX - 1;                    // = 62
+  const baseClean = (raw: unknown, field: string, max: number): string => {
     if (typeof raw !== 'string') throw new Error(`${field} must be a string`);
     const cleaned = raw.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     if (!cleaned) throw new Error(`${field} produces an empty identifier`);
-    if (cleaned.length > IDENT_MAX_LEN) throw new Error(`${field} exceeds ${IDENT_MAX_LEN} chars`);
+    if (cleaned.length > max) throw new Error(`${field} exceeds ${max} chars after sanitisation`);
     return cleaned;
   };
   // Keys can start with digits. They only appear in DDL prefixed by
   // 'data_' / 'idx_' and as parameterised string values elsewhere, so
   // leading digits are safe. Stripping them would collapse every CBS
   // *NED table into 'ned' and silently overwrite prior activations.
-  const toSafeKey = (raw: unknown, field: string): string => baseClean(raw, field);
+  const toSafeKey = (raw: unknown, field: string): string => baseClean(raw, field, KEY_MAX);
   // Column names get interpolated unquoted into CREATE TABLE, so Postgres
   // requires them to start with a letter or underscore. When a sanitised
   // column happens to start with a digit (rare: CBS dims are PascalCase,
   // but e.g. a '3-kind' -> '3_kind'), auto-prefix an underscore.
   const toSafeColumn = (raw: unknown, field: string): string => {
-    const cleaned = baseClean(raw, field);
+    const cleaned = baseClean(raw, field, COLUMN_MAX);
     return /^[0-9]/.test(cleaned) ? `_${cleaned}` : cleaned;
   };
 
