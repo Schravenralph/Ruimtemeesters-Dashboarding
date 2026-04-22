@@ -177,7 +177,7 @@ export function ReportPage() {
                 if (neighbor !== undefined) setCompareYear(neighbor);
               }
             }}
-            disabled={years.length < 2}
+            disabled={!isComparing && years.length < 2}
             className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isComparing ? (
