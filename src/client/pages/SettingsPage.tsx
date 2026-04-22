@@ -2,17 +2,14 @@ import { Select } from '../components/ui/Select';
 import { Card, CardHeader } from '../components/ui/Card';
 import { useThemes } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useLocalStorage } from '../hooks/useLocalStorage';
+import { useAppConfig } from '../contexts/AppConfigContext';
+
+const YEAR_OPTIONS = [2020, 2021, 2022, 2023, 2024, 2025];
 
 export function SettingsPage() {
   const { user } = useAuth();
   const { themes } = useThemes();
-
-  const [defaultTheme, setDefaultTheme] = useLocalStorage('defaultTheme', '');
-  const [defaultYear, setDefaultYear] = useLocalStorage('defaultYear', '2024');
-  const [autoRefresh, setAutoRefresh] = useLocalStorage('autoRefresh', false);
-  const [compactNumbers, setCompactNumbers] = useLocalStorage('compactNumbers', true);
-  const [chartAnimation, setChartAnimation] = useLocalStorage('chartAnimation', true);
+  const { config, updateConfig, isLoading } = useAppConfig();
 
   if (!user) {
     return (
@@ -24,9 +21,12 @@ export function SettingsPage() {
 
   return (
     <div className="max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Instellingen</h1>
-        <p className="text-sm text-gray-500 mt-1">Pas je persoonlijke voorkeuren aan</p>
+      <div className="mb-6 flex items-baseline justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Instellingen</h1>
+          <p className="text-sm text-gray-500 mt-1">Pas je persoonlijke voorkeuren aan</p>
+        </div>
+        {isLoading && <span className="text-xs text-gray-400">Laden…</span>}
       </div>
 
       <div className="space-y-6">
@@ -52,21 +52,23 @@ export function SettingsPage() {
         {/* Dashboard Defaults */}
         <Card>
           <CardHeader title="Dashboard standaardwaarden" />
-          <div className="space-y-3">
+          <div className={`space-y-3 ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}>
             <Select
               label="Standaard thema"
-              value={defaultTheme}
-              onChange={(e) => setDefaultTheme(e.target.value)}
-              options={themes.map(t => ({ value: t.slug, label: t.name }))}
+              value={config.defaultTheme}
+              onChange={(e) => updateConfig({ defaultTheme: e.target.value })}
+              disabled={isLoading}
+              options={[
+                { value: '', label: '— Kies een thema —' },
+                ...themes.map(t => ({ value: t.slug, label: t.name })),
+              ]}
             />
             <Select
               label="Standaard jaar"
-              value={defaultYear}
-              onChange={(e) => setDefaultYear(e.target.value)}
-              options={['2020', '2021', '2022', '2023', '2024', '2025'].map(y => ({
-                value: y,
-                label: y,
-              }))}
+              value={String(config.defaultYear)}
+              onChange={(e) => updateConfig({ defaultYear: parseInt(e.target.value, 10) })}
+              disabled={isLoading}
+              options={YEAR_OPTIONS.map(y => ({ value: String(y), label: String(y) }))}
             />
           </div>
         </Card>
@@ -74,13 +76,14 @@ export function SettingsPage() {
         {/* Display */}
         <Card>
           <CardHeader title="Weergave" />
-          <div className="space-y-3">
+          <div className={`space-y-3 ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}>
             <label className="flex items-center justify-between py-2">
               <span className="text-sm text-gray-700">Compacte getallen (1.5M i.p.v. 1.500.000)</span>
               <input
                 type="checkbox"
-                checked={compactNumbers}
-                onChange={(e) => setCompactNumbers(e.target.checked)}
+                checked={config.compactNumbers}
+                disabled={isLoading}
+                onChange={(e) => updateConfig({ compactNumbers: e.target.checked })}
                 className="h-4 w-4 rounded border-gray-300 text-blue-600"
               />
             </label>
@@ -88,8 +91,9 @@ export function SettingsPage() {
               <span className="text-sm text-gray-700">Grafiek animaties</span>
               <input
                 type="checkbox"
-                checked={chartAnimation}
-                onChange={(e) => setChartAnimation(e.target.checked)}
+                checked={config.chartAnimations}
+                disabled={isLoading}
+                onChange={(e) => updateConfig({ chartAnimations: e.target.checked })}
                 className="h-4 w-4 rounded border-gray-300 text-blue-600"
               />
             </label>
@@ -97,15 +101,18 @@ export function SettingsPage() {
               <span className="text-sm text-gray-700">Automatisch vernieuwen</span>
               <input
                 type="checkbox"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
+                checked={config.autoRefresh}
+                disabled={isLoading}
+                onChange={(e) => updateConfig({ autoRefresh: e.target.checked })}
                 className="h-4 w-4 rounded border-gray-300 text-blue-600"
               />
             </label>
           </div>
         </Card>
 
-        <p className="text-xs text-gray-400">Wijzigingen worden automatisch opgeslagen.</p>
+        <p className="text-xs text-gray-400">
+          Wijzigingen worden automatisch opgeslagen en gedeeld tussen apparaten.
+        </p>
       </div>
     </div>
   );
