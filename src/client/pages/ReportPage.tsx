@@ -9,7 +9,7 @@ import { LoadingOverlay } from '../components/ui/Spinner';
 import { useFilters } from '../contexts/FilterContext';
 import { api } from '../services/api/client';
 import { getAvailableYears } from '../services/api/data';
-import { formatNumber, formatCompact } from '../utils/format';
+import { formatNumber, formatCompact, formatPercent } from '../utils/format';
 
 interface ReportSection {
   title: string;
@@ -138,7 +138,15 @@ export function ReportPage() {
           <Select
             label="Jaar"
             value={String(currentYear)}
-            onChange={(e) => setYear(parseInt(e.target.value, 10))}
+            onChange={(e) => {
+              const y = parseInt(e.target.value, 10);
+              setYear(y);
+              // Avoid year === compareYear (degenerate same-year compare).
+              if (compareYear === y) {
+                const fallback = years.find(other => other !== y);
+                setCompareYear(fallback ?? null);
+              }
+            }}
             options={years.map(y => ({
               value: String(y),
               label: y > new Date().getFullYear() ? `${y} (prognose)` : String(y),
@@ -286,9 +294,7 @@ export function ReportPage() {
                           >
                             {item.change > 0 ? '+' : ''}{formatNumber(item.change)}
                             {pct !== undefined && Number.isFinite(pct) && (
-                              <span className="ml-1 opacity-75">
-                                ({pct > 0 ? '+' : ''}{pct.toFixed(1)}%)
-                              </span>
+                              <span className="ml-1 opacity-75">({formatPercent(pct)})</span>
                             )}
                           </span>
                         )}
