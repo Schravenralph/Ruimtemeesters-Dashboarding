@@ -133,29 +133,35 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
   // invariant), so every identifier that flows into DDL must be validated
   // server-side. Previously admin trust was the only thing between a
   // malformed `targetColumn` and our CREATE TABLE statement.
-  //
-  // Leading digits are PERMITTED. CBS table IDs like '83648NED' produce a
-  // key '83648ned' — DDL always prefixes it ('data_', 'idx_') before it
-  // appears unquoted, so leading digits are safe. Stripping them would
-  // collapse every *NED table into the same 'ned' key and silently
-  // overwrite prior activations.
   const IDENT_MAX_LEN = 63; // Postgres identifier cap
-  const toSafeIdent = (raw: string, field: string): string => {
+  const baseClean = (raw: unknown, field: string): string => {
     if (typeof raw !== 'string') throw new Error(`${field} must be a string`);
     const cleaned = raw.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     if (!cleaned) throw new Error(`${field} produces an empty identifier`);
     if (cleaned.length > IDENT_MAX_LEN) throw new Error(`${field} exceeds ${IDENT_MAX_LEN} chars`);
-    if (!/^[a-z0-9_]+$/.test(cleaned)) throw new Error(`${field} is not a valid SQL identifier`);
     return cleaned;
+  };
+  // Keys can start with digits. They only appear in DDL prefixed by
+  // 'data_' / 'idx_' and as parameterised string values elsewhere, so
+  // leading digits are safe. Stripping them would collapse every CBS
+  // *NED table into 'ned' and silently overwrite prior activations.
+  const toSafeKey = (raw: unknown, field: string): string => baseClean(raw, field);
+  // Column names get interpolated unquoted into CREATE TABLE, so Postgres
+  // requires them to start with a letter or underscore. When a sanitised
+  // column happens to start with a digit (rare: CBS dims are PascalCase,
+  // but e.g. a '3-kind' -> '3_kind'), auto-prefix an underscore.
+  const toSafeColumn = (raw: unknown, field: string): string => {
+    const cleaned = baseClean(raw, field);
+    return /^[0-9]/.test(cleaned) ? `_${cleaned}` : cleaned;
   };
 
   let safeKey: string;
   let safeDimMappings: Array<{ cbsDimension: string; targetColumn: string; valueMap: Record<string, string> }>;
   try {
-    safeKey = toSafeIdent(key, 'key');
+    safeKey = toSafeKey(key, 'key');
     safeDimMappings = (dimensionMappings ?? []).map((d, i) => ({
       cbsDimension: String(d.cbsDimension ?? ''),
-      targetColumn: toSafeIdent(d.targetColumn, `dimensionMappings[${i}].targetColumn`),
+      targetColumn: toSafeColumn(d.targetColumn, `dimensionMappings[${i}].targetColumn`),
       valueMap: d.valueMap && typeof d.valueMap === 'object' ? d.valueMap : {},
     }));
   } catch (err) {

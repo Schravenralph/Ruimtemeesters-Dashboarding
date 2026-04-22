@@ -217,6 +217,11 @@ function CatalogTab({
   const [activateTarget, setActivateTarget] = useState<CatalogRow | null>(null);
 
   useEffect(() => {
+    // Debounce keystrokes AND guard against an in-flight request landing
+    // after the user typed more characters: the `cancelled` ref ensures a
+    // stale response can never overwrite fresh results or clear a spinner
+    // that a newer request is relying on.
+    let cancelled = false;
     setIsLoading(true);
     const t = setTimeout(() => {
       api.get<{ tables: CatalogRow[]; total: number }>('/catalog', {
@@ -224,11 +229,21 @@ function CatalogTab({
         limit: CATALOG_PAGE_SIZE,
         offset: 0,
       } as Record<string, string | number>)
-        .then(data => { setResults(data.tables); setTotal(data.total); })
-        .catch(() => { setResults([]); setTotal(0); })
-        .finally(() => setIsLoading(false));
-    }, 250); // Debounce so we don't hammer the endpoint on every keystroke
-    return () => clearTimeout(t);
+        .then(data => {
+          if (cancelled) return;
+          setResults(data.tables);
+          setTotal(data.total);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setResults([]);
+          setTotal(0);
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoading(false);
+        });
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
   }, [search]);
 
   const jumpToExistingTheme = useCallback(async (dataSourceKey: string) => {
