@@ -21,22 +21,26 @@ export function exportTile(tile: TileConfig, format: string, data?: DataPoint[])
 
 function toExportRows(data?: DataPoint[]): Record<string, unknown>[] {
   if (!data || data.length === 0) return [];
+  const hasDimension = data.some(d => d.dimensionValue !== undefined && d.dimensionValue !== null);
+  const hasConfidence = data.some(
+    d =>
+      (d.confidenceLower !== undefined && d.confidenceLower !== null) ||
+      (d.confidenceUpper !== undefined && d.confidenceUpper !== null),
+  );
   return data.map(d => {
     const row: Record<string, unknown> = {
       year: d.year,
       geo_code: d.geoCode,
       geo_name: d.geoName,
       value: d.value,
-      source: d.source,
+      source: d.source ?? '',
     };
-    if (d.dimensionValue !== undefined && d.dimensionValue !== null) {
-      row.dimension = d.dimensionValue;
+    if (hasDimension) {
+      row.dimension = d.dimensionValue ?? '';
     }
-    if (d.confidenceLower !== undefined && d.confidenceLower !== null) {
-      row.confidence_lower = d.confidenceLower;
-    }
-    if (d.confidenceUpper !== undefined && d.confidenceUpper !== null) {
-      row.confidence_upper = d.confidenceUpper;
+    if (hasConfidence) {
+      row.confidence_lower = d.confidenceLower ?? '';
+      row.confidence_upper = d.confidenceUpper ?? '';
     }
     return row;
   });
