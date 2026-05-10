@@ -309,7 +309,23 @@ export const DataQueryParams = z.object({
   // Absent → no references block (back-compat preserved).
   references: z.string().optional(),
   cohortType: CohortType.optional(),    // overrides the per-supercategory default cohort type
-  envelope: z.coerce.boolean().optional(), // include p25/p50/p75 alongside cohort mean
+  // envelope: include p25/p50/p75 alongside cohort mean.
+  // Cannot use z.coerce.boolean() — it calls JS Boolean() which treats both 'true' AND 'false' (any non-empty string)
+  // as truthy. Query strings always arrive as strings, so we accept boolean | 'true' | 'false' | undefined and
+  // collapse to boolean | undefined explicitly.
+  envelope: z.preprocess(
+    v => {
+      if (v === undefined) return undefined;
+      if (typeof v === 'boolean') return v;
+      if (typeof v === 'string') {
+        const lower = v.toLowerCase();
+        if (lower === 'true' || lower === '1') return true;
+        if (lower === 'false' || lower === '0' || lower === '') return false;
+      }
+      return undefined;
+    },
+    z.boolean().optional(),
+  ),
 });
 export type DataQueryParams = z.infer<typeof DataQueryParams>;
 
