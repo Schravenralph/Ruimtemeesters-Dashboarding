@@ -1,9 +1,26 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import type { FilterState, ChartType } from '@shared/api/contracts';
+import type { FilterState, ChartType, CohortType } from '@shared/api/contracts';
 import type { TransformationType } from '../utils/transformations';
 
 const STORAGE_KEY = 'ruimtemeesters_presentations';
 const MAX_PRESENTATIONS = 10;
+
+// SPEC-B: per-tab visibility of cohort/provincie/land reference series + envelope toggle.
+// cohortType undefined → use the per-supercategory default returned by GET /api/cohorts/.
+export interface ReferenceVisibility {
+  cohort: boolean;
+  provincie: boolean;
+  land: boolean;
+  envelope: boolean;
+  cohortType?: CohortType;
+}
+
+export const DEFAULT_REFERENCE_VISIBILITY: ReferenceVisibility = {
+  cohort: true,
+  provincie: true,
+  land: true,
+  envelope: false,
+};
 
 export interface Presentation {
   id: string;
@@ -16,6 +33,7 @@ export interface Presentation {
     groeicijferType?: 'absoluut' | 'relatief' | 'index';
     baseYear?: number;
   };
+  referenceVisibility: ReferenceVisibility;
 }
 
 interface PresentationState {
@@ -54,7 +72,17 @@ function createDefaultPresentation(): Presentation {
     filters: { ...defaultFilters },
     chartType: 'table',
     transformation: 'none',
+    referenceVisibility: { ...DEFAULT_REFERENCE_VISIBILITY },
   };
+}
+
+// Migrate old persisted presentations that lack referenceVisibility.
+function migratePresentation(p: Partial<Presentation>): Presentation {
+  return {
+    ...createDefaultPresentation(),
+    ...p,
+    referenceVisibility: p.referenceVisibility ?? { ...DEFAULT_REFERENCE_VISIBILITY },
+  } as Presentation;
 }
 
 function loadFromStorage(): PresentationState | null {
@@ -68,7 +96,10 @@ function loadFromStorage(): PresentationState | null {
       parsed.presentations.length > 0 &&
       typeof parsed.activeId === 'string'
     ) {
-      return parsed as PresentationState;
+      return {
+        presentations: parsed.presentations.map(migratePresentation),
+        activeId: parsed.activeId,
+      };
     }
     return null;
   } catch {

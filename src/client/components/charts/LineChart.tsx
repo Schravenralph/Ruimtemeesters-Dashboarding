@@ -3,14 +3,66 @@ import {
   Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   ReferenceLine, ReferenceArea,
 } from 'recharts';
-import type { DataPoint } from '@shared/api/contracts';
+import type { DataPoint, ReferenceSeries } from '@shared/api/contracts';
 import { isPrognoseSource } from '../../utils/prognose';
+import { getReferenceStyle, sortReferences } from '../../utils/referenceSeries';
 
 interface LineChartProps {
   data: DataPoint[];
   colors?: string[];
   comparisonData?: DataPoint[];
   comparisonLabel?: string;
+  /** SPEC-B: cohort/provincie/land reference series, rendered as dashed lines on the same axis. */
+  references?: ReferenceSeries[];
+}
+
+/** Stable dataKey per reference kind so Recharts can render them as additional lines. */
+const REF_KEYS = { cohort: '__ref_cohort', provincie: '__ref_provincie', land: '__ref_land' } as const;
+type RefKey = typeof REF_KEYS[keyof typeof REF_KEYS];
+
+function attachReferences(
+  chartData: Array<Record<string, string | number | undefined | number[]>>,
+  refs: ReferenceSeries[] | undefined,
+): { data: typeof chartData; presentRefs: ReferenceSeries[] } {
+  if (!refs || refs.length === 0) return { data: chartData, presentRefs: [] };
+  const sorted = sortReferences(refs);
+  const presentRefs: ReferenceSeries[] = [];
+  for (const ref of sorted) {
+    const key: RefKey = REF_KEYS[ref.kind];
+    const valueByYear = new Map(ref.series.map(p => [p.year, p.value]));
+    let added = false;
+    for (const row of chartData) {
+      const yr = parseInt(row.name as string, 10);
+      const v = valueByYear.get(yr);
+      if (v !== undefined && Number.isFinite(v)) {
+        row[key] = v;
+        added = true;
+      }
+    }
+    if (added) presentRefs.push(ref);
+  }
+  return { data: chartData, presentRefs };
+}
+
+function renderReferenceLines(presentRefs: ReferenceSeries[]): React.ReactNode[] {
+  return presentRefs.map(ref => {
+    const style = getReferenceStyle(ref.kind);
+    const key: RefKey = REF_KEYS[ref.kind];
+    return (
+      <Line
+        key={`ref-${ref.kind}`}
+        type="monotone"
+        dataKey={key}
+        name={ref.label}
+        stroke={style.stroke}
+        strokeWidth={style.strokeWidth}
+        strokeDasharray={style.strokeDasharray}
+        strokeOpacity={style.opacity}
+        dot={false}
+        connectNulls={true}
+      />
+    );
+  });
 }
 
 const DEFAULT_COLORS = [
@@ -18,7 +70,7 @@ const DEFAULT_COLORS = [
   '#ec4899', '#06b6d4', '#84cc16',
 ];
 
-export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonData, comparisonLabel }: LineChartProps) {
+export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonData, comparisonLabel, references }: LineChartProps) {
   const dimensionValues = [...new Set(data.map(d => d.dimensionValue).filter((v): v is string => !!v))];
 
   if (dimensionValues.length === 0) {
@@ -50,6 +102,9 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
         chartData[bridgeIdx].prognose = chartData[bridgeIdx].actuals;
       }
     }
+
+    // SPEC-B: weave reference series into the per-year rows.
+    const { presentRefs } = attachReferences(chartData, references);
 
     return (
       <ResponsiveContainer width="100%" height={300}>
@@ -102,10 +157,14 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
               />
             </>
           ) : (
-            <Line type="monotone" dataKey="value" stroke={colors[0]} strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="value" name="Focal" stroke={colors[0]} strokeWidth={2} dot={{ r: 3 }} />
           )}
           {comparisonData && comparisonData.length > 0 && (
             <ReferenceLine y={comparisonData.reduce((sum, d) => sum + d.value, 0) / comparisonData.length} stroke="#ef4444" strokeDasharray="8 4" label={{ value: comparisonLabel || 'Vergelijking', position: 'right', fontSize: 11, fill: '#ef4444' }} />
+          )}
+          {renderReferenceLines(presentRefs)}
+          {presentRefs.length > 0 && !hasPrognose && (
+            <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
           )}
         </ComposedChart>
       </ResponsiveContainer>
@@ -114,18 +173,19 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
 
   // Multi-line: one line per dimension value, x-axis = year
   const years = [...new Set(data.map(d => d.year))].sort();
-  const chartData = years.map(year => {
-    const entry: Record<string, string | number> = { name: String(year) };
+  const chartDataMulti: Array<Record<string, string | number | undefined | number[]>> = years.map(year => {
+    const entry: Record<string, string | number | undefined | number[]> = { name: String(year) };
     for (const dimVal of dimensionValues) {
       const point = data.find(d => d.year === year && d.dimensionValue === dimVal);
       entry[dimVal] = point?.value || 0;
     }
     return entry;
   });
+  const { presentRefs: presentRefsMulti } = attachReferences(chartDataMulti, references);
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <ComposedChart data={chartData}>
+      <ComposedChart data={chartDataMulti}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
         <XAxis dataKey="name" tick={{ fontSize: 12 }} />
         <YAxis tick={{ fontSize: 12 }} tickFormatter={formatNumber} />
@@ -141,6 +201,7 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
             dot={{ r: 3 }}
           />
         ))}
+        {renderReferenceLines(presentRefsMulti)}
       </ComposedChart>
     </ResponsiveContainer>
   );
