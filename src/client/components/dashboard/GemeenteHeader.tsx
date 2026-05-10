@@ -16,27 +16,33 @@ export function GemeenteHeader() {
   const { memberships } = useCohortMemberships(filters.geoCode);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [focalArea, setFocalArea] = useState<{ name: string; level: string } | null>(null);
-  const [previousFocal, setPreviousFocal] = useState<string>(filters.geoCode);
 
-  // Fetch focal area name (geo_areas → /api/geo) when geoCode changes
+  // Fetch focal area name with AbortController + non-OK clear, so a rapid
+  // sequence of geoCode changes (or a 404 after a municipal merger) doesn't
+  // leave stale data on screen. Bugbot R1 #63.
   useEffect(() => {
-    fetch(`/api/geo/${filters.geoCode}`)
-      .then(r => r.ok ? r.json() : null)
+    const ctrl = new AbortController();
+    fetch(`/api/geo/${filters.geoCode}`, { signal: ctrl.signal })
+      .then(r => {
+        if (!r.ok) {
+          // Clear stale name so the picker label falls back to the raw code.
+          setFocalArea(null);
+          return null;
+        }
+        return r.json();
+      })
       .then((area: GeoArea | null) => {
         if (area) setFocalArea({ name: area.name, level: area.level });
       })
-      .catch(() => setFocalArea(null));
+      .catch((err: unknown) => {
+        // Ignore abort errors (expected on rapid changes); clear on real errors.
+        if (err instanceof Error && err.name !== 'AbortError') setFocalArea(null);
+      });
+    return () => ctrl.abort();
   }, [filters.geoCode]);
 
   const isGemeente = filters.geoLevel === 'gemeente';
   const stedelijkheid = memberships?.memberships.find(m => m.cohortType === 'stedelijkheid');
-
-  // a11y: announce focal change once focalArea resolves to a different code
-  useEffect(() => {
-    if (focalArea && filters.geoCode !== previousFocal) {
-      setPreviousFocal(filters.geoCode);
-    }
-  }, [focalArea, filters.geoCode, previousFocal]);
 
   const handleSelect = (area: { code: string; level?: string }) => {
     setGeoCode(area.code);

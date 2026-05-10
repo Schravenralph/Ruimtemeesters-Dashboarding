@@ -82,9 +82,37 @@ export function useCohortMemberships(geoCode: string | null | undefined): UseCoh
     }
   }, [geoCode]);
 
+  // Race-safe effect: a rapid sequence of geoCode changes can race in-flight
+  // fetches. The cancelled flag prevents a stale resolution from clobbering
+  // state set by a later request. Bugbot R1 #63.
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    let cancelled = false;
+    void (async () => {
+      if (!geoCode || !geoCode.startsWith('GM')) {
+        if (!cancelled) setMemberships(null);
+        return;
+      }
+      const cached = readCache(geoCode);
+      if (cached) {
+        if (!cancelled) setMemberships(cached);
+        return;
+      }
+      if (!cancelled) { setIsLoading(true); setError(null); }
+      try {
+        const data = await getCohortMemberships(geoCode);
+        if (cancelled) return;
+        writeCache(geoCode, data);
+        setMemberships(data);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Failed to fetch cohort memberships');
+        setMemberships(null);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [geoCode]);
 
   return { memberships, isLoading, error, refetch: fetchData };
 }
