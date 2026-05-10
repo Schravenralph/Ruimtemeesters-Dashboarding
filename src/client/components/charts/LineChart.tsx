@@ -157,7 +157,7 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
               />
             </>
           ) : (
-            <Line type="monotone" dataKey="value" name="Focal" stroke={colors[0]} strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="value" name="Gemeente" stroke={colors[0]} strokeWidth={2} dot={{ r: 3 }} />
           )}
           {comparisonData && comparisonData.length > 0 && (
             <ReferenceLine y={comparisonData.reduce((sum, d) => sum + d.value, 0) / comparisonData.length} stroke="#ef4444" strokeDasharray="8 4" label={{ value: comparisonLabel || 'Vergelijking', position: 'right', fontSize: 11, fill: '#ef4444' }} />

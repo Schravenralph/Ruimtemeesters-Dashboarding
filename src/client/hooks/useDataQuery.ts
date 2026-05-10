@@ -73,6 +73,8 @@ export function useDataQuery({
     setError(null);
 
     try {
+      // cohortType + envelope are only meaningful alongside references — guard them
+      // so we don't send orphaned modifiers when references is omitted.
       const response = await queryData({
         source,
         geoLevel: filters.geoLevel,
@@ -81,8 +83,8 @@ export function useDataQuery({
         dimension,
         dimensionValue,
         ...(refsParam ? { references: refsParam } : {}),
-        ...(refVis?.cohortType ? { cohortType: refVis.cohortType } : {}),
-        ...(refVis?.envelope ? { envelope: true } : {}),
+        ...(refsParam && refVis?.cohortType ? { cohortType: refVis.cohortType } : {}),
+        ...(refsParam && refVis?.envelope ? { envelope: true } : {}),
       });
       setData(response.data);
       setReferences(blockToArray(response.references));
