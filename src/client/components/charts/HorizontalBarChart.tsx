@@ -1,13 +1,16 @@
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from 'recharts';
-import type { DataPoint } from '@shared/api/contracts';
+import type { DataPoint, ReferenceSeries } from '@shared/api/contracts';
 import { formatCompact, dimensionValueLabel } from '../../utils/format';
+import { getReferenceStyle, sortReferences } from '../../utils/referenceSeries';
 
 interface HorizontalBarChartProps {
   data: DataPoint[];
   colors?: string[];
   maxItems?: number;
+  /** SPEC-B: cohort/provincie/land reference series rendered as vertical reference lines. */
+  references?: ReferenceSeries[];
 }
 
 const DEFAULT_COLORS = ['#3b82f6'];
@@ -20,6 +23,7 @@ export function HorizontalBarChartComponent({
   data,
   colors = DEFAULT_COLORS,
   maxItems = 15,
+  references,
 }: HorizontalBarChartProps) {
   // Aggregate by geo area
   const aggregated = new Map<string, { name: string; value: number }>();
@@ -38,6 +42,21 @@ export function HorizontalBarChartComponent({
     return <p className="text-sm text-gray-500 py-4 text-center">Geen data beschikbaar</p>;
   }
 
+  // SPEC-B: pick reference values at the latest year present in the data.
+  const chartYears = [...new Set(data.map(d => d.year))];
+  const targetYear = chartYears.length > 0 ? Math.max(...chartYears) : null;
+  const refLines = (references && references.length > 0)
+    ? sortReferences(references)
+        .map(ref => {
+          if (ref.series.length === 0) return null;
+          const point = targetYear !== null
+            ? ref.series.find(p => p.year === targetYear) ?? ref.series.reduce((a, b) => (b.year > a.year ? b : a))
+            : ref.series.reduce((a, b) => (b.year > a.year ? b : a));
+          return { ref, value: point.value };
+        })
+        .filter((entry): entry is { ref: ReferenceSeries; value: number } => entry !== null)
+    : [];
+
   return (
     <ResponsiveContainer width="100%" height={Math.max(200, sorted.length * 28 + 40)}>
       <BarChart data={sorted} layout="vertical" margin={{ left: 80 }}>
@@ -51,6 +70,21 @@ export function HorizontalBarChartComponent({
         />
         <Tooltip formatter={(value: number) => formatCompact(value)} />
         <Bar dataKey="value" fill={colors[0]} radius={[0, 4, 4, 0]} />
+        {refLines.map(({ ref, value }) => {
+          const style = getReferenceStyle(ref.kind);
+          // For horizontal bar (layout=vertical), reference is a vertical line on the value axis.
+          return (
+            <ReferenceLine
+              key={`ref-${ref.kind}`}
+              x={value}
+              stroke={style.stroke}
+              strokeWidth={style.strokeWidth}
+              strokeDasharray={style.strokeDasharray}
+              strokeOpacity={style.opacity}
+              label={{ value: ref.label, position: 'top', fontSize: 10, fill: style.stroke }}
+            />
+          );
+        })}
       </BarChart>
     </ResponsiveContainer>
   );

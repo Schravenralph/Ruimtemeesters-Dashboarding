@@ -13,6 +13,8 @@ vi.mock('recharts', () => ({
   CartesianGrid: () => null,
   Tooltip: () => null,
   Legend: () => null,
+  ReferenceLine: ({ y, label }: { y: number; label?: { value?: string } }) =>
+    <div data-testid="reference-line" data-y={y} data-label={label?.value} />,
 }));
 
 describe('BarChartComponent', () => {
@@ -43,5 +45,29 @@ describe('BarChartComponent', () => {
   it('renders stacked bar chart', () => {
     render(<BarChartComponent data={dimensionData} stacked />);
     expect(screen.getByTestId('responsive-container')).toBeDefined();
+  });
+
+  it('renders reference lines when references provided (SPEC-B)', () => {
+    render(
+      <BarChartComponent
+        data={simpleData}
+        references={[
+          { kind: 'cohort', label: 'Cohort: Wmr Amsterdam', series: [{ year: 2024, value: 750000 }] },
+          { kind: 'land', label: 'Nederland', series: [{ year: 2024, value: 600000 }] },
+        ]}
+      />,
+    );
+    const refLines = screen.getAllByTestId('reference-line');
+    // 2 reference lines from the props
+    expect(refLines.length).toBe(2);
+    const labels = refLines.map(el => el.getAttribute('data-label'));
+    expect(labels).toContain('Cohort: Wmr Amsterdam');
+    expect(labels).toContain('Nederland');
+  });
+
+  it('renders no reference lines when references absent', () => {
+    render(<BarChartComponent data={simpleData} />);
+    const refLines = screen.queryAllByTestId('reference-line');
+    expect(refLines.length).toBe(0);
   });
 });
