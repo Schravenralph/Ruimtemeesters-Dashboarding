@@ -65,6 +65,18 @@ export type TileConfig = z.infer<typeof TileConfig>;
 
 // ── Dashboard Theme ──────────────────────────────────────────────────────────
 
+// SPEC-C: per-theme KPI strip descriptors. Each entry → one NumberDisplay tile
+// in the gemeente-drilldown KPI strip.
+export const ThemeKpiEntry = z.object({
+  label: z.string(),
+  dataSource: z.string(),
+  dimension: z.string().optional().nullable(),
+  dimensionValue: z.string().optional().nullable(),
+  format: z.enum(['number', 'compact', 'percent']).optional(),
+  deltaDirection: z.enum(['higher-is-good', 'higher-is-bad', 'neutral']).optional(),
+});
+export type ThemeKpiEntry = z.infer<typeof ThemeKpiEntry>;
+
 export const ThemeConfig = z.object({
   id: z.string(),
   slug: z.string(),
@@ -76,6 +88,7 @@ export const ThemeConfig = z.object({
   isSystem: z.boolean().default(true),
   supercategory: z.string().optional(),
   isOverview: z.boolean().optional(),
+  kpiConfig: z.array(ThemeKpiEntry).optional().default([]),
 });
 export type ThemeConfig = z.infer<typeof ThemeConfig>;
 

@@ -21,6 +21,7 @@ import { MultiAreaTable } from '../components/dashboard/MultiAreaTable';
 import { WorkspaceManager } from '../components/dashboard/WorkspaceManager';
 import { GemeenteHeader } from '../components/dashboard/GemeenteHeader';
 import { CohortToggles } from '../components/dashboard/CohortToggles';
+import { KpiStrip } from '../components/dashboard/KpiStrip';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/ui/Spinner';
@@ -194,10 +195,13 @@ export function DashboardPage() {
       {/* SPEC-C: per-gemeente drilldown shell — only mounts when focal is a gemeente.
           Renders above existing FilterBar so cohort affordances are top-level discoverable. */}
       {filters.geoLevel === 'gemeente' && (
-        <div className="mb-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <GemeenteHeader />
-          <CohortToggles />
-        </div>
+        <>
+          <div className="mb-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            <GemeenteHeader />
+            <CohortToggles />
+          </div>
+          <KpiStrip themeSlug={theme.slug} kpiConfig={theme.kpiConfig ?? []} />
+        </>
       )}
 
       {/* Filters */}
