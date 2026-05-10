@@ -327,10 +327,12 @@ export async function syncCohortsFromCsv(csvPath: string): Promise<CohortSyncRes
     result.definitionsUpserted++;
   }
   for (const m of memberships) {
-    await upsertCohortMember('krimp_anticipeer', m.key, m.geoCode).catch(err => {
+    try {
+      await upsertCohortMember('krimp_anticipeer', m.key, m.geoCode);
+      result.membersUpserted++;
+    } catch (err) {
       result.errors.push(`upsert ${m.key}/${m.geoCode}: ${err instanceof Error ? err.message : String(err)}`);
-    });
-    result.membersUpserted++;
+    }
   }
 
   result.durationMs = Date.now() - start;
