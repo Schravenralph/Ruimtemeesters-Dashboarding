@@ -24,6 +24,17 @@ Push to the remote after every logical chunk of work (e.g. after each completed 
 
 Worktrees go in `.worktrees/` (project-local, gitignored). Copy `.env` into new worktrees — it is gitignored and won't be present automatically.
 
+## Product Direction (read before proposing work)
+
+Before designing or implementing anything beyond a trivial fix, read:
+
+- [`docs/PRODUCT-VISION.md`](docs/PRODUCT-VISION.md) — vision, programmes, roadmap stages, non-goals.
+- [`docs/adr/ADR-002-prebuilt-themes-as-front-door.md`](docs/adr/ADR-002-prebuilt-themes-as-front-door.md) — prebuilt themes are the headline; customisation is a backstop.
+- [`docs/adr/ADR-003-municipality-drilldown-with-referential-cohort.md`](docs/adr/ADR-003-municipality-drilldown-with-referential-cohort.md) — every per-gemeente chart shows cohort + provincial + national reference by default.
+- [`docs/adr/ADR-004-theme-as-template-on-project-bootstrap.md`](docs/adr/ADR-004-theme-as-template-on-project-bootstrap.md) — new `Project` entity (many-per-org); theme-as-template provisioning.
+
+New work — themes, dashboards, charts — is judged against these ADRs. A new theme is not "shipped" until it has a per-gemeente prebuilt dashboard with reference series visible by default. Customisation polish (tile picker, drag-and-drop, custom dashboards) is maintenance-only — do not add headline investment there.
+
 ## Project Structure
 
 This project follows the Ruimtemeesters-Geoportaal folder structure:
