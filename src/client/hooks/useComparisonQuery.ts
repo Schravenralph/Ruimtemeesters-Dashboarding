@@ -14,5 +14,9 @@ export function useComparisonQuery(source: string, dimension?: string) {
     dimension,
     enabled: !!filters.comparisonLevel && !!filters.comparisonGeoCode,
     geoCodeOverride: filters.comparisonGeoCode || undefined,
+    // Comparison queries fetch a single benchmark area's data — they don't need
+    // cohort/provincie/land aggregates layered on top. Skip the references
+    // round-trip overhead.
+    withReferences: false,
   });
 }
