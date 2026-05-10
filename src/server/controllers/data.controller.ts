@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
 import { safeIdent } from '../db/sql-utils.js';
-import { DataQueryParams } from '../../shared/api/contracts.js';
+import { DataQueryParams, type ReferencesBlock } from '../../shared/api/contracts.js';
 import { getDataSource, getDataSources } from '../services/data-source-registry.js';
+import { computeReferences } from '../services/cohorts/reference-aggregates.js';
 
 // Tables that have confidence_lower/confidence_upper columns (migration 011)
 const TABLES_WITH_CONFIDENCE = ['data_bevolking', 'data_huishoudens', 'data_woningen', 'data_woningtekort'];
@@ -14,7 +15,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const { source, geoCode, geoLevel, year, dimension, dimensionValue, limit, offset, dataOrigin, dimensionType } = parsed.data;
+  const { source, geoCode, geoLevel, year, dimension, dimensionValue, limit, offset, dataOrigin, dimensionType, references, cohortType, envelope } = parsed.data;
 
   const sourceDef = await getDataSource(source);
   if (!sourceDef) {
@@ -203,6 +204,40 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     ...(row.confidence_upper != null ? { confidenceUpper: Number(row.confidence_upper) } : {}),
   }));
 
+  // SPEC-A: optional references block (cohort/provincie/land aggregates).
+  // Computed only when ?references=... is present and the focal is a gemeente (and 'land' even without focal).
+  let referencesBlock: ReferencesBlock | undefined;
+  if (references && geoCode) {
+    const requested = references
+      .split(',')
+      .map(s => s.trim())
+      .filter((s): s is 'cohort' | 'provincie' | 'land' => s === 'cohort' || s === 'provincie' || s === 'land');
+    if (requested.length > 0) {
+      try {
+        referencesBlock = await computeReferences({
+          source: {
+            tableName: sourceDef.tableName,
+            valueColumn: sourceDef.valueColumn,
+            dimensionColumns: sourceDef.dimensionColumns,
+            defaultFilters: sourceDef.defaultFilters ?? null,
+            supercategory: sourceDef.supercategory,
+          },
+          focalGeoCode: geoCode,
+          yearFilter: year,
+          dimension,
+          dimensionValue,
+          dataOrigin,
+          references: requested,
+          cohortType,
+          envelope: !!envelope,
+        });
+      } catch (err) {
+        // Non-fatal — main response should still go out. Log and omit refs.
+        console.error('[data.controller] references compute failed:', err);
+      }
+    }
+  }
+
   res.json({
     data,
     metadata: {
@@ -210,6 +245,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
       totalRecords: parseInt(countResult.rows[0].total, 10),
       unit: sourceDef.unit,
     },
+    ...(referencesBlock ? { references: referencesBlock } : {}),
   });
 }
 
