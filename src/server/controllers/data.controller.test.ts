@@ -55,4 +55,38 @@ describe('DataQueryParams validation', () => {
       expect(result.data.dimensionValue).toBe('25-44');
     }
   });
+
+  it('accepts SPEC-A references param', () => {
+    const result = DataQueryParams.safeParse({
+      source: 'bevolking',
+      geoCode: 'GM0363',
+      references: 'cohort,provincie,land',
+      cohortType: 'populatiegrootte',
+      envelope: 'true',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.references).toBe('cohort,provincie,land');
+      expect(result.data.cohortType).toBe('populatiegrootte');
+      expect(result.data.envelope).toBe(true);
+    }
+  });
+
+  it('rejects unknown cohortType', () => {
+    const result = DataQueryParams.safeParse({
+      source: 'bevolking',
+      cohortType: 'not_a_cohort',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts query without references (back-compat)', () => {
+    const result = DataQueryParams.safeParse({ source: 'bevolking' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.references).toBeUndefined();
+      expect(result.data.cohortType).toBeUndefined();
+      expect(result.data.envelope).toBeUndefined();
+    }
+  });
 });

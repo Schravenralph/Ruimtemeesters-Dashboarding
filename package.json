@@ -20,7 +20,8 @@
     "sync:cbs": "tsx src/server/db/sync-cbs.ts",
     "e2e:screenshots": "tsx scripts/e2e-screenshots-email.ts",
     "sync:cbs:2024": "tsx src/server/db/sync-cbs.ts -- --year 2024",
-    "sync:cbs:bevolking": "tsx src/server/db/sync-cbs.ts -- --source bevolking"
+    "sync:cbs:bevolking": "tsx src/server/db/sync-cbs.ts -- --source bevolking",
+    "sync:cohorts": "tsx src/server/db/sync-cohorts.ts"
   },
   "keywords": [
     "dashboard",

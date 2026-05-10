@@ -165,8 +165,65 @@ export const DataResponse = z.object({
     lastUpdated: z.string().optional(),
     totalRecords: z.number(),
   }),
+  references: z.lazy(() => ReferencesBlock).optional(),
 });
 export type DataResponse = z.infer<typeof DataResponse>;
+
+// ── Cohort + Referential Series (SPEC-A) ─────────────────────────────────────
+// Implements ADR-003. See docs/superpowers/specs/2026-05-09-cohort-referential-data-design.md
+
+export const CohortType = z.enum([
+  'stedelijkheid',
+  'populatiegrootte',
+  'woningmarktregio',
+  'krimp_anticipeer',
+]);
+export type CohortType = z.infer<typeof CohortType>;
+
+export const CohortMembership = z.object({
+  cohortType: CohortType,
+  cohortKey: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  source: z.string(),
+  sourceUrl: z.string().nullable(),
+  sourceVintage: z.string(),       // ISO date
+  members: z.array(z.string()),    // gemeente codes in this cohort
+  memberCount: z.number(),
+});
+export type CohortMembership = z.infer<typeof CohortMembership>;
+
+export const CohortMembershipsResponse = z.object({
+  geoCode: z.string(),
+  memberships: z.array(CohortMembership),
+  defaultByTheme: z.record(z.string()),  // theme_slug → cohort_type
+});
+export type CohortMembershipsResponse = z.infer<typeof CohortMembershipsResponse>;
+
+export const SeriesPoint = z.object({
+  year: z.number(),
+  value: z.number(),
+});
+export type SeriesPoint = z.infer<typeof SeriesPoint>;
+
+export const ReferenceSeries = z.object({
+  kind: z.enum(['cohort', 'provincie', 'land']),
+  label: z.string(),
+  series: z.array(SeriesPoint),
+  envelope: z.object({
+    p25: z.array(SeriesPoint),
+    p50: z.array(SeriesPoint),
+    p75: z.array(SeriesPoint),
+  }).optional(),
+});
+export type ReferenceSeries = z.infer<typeof ReferenceSeries>;
+
+export const ReferencesBlock = z.object({
+  cohort: ReferenceSeries.optional(),
+  provincie: ReferenceSeries.optional(),
+  land: ReferenceSeries.optional(),
+});
+export type ReferencesBlock = z.infer<typeof ReferencesBlock>;
 
 // ── RBAC ─────────────────────────────────────────────────────────────────────
 
@@ -248,6 +305,11 @@ export const DataQueryParams = z.object({
   offset: z.coerce.number().optional(),
   dataOrigin: z.string().optional(),    // 'cbs_actuals' | 'cbs_prognose' — filter by source column
   dimensionType: z.string().optional(), // 'samenstelling' | 'leeftijd_referentiepersoon' — for huishoudens
+  // SPEC-A reference series — comma-separated subset of 'cohort,provincie,land'.
+  // Absent → no references block (back-compat preserved).
+  references: z.string().optional(),
+  cohortType: CohortType.optional(),    // overrides the per-supercategory default cohort type
+  envelope: z.coerce.boolean().optional(), // include p25/p50/p75 alongside cohort mean
 });
 export type DataQueryParams = z.infer<typeof DataQueryParams>;
 
