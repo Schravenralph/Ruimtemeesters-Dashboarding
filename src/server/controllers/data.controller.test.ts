@@ -90,3 +90,36 @@ describe('DataQueryParams validation', () => {
     }
   });
 });
+
+describe("envelope coercion (regression: bugbot found z.coerce.boolean treats 'false' as true)", () => {
+  it("'false' string coerces to false", () => {
+    const r = DataQueryParams.safeParse({ source: 'bevolking', envelope: 'false' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.envelope).toBe(false);
+  });
+  it("'0' string coerces to false", () => {
+    const r = DataQueryParams.safeParse({ source: 'bevolking', envelope: '0' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.envelope).toBe(false);
+  });
+  it("'true' string coerces to true", () => {
+    const r = DataQueryParams.safeParse({ source: 'bevolking', envelope: 'true' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.envelope).toBe(true);
+  });
+  it("'1' string coerces to true", () => {
+    const r = DataQueryParams.safeParse({ source: 'bevolking', envelope: '1' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.envelope).toBe(true);
+  });
+  it('native boolean true preserved', () => {
+    const r = DataQueryParams.safeParse({ source: 'bevolking', envelope: true });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.envelope).toBe(true);
+  });
+  it('undefined stays undefined', () => {
+    const r = DataQueryParams.safeParse({ source: 'bevolking' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.envelope).toBeUndefined();
+  });
+});
