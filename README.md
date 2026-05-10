@@ -1,26 +1,33 @@
 # Ruimtemeesters Dashboard
 
-Interactive, configurable dashboarding platform with RBAC/ABAC access control. Mirrors the functionality of ABF Research's Primos dashboard with custom data sources.
+**Prebuilt theme dashboards for Dutch governments — per municipality, in context.**
+
+A new project is created by picking a theme (Wonen, Duurzaamheid, Economie, Mobiliteit, Veiligheid). The platform auto-subscribes the org to the theme's CBS data sources, clones the theme's prebuilt dashboards into the project, and lands the user on the per-municipality drilldown view — with a referential cohort (similar municipalities) plus provincial and national reference series visible by default. Customisation remains available as a backstop for power users; it is no longer the front door.
+
+See [`docs/PRODUCT-VISION.md`](docs/PRODUCT-VISION.md) and ADRs [002](docs/adr/ADR-002-prebuilt-themes-as-front-door.md), [003](docs/adr/ADR-003-municipality-drilldown-with-referential-cohort.md), [004](docs/adr/ADR-004-theme-as-template-on-project-bootstrap.md) for the strategic direction.
 
 ## Features
 
-### Dashboard
-- **Theme-based navigation** — Overzicht, Bevolking, Huishoudens, Woningen, Woningtekort
-- **7 chart types** — Bar, Stacked Bar, Line, Pie, Radar/Spider, Table, Choropleth Map
-- **Configurable tile grid** — Drag-and-drop layout with per-user persistence
-- **Geographic filtering** — Land, Provincie, Gemeente with hierarchy browser and search
-- **Period selection** — Year selection with comparison mode (year-over-year)
+### Prebuilt theme dashboards
+- **Per-supercategory navigation** — Wonen (Overzicht, Bevolking, Huishoudens, Woningen, Woningtekort) and Duurzaamheid (Energie, Emissies, Hernieuwbaar, Afval); Economie / Mobiliteit / Veiligheid follow.
+- **Per-municipality drilldown as the canonical view** — every theme has a focal-gemeente landing dashboard.
+- **Referential cohort + provincial + national reference series** rendered by default on every applicable chart (cohort definitions: CBS stedelijkheidsklasse, population-size bin, ABF Woningmarktregio / Krimp- en anticipeerregio).
+- **7 chart types** — Bar, Stacked Bar, Line, Pie, Radar/Spider, Table, Choropleth Map.
+- **Geographic filtering** — Land, Provincie, Gemeente with hierarchy browser and search.
+- **Period selection** — Year selection with comparison mode (year-over-year).
 - **Dimension drilldown** — Explore data by age group, gender, household type, etc.
-- **Comparison view** — Side-by-side year comparison with change indicators
-- **Statistics summary** — Overview cards with key metrics
-- **Saved filter presets** — Bookmark and reuse filter configurations
-- **Export** — CSV, PDF, Excel, PNG per tile or bulk PDF
+- **Comparison view** — Side-by-side year comparison with change indicators.
+- **Statistics summary** — Overview cards with key metrics.
+- **Saved filter presets** — Bookmark and reuse filter configurations.
+- **Export** — CSV, PDF, Excel, PNG per tile or bulk PDF.
 
-### Custom Dashboards ("Mijn Dashboards")
-- Create up to 5 personal dashboards
-- Add tiles from any existing theme via tile picker
-- Customizable layout and tile configuration
-- Share via URL (30-day expiry)
+### Projects (theme-as-template)
+- Each org runs one or more projects (e.g. *"Woonzorgvisie 2030"*, *"Klimaatadaptatie"*).
+- Creating a project = picking a theme; the org is auto-subscribed to the theme's data sources, dashboards are cloned from the theme template, and the user lands on the focal-gemeente drilldown.
+- Existing system theme improvements are pulled into a project explicitly via "Update from theme" — projects do not silently mutate.
+
+### Customisation (backstop)
+- **Mijn Dashboards** — up to 5 personal dashboards per user, tile picker, drag-and-drop layout, per-user persistence, share via URL (30-day expiry). Maintained, not headlined.
 
 ### Access Control
 - **RBAC** — Admin, Editor, Viewer, Guest roles
