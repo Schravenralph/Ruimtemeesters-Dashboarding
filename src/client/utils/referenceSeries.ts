@@ -94,3 +94,24 @@ export function computeDeltaPct(focal: number, reference: number): number | null
   if (!Number.isFinite(focal) || !Number.isFinite(reference) || reference === 0) return null;
   return ((focal - reference) / reference) * 100;
 }
+
+/**
+ * Pick the reference value at the year that aligns with the chart's data.
+ * Strategy: prefer exact match at max year present in chart data; fall back to
+ * latest year present in the reference series. Returns undefined for empty series.
+ *
+ * Single source of truth for "which year's reference" used by single-snapshot
+ * chart types (Bar, HorizontalBar, NumberDisplay).
+ */
+export function pickReferenceValueAtYear(
+  ref: ReferenceSeries,
+  chartYears: number[],
+): number | undefined {
+  if (ref.series.length === 0) return undefined;
+  if (chartYears.length > 0) {
+    const targetYear = Math.max(...chartYears);
+    const exact = ref.series.find(p => p.year === targetYear);
+    if (exact) return exact.value;
+  }
+  return ref.series.reduce((latest, p) => (p.year > latest.year ? p : latest), ref.series[0]).value;
+}
