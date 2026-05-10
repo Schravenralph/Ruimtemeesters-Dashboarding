@@ -3,7 +3,7 @@ import {
   Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import type { DataPoint, ReferenceSeries } from '@shared/api/contracts';
-import { getReferenceStyle, sortReferences } from '../../utils/referenceSeries';
+import { getReferenceStyle, sortReferences, pickReferenceValueAtYear } from '../../utils/referenceSeries';
 
 interface BarChartProps {
   data: DataPoint[];
@@ -14,22 +14,6 @@ interface BarChartProps {
   colors?: string[];
   /** SPEC-B: cohort/provincie/land reference series rendered as horizontal reference lines. */
   references?: ReferenceSeries[];
-}
-
-/**
- * Pick the reference value at the year that most aligns with the chart's data.
- * BarCharts typically show a single year (or a few); we use the max year present
- * in the chart data, falling back to the latest year in the reference series.
- */
-function pickReferenceValue(ref: ReferenceSeries, chartYears: number[]): number | undefined {
-  if (ref.series.length === 0) return undefined;
-  if (chartYears.length > 0) {
-    const targetYear = Math.max(...chartYears);
-    const exact = ref.series.find(p => p.year === targetYear);
-    if (exact) return exact.value;
-  }
-  // Fallback: latest reference point.
-  return ref.series.reduce((latest, p) => (p.year > latest.year ? p : latest), ref.series[0]).value;
 }
 
 const DEFAULT_COLORS = [
@@ -45,7 +29,7 @@ export function BarChartComponent({ data, stacked = false, colors = DEFAULT_COLO
   // SPEC-B: reference lines per requested kind, picked at the year shown.
   const refLines = (references && references.length > 0)
     ? sortReferences(references)
-        .map(ref => ({ ref, value: pickReferenceValue(ref, chartYears) }))
+        .map(ref => ({ ref, value: pickReferenceValueAtYear(ref, chartYears) }))
         .filter((entry): entry is { ref: ReferenceSeries; value: number } => entry.value !== undefined)
     : [];
 

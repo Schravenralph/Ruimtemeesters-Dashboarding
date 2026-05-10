@@ -3,7 +3,7 @@ import {
 } from 'recharts';
 import type { DataPoint, ReferenceSeries } from '@shared/api/contracts';
 import { formatCompact, dimensionValueLabel } from '../../utils/format';
-import { getReferenceStyle, sortReferences } from '../../utils/referenceSeries';
+import { getReferenceStyle, sortReferences, pickReferenceValueAtYear } from '../../utils/referenceSeries';
 
 interface HorizontalBarChartProps {
   data: DataPoint[];
@@ -44,17 +44,10 @@ export function HorizontalBarChartComponent({
 
   // SPEC-B: pick reference values at the latest year present in the data.
   const chartYears = [...new Set(data.map(d => d.year))];
-  const targetYear = chartYears.length > 0 ? Math.max(...chartYears) : null;
   const refLines = (references && references.length > 0)
     ? sortReferences(references)
-        .map(ref => {
-          if (ref.series.length === 0) return null;
-          const point = targetYear !== null
-            ? ref.series.find(p => p.year === targetYear) ?? ref.series.reduce((a, b) => (b.year > a.year ? b : a))
-            : ref.series.reduce((a, b) => (b.year > a.year ? b : a));
-          return { ref, value: point.value };
-        })
-        .filter((entry): entry is { ref: ReferenceSeries; value: number } => entry !== null)
+        .map(ref => ({ ref, value: pickReferenceValueAtYear(ref, chartYears) }))
+        .filter((entry): entry is { ref: ReferenceSeries; value: number } => entry.value !== undefined)
     : [];
 
   return (
