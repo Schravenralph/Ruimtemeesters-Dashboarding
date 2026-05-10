@@ -3,12 +3,20 @@ import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { scaleSequential } from 'd3-scale';
 import { interpolateBlues } from 'd3-scale-chromatic';
-import type { DataPoint } from '@shared/api/contracts';
+import type { DataPoint, ReferenceSeries } from '@shared/api/contracts';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
+import { sortReferences, pickReferenceValueAtYear, getReferenceStyle } from '../../utils/referenceSeries';
 import 'leaflet/dist/leaflet.css';
 
 interface ChoroplethMapProps {
   data: DataPoint[];
+  /**
+   * SPEC-B: cohort/provincie/land reference series. Rendered as legend markers showing
+   * cohort + national mean values. Outlining cohort gemeenten on the map itself defers
+   * to SPEC-C (needs the cohort_members list from useCohortMemberships, not the
+   * aggregated value already in this prop).
+   */
+  references?: ReferenceSeries[];
 }
 
 const NL_CENTER: [number, number] = [52.2, 5.3];
@@ -29,9 +37,29 @@ function aggregateByGeo(data: DataPoint[]): Map<string, { name: string; total: n
   return agg;
 }
 
-function Legend({ min, max, colorScale }: { min: number; max: number; colorScale: (v: number) => string }) {
+function Legend({
+  min,
+  max,
+  colorScale,
+  references,
+  chartYears,
+}: {
+  min: number;
+  max: number;
+  colorScale: (v: number) => string;
+  references?: ReferenceSeries[];
+  chartYears: number[];
+}) {
   const steps = 6;
   const range = max - min || 1;
+  // SPEC-B: cohort + land legend markers (provincie omitted on maps per spec).
+  const refMarkers = (references && references.length > 0)
+    ? sortReferences(references)
+        .filter(ref => ref.kind === 'cohort' || ref.kind === 'land')
+        .map(ref => ({ ref, value: pickReferenceValueAtYear(ref, chartYears) }))
+        .filter((m): m is { ref: ReferenceSeries; value: number } => m.value !== undefined)
+    : [];
+
   return (
     <div className="absolute bottom-6 left-4 z-[1000] bg-white/90 rounded-lg shadow-md px-3 py-2 text-xs">
       <div className="flex items-center gap-0.5 mb-1">
@@ -44,6 +72,19 @@ function Legend({ min, max, colorScale }: { min: number; max: number; colorScale
         <span>{min.toLocaleString('nl-NL')}</span>
         <span>{max.toLocaleString('nl-NL')}</span>
       </div>
+      {refMarkers.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-gray-200 space-y-1">
+          {refMarkers.map(({ ref, value }) => {
+            const style = getReferenceStyle(ref.kind);
+            return (
+              <div key={ref.kind} className="flex items-center gap-2 text-[11px]">
+                <span className="inline-block w-4" style={{ borderTop: `2px ${ref.kind === 'land' ? 'dotted' : 'dashed'} ${style.stroke}`, opacity: style.opacity }} />
+                <span className="text-gray-700">{ref.label}: {Math.round(value).toLocaleString('nl-NL')}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -120,7 +161,7 @@ function ChoroplethLayer({
   return <GeoJSON key={JSON.stringify([...aggregated.keys()].sort())} data={geojson} style={style} onEachFeature={onEachFeature} />;
 }
 
-export function ChoroplethMapComponent({ data }: ChoroplethMapProps) {
+export function ChoroplethMapComponent({ data, references }: ChoroplethMapProps) {
   const [geojson, setGeojson] = useState<FeatureCollection | null>(null);
 
   useEffect(() => {
@@ -171,7 +212,7 @@ export function ChoroplethMapComponent({ data }: ChoroplethMapProps) {
           </>
         )}
       </MapContainer>
-      <Legend min={min} max={max} colorScale={colorScale} />
+      <Legend min={min} max={max} colorScale={colorScale} references={references} chartYears={[...new Set(data.map(d => d.year))]} />
     </div>
   );
 }

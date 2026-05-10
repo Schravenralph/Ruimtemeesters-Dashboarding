@@ -144,7 +144,7 @@ export function ChartRenderer({ chartType, data, isLoading, error, config, refer
     case 'table':
       return <DataTableComponent data={processedData} />;
     case 'color-table':
-      return <ColorTableComponent data={processedData} />;
+      return <ColorTableComponent data={processedData} references={refs} />;
     case 'number': {
       const point = processedData[0];
       return (
@@ -162,7 +162,7 @@ export function ChartRenderer({ chartType, data, isLoading, error, config, refer
     case 'waterfall':
       return <WaterfallChartComponent data={processedData} />;
     case 'choropleth':
-      return <ChoroplethMapComponent data={processedData} />;
+      return <ChoroplethMapComponent data={processedData} references={refs} />;
     case 'pyramid':
       return <PopulationPyramidComponent data={processedData} />;
     default:
