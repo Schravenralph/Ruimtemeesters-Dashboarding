@@ -126,11 +126,11 @@ export function ChartRenderer({ chartType, data, isLoading, error, config, refer
 
   switch (chartType) {
     case 'bar':
-      return <BarChartComponent data={processedData} colors={colors} />;
+      return <BarChartComponent data={processedData} colors={colors} references={refs} />;
     case 'stacked-bar':
-      return <BarChartComponent data={processedData} stacked colors={colors} />;
+      return <BarChartComponent data={processedData} stacked colors={colors} references={refs} />;
     case 'horizontal-bar':
-      return <HorizontalBarChartComponent data={processedData} colors={colors} />;
+      return <HorizontalBarChartComponent data={processedData} colors={colors} references={refs} />;
     case 'line':
       return <LineChartComponent data={processedData} colors={colors} references={refs} />;
     case 'stacked-area':
@@ -151,6 +151,7 @@ export function ChartRenderer({ chartType, data, isLoading, error, config, refer
         <NumberDisplay
           value={point?.value ?? 0}
           label={point?.dimensionValue || point?.geoName || point?.label || String(point?.year ?? '')}
+          references={refs}
         />
       );
     }

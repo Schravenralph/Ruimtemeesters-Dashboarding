@@ -2,7 +2,8 @@ import {
   BarChart as RechartsBar,
   Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import type { DataPoint } from '@shared/api/contracts';
+import type { DataPoint, ReferenceSeries } from '@shared/api/contracts';
+import { getReferenceStyle, sortReferences, pickReferenceValueAtYear } from '../../utils/referenceSeries';
 
 interface BarChartProps {
   data: DataPoint[];
@@ -11,6 +12,8 @@ interface BarChartProps {
   comparisonValue?: number;
   comparisonLabel?: string;
   colors?: string[];
+  /** SPEC-B: cohort/provincie/land reference series rendered as horizontal reference lines. */
+  references?: ReferenceSeries[];
 }
 
 const DEFAULT_COLORS = [
@@ -18,9 +21,17 @@ const DEFAULT_COLORS = [
   '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
 ];
 
-export function BarChartComponent({ data, stacked = false, colors = DEFAULT_COLORS, comparisonValue, comparisonLabel }: BarChartProps) {
+export function BarChartComponent({ data, stacked = false, colors = DEFAULT_COLORS, comparisonValue, comparisonLabel, references }: BarChartProps) {
   // Group data by dimensionValue to create multi-bar series
   const dimensionValues = [...new Set(data.map(d => d.dimensionValue).filter((v): v is string => !!v))];
+  const chartYears = [...new Set(data.map(d => d.year))];
+
+  // SPEC-B: reference lines per requested kind, picked at the year shown.
+  const refLines = (references && references.length > 0)
+    ? sortReferences(references)
+        .map(ref => ({ ref, value: pickReferenceValueAtYear(ref, chartYears) }))
+        .filter((entry): entry is { ref: ReferenceSeries; value: number } => entry.value !== undefined)
+    : [];
 
   if (dimensionValues.length === 0) {
     // Simple bar chart: one bar per data point
@@ -40,6 +51,20 @@ export function BarChartComponent({ data, stacked = false, colors = DEFAULT_COLO
           {comparisonValue !== undefined && (
             <ReferenceLine y={comparisonValue} stroke="#ef4444" strokeDasharray="5 5" label={{ value: comparisonLabel || 'Vergelijking', position: 'right', fontSize: 11, fill: '#ef4444' }} />
           )}
+          {refLines.map(({ ref, value }) => {
+            const style = getReferenceStyle(ref.kind);
+            return (
+              <ReferenceLine
+                key={`ref-${ref.kind}`}
+                y={value}
+                stroke={style.stroke}
+                strokeWidth={style.strokeWidth}
+                strokeDasharray={style.strokeDasharray}
+                strokeOpacity={style.opacity}
+                label={{ value: ref.label, position: 'right', fontSize: 11, fill: style.stroke }}
+              />
+            );
+          })}
         </RechartsBar>
       </ResponsiveContainer>
     );
@@ -79,6 +104,20 @@ export function BarChartComponent({ data, stacked = false, colors = DEFAULT_COLO
         {comparisonValue !== undefined && (
           <ReferenceLine y={comparisonValue} stroke="#ef4444" strokeDasharray="5 5" label={{ value: comparisonLabel || 'Vergelijking', position: 'right', fontSize: 11, fill: '#ef4444' }} />
         )}
+        {refLines.map(({ ref, value }) => {
+          const style = getReferenceStyle(ref.kind);
+          return (
+            <ReferenceLine
+              key={`ref-${ref.kind}`}
+              y={value}
+              stroke={style.stroke}
+              strokeWidth={style.strokeWidth}
+              strokeDasharray={style.strokeDasharray}
+              strokeOpacity={style.opacity}
+              label={{ value: ref.label, position: 'right', fontSize: 11, fill: style.stroke }}
+            />
+          );
+        })}
       </RechartsBar>
     </ResponsiveContainer>
   );

@@ -27,13 +27,15 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
   const isLineChart = tile.chartType === 'line';
   const lineDim = tile.dimensions[0];
 
-  const { data: snapshotData, isLoading: snapLoading, error: snapError } = useDataQuery({
+  const { data: snapshotData, references: snapshotReferences, isLoading: snapLoading, error: snapError } = useDataQuery({
     source: tile.dataSource,
     dimension: isDimensionComparison ? undefined : lineDim,
     enabled: !isLineChart,
   });
 
   // No dimension → backend returns grand total per year (all dimensions pinned to 'totaal')
+  // useTimeSeriesQuery hits /api/data/timeseries which doesn't yet support references —
+  // line charts use the snapshot path's references when available, otherwise empty.
   const { data: timeSeriesData, isLoading: tsLoading, error: tsError } = useTimeSeriesQuery({
     source: tile.dataSource,
     enabled: isLineChart,
@@ -42,6 +44,9 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
   const data = isLineChart ? timeSeriesData : snapshotData;
   const isLoading = isLineChart ? tsLoading : snapLoading;
   const error = isLineChart ? tsError : snapError;
+  // SPEC-B: forward references from useDataQuery into ChartRenderer.
+  // Time-series path doesn't carry references yet (separate /api/data/timeseries endpoint).
+  const references = isLineChart ? [] : snapshotReferences;
 
   // Merge dimension comparison values into tile config (only for non-line relevant tiles).
   // Line chart tiles use time series (grand totals), so dimension comparison doesn't apply.
@@ -128,6 +133,7 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
             isLoading={isLoading}
             error={error}
             config={mergedConfig as Record<string, unknown>}
+            references={references}
           />
         </div>
 
@@ -160,6 +166,7 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
                   isLoading={isLoading}
                   error={error}
                   config={mergedConfig as Record<string, unknown>}
+                  references={references}
                 />
               </div>
             </div>
