@@ -11,8 +11,18 @@ export async function queryData(params: {
   dimensionValue?: string;
   limit?: number;
   offset?: number;
+  // SPEC-B reference series — comma-separated subset of cohort,provincie,land
+  references?: string;
+  cohortType?: string;
+  envelope?: boolean;
 }): Promise<DataResponse> {
-  return api.get('/data/query', params as Record<string, string | number>);
+  // ApiClient.get only accepts string | number | undefined — stringify the boolean.
+  const { envelope, ...rest } = params;
+  const queryParams: Record<string, string | number | undefined> = {
+    ...(rest as Record<string, string | number | undefined>),
+    ...(envelope ? { envelope: 'true' } : {}),
+  };
+  return api.get('/data/query', queryParams);
 }
 
 export async function queryTimeSeries(params: {

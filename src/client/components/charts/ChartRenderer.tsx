@@ -1,4 +1,5 @@
-import type { ChartType, DataPoint } from '@shared/api/contracts';
+import type { ChartType, DataPoint, ReferenceSeries } from '@shared/api/contracts';
+import { chartSupportsReferences } from '../../utils/referenceSeries';
 import { BarChartComponent } from './BarChart';
 import { LineChartComponent } from './LineChart';
 import { PieChartComponent } from './PieChart';
@@ -51,6 +52,8 @@ interface ChartRendererProps {
   isLoading?: boolean;
   error?: string | null;
   config?: ChartConfig;
+  /** SPEC-B: cohort/provincie/land reference series. Forwarded only to Tier-1 chart types. */
+  references?: ReferenceSeries[];
 }
 
 function getColors(config?: ChartConfig): string[] {
@@ -95,7 +98,7 @@ function applyFilters(data: DataPoint[], config?: ChartConfig): DataPoint[] {
   return filtered;
 }
 
-export function ChartRenderer({ chartType, data, isLoading, error, config }: ChartRendererProps) {
+export function ChartRenderer({ chartType, data, isLoading, error, config, references }: ChartRendererProps) {
   if (isLoading) {
     return <LoadingOverlay message="Data laden..." />;
   }
@@ -118,6 +121,8 @@ export function ChartRenderer({ chartType, data, isLoading, error, config }: Cha
 
   const colors = getColors(config);
   const processedData = applySort(applyFilters(data, config), config);
+  // SPEC-B: only forward references to Tier-1 chart types; otherwise no-op.
+  const refs = chartSupportsReferences(chartType) ? references : undefined;
 
   switch (chartType) {
     case 'bar':
@@ -127,7 +132,7 @@ export function ChartRenderer({ chartType, data, isLoading, error, config }: Cha
     case 'horizontal-bar':
       return <HorizontalBarChartComponent data={processedData} colors={colors} />;
     case 'line':
-      return <LineChartComponent data={processedData} colors={colors} />;
+      return <LineChartComponent data={processedData} colors={colors} references={refs} />;
     case 'stacked-area':
       return <StackedAreaChartComponent data={processedData} colors={colors} />;
     case 'pie':
