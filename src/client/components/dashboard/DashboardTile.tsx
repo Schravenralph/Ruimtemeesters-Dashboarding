@@ -166,6 +166,7 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
                   isLoading={isLoading}
                   error={error}
                   config={mergedConfig as Record<string, unknown>}
+                  references={references}
                 />
               </div>
             </div>
