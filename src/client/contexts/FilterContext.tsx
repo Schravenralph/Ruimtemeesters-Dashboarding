@@ -120,9 +120,10 @@ export function FilterProvider({ children }: { children: ReactNode }) {
   }, [updateFilters]);
 
   const resetFilters = useCallback(() => {
-    if (!activeId) return;
-    updatePresentation(activeId, { filters: { ...defaultFilters } });
-  }, [activeId, updatePresentation]);
+    // Route through updateFilters so filtersRef stays in sync — otherwise a
+    // setX call right after a reset would compound on the pre-reset filters.
+    updateFilters(() => ({ ...defaultFilters }));
+  }, [updateFilters]);
 
   return (
     <FilterContext.Provider value={{
