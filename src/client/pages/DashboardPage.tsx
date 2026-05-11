@@ -47,21 +47,26 @@ export function DashboardPage() {
   const [showComparisonTable, setShowComparisonTable] = useState(false);
   const [showWorkspace, setShowWorkspace] = useState(false);
 
-  // Create or activate a presentation tab for this slug
+  // Each route (slug + optional projectSlug) has exactly one tab. Mounting or
+  // navigating here either activates the matching tab or creates it. This is
+  // the *only* place tabs are created — the + button in the tab bar uses
+  // navigate(), which lands back here and falls through to this effect.
   useEffect(() => {
     if (!slug) return;
-
-    const existing = presentations.find(p => p.themeSlug === slug);
+    const existing = presentations.find(
+      p => p.themeSlug === slug && (p.projectSlug ?? null) === (projectSlug ?? null),
+    );
     if (existing) {
       setActive(existing.id);
     } else {
       const themeName = themes.find(t => t.slug === slug)?.name || slug;
       addPresentation({
         themeSlug: slug,
+        projectSlug: projectSlug ?? null,
         title: themeName,
       });
     }
-  }, [slug]);
+  }, [slug, projectSlug]);
 
   useEffect(() => {
     if (!slug) return;

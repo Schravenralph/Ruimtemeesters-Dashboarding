@@ -26,6 +26,10 @@ export interface Presentation {
   id: string;
   title: string;
   themeSlug: string;
+  // Optional project scope — when set, the tab points at /p/:projectSlug/:themeSlug
+  // rather than /dashboard/:themeSlug. Tab clicks reconstruct the route from these
+  // two fields, so the URL stays the source of truth for what's rendered.
+  projectSlug?: string | null;
   filters: FilterState;
   chartType: ChartType;
   transformation: TransformationType;
@@ -36,9 +40,16 @@ export interface Presentation {
   referenceVisibility: ReferenceVisibility;
 }
 
+/** Derive the route a tab navigates to. Pure function — kept here so the
+ *  PresentationTabBar and DashboardPage agree on the URL shape. */
+export function routePathForPresentation(p: Pick<Presentation, 'themeSlug' | 'projectSlug'>): string {
+  if (!p.themeSlug) return '/dashboard';
+  return p.projectSlug ? `/p/${p.projectSlug}/${p.themeSlug}` : `/dashboard/${p.themeSlug}`;
+}
+
 interface PresentationState {
   presentations: Presentation[];
-  activeId: string;
+  activeId: string | null;
 }
 
 interface PresentationContextValue {
@@ -69,6 +80,7 @@ function createDefaultPresentation(): Presentation {
     id: `pres-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     title: 'Dashboard',
     themeSlug: '',
+    projectSlug: null,
     filters: { ...defaultFilters },
     chartType: 'table',
     transformation: 'none',
@@ -90,16 +102,16 @@ function loadFromStorage(): PresentationState | null {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (
-      parsed &&
-      Array.isArray(parsed.presentations) &&
-      parsed.presentations.length > 0 &&
-      typeof parsed.activeId === 'string'
-    ) {
-      return {
-        presentations: parsed.presentations.map(migratePresentation),
-        activeId: parsed.activeId,
-      };
+    if (parsed && Array.isArray(parsed.presentations)) {
+      // Drop legacy inert tabs (themeSlug === '') created by the old + button.
+      // Keeps only tabs that point at a real route.
+      const presentations = parsed.presentations
+        .map(migratePresentation)
+        .filter((p: Presentation) => p.themeSlug);
+      const activeId = presentations.some((p: Presentation) => p.id === parsed.activeId)
+        ? parsed.activeId
+        : (presentations[0]?.id ?? null);
+      return { presentations, activeId };
     }
     return null;
   } catch {
@@ -121,8 +133,10 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PresentationState>(() => {
     const restored = loadFromStorage();
     if (restored) return restored;
-    const defaultPres = createDefaultPresentation();
-    return { presentations: [defaultPres], activeId: defaultPres.id };
+    // Start empty: tabs only exist once the user opens a dashboard. The first
+    // navigation (sidebar click, direct URL, or + picker) will create one via
+    // DashboardPage's effect.
+    return { presentations: [], activeId: null };
   });
 
   // Persist to sessionStorage on every state change
@@ -150,14 +164,13 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
 
   const removePresentation = useCallback((id: string) => {
     setState(prev => {
-      // Cannot remove the last presentation
-      if (prev.presentations.length <= 1) return prev;
-
       const remaining = prev.presentations.filter(p => p.id !== id);
+      // When closing the active tab, fall back to the rightmost remaining tab
+      // (matches the visual ordering); when none remain, leave activeId null —
+      // navigation will recreate a tab on next URL change.
       const newActiveId = prev.activeId === id
-        ? remaining[remaining.length - 1].id
+        ? (remaining[remaining.length - 1]?.id ?? null)
         : prev.activeId;
-
       return { presentations: remaining, activeId: newActiveId };
     });
   }, []);
