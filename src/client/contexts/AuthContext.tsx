@@ -12,7 +12,34 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+// Mirrors the dev bypass in App.tsx: pk_live_ Clerk rejects localhost, so on
+// localhost dev we stub a fake authenticated user instead of calling the
+// Clerk hooks (which need ClerkProvider — absent in the dev bypass tree).
+const DEV_BYPASS_CLERK =
+  import.meta.env.DEV &&
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+function DevBypassAuthProvider({ children }: { children: ReactNode }) {
+  const [user] = useState<User>({
+    id: 'dev-user',
+    email: 'dev@localhost',
+    name: 'Dev User',
+    role: 'admin',
+  } as User);
+  return (
+    <AuthContext.Provider value={{ user, isLoading: false, isAuthenticated: true, logout: () => {} }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
+  if (DEV_BYPASS_CLERK) return <DevBypassAuthProvider>{children}</DevBypassAuthProvider>;
+  return <ClerkAuthProvider>{children}</ClerkAuthProvider>;
+}
+
+function ClerkAuthProvider({ children }: { children: ReactNode }) {
   const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
   const { getToken, signOut } = useClerkAuth();
   const [user, setUser] = useState<User | null>(null);

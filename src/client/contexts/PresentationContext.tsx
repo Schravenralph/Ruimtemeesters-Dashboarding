@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type { FilterState, ChartType, CohortType } from '@shared/api/contracts';
 import type { TransformationType } from '../utils/transformations';
 
@@ -139,27 +139,54 @@ export function PresentationProvider({ children }: { children: ReactNode }) {
     return { presentations: [], activeId: null };
   });
 
+  // Mirror state into a ref so addPresentation can do its dedup decision
+  // synchronously without relying on a side-effecting setState updater. Pure
+  // updaters are required for React 18 StrictMode safety.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   // Persist to sessionStorage on every state change
   useEffect(() => {
     saveToStorage(state);
   }, [state]);
 
   const addPresentation = useCallback((config?: Partial<Presentation>): string => {
-    const newPres: Presentation = {
+    // Idempotent on themeSlug + projectSlug. React 18 StrictMode double-mounts
+    // the effect that creates a tab; the dedup means the second invocation
+    // activates the existing tab rather than producing a duplicate sibling.
+    const themeSlug = config?.themeSlug;
+    const projectSlug = config?.projectSlug ?? null;
+    if (themeSlug) {
+      const existing = stateRef.current.presentations.find(p =>
+        p.themeSlug === themeSlug && (p.projectSlug ?? null) === projectSlug,
+      );
+      if (existing) {
+        setState(prev => prev.activeId === existing.id ? prev : { ...prev, activeId: existing.id });
+        return existing.id;
+      }
+    }
+    const candidate: Presentation = {
       ...createDefaultPresentation(),
       ...config,
       id: `pres-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     };
-
     setState(prev => {
       if (prev.presentations.length >= MAX_PRESENTATIONS) return prev;
+      // Late-binding re-check: if a parallel call already added this tab
+      // (extremely rare, e.g. two effects firing on the same tick), prefer
+      // the existing one.
+      if (themeSlug) {
+        const existing = prev.presentations.find(p =>
+          p.themeSlug === themeSlug && (p.projectSlug ?? null) === projectSlug,
+        );
+        if (existing) return { ...prev, activeId: existing.id };
+      }
       return {
-        presentations: [...prev.presentations, newPres],
-        activeId: newPres.id,
+        presentations: [...prev.presentations, candidate],
+        activeId: candidate.id,
       };
     });
-
-    return newPres.id;
+    return candidate.id;
   }, []);
 
   const removePresentation = useCallback((id: string) => {

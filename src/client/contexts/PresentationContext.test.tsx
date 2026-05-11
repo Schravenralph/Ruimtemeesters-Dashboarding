@@ -125,6 +125,27 @@ describe('PresentationContext', () => {
     expect(result.current.presentations).toHaveLength(0);
     expect(result.current.activeId).toBeNull();
   });
+
+  it('addPresentation is idempotent on themeSlug+projectSlug (StrictMode safe)', () => {
+    // React 18 StrictMode double-invokes effects in dev. Without dedup this
+    // would create two identical tabs. Calling addPresentation twice with
+    // the same scope returns the same id and leaves one tab.
+    const { result } = renderHook(() => usePresentations(), { wrapper });
+    let firstId: string; let secondId: string;
+    act(() => { firstId = result.current.addPresentation({ themeSlug: 'wonen' }); });
+    act(() => { secondId = result.current.addPresentation({ themeSlug: 'wonen' }); });
+    expect(result.current.presentations).toHaveLength(1);
+    expect(secondId!).toBe(firstId!);
+    expect(result.current.activeId).toBe(firstId!);
+  });
+
+  it('addPresentation dedup respects projectSlug — same theme across projects = separate tabs', () => {
+    const { result } = renderHook(() => usePresentations(), { wrapper });
+    act(() => { result.current.addPresentation({ themeSlug: 'wonen' }); });
+    act(() => { result.current.addPresentation({ themeSlug: 'wonen', projectSlug: 'eindhoven' }); });
+    act(() => { result.current.addPresentation({ themeSlug: 'wonen', projectSlug: 'almere' }); });
+    expect(result.current.presentations).toHaveLength(3);
+  });
 });
 
 describe('routePathForPresentation', () => {

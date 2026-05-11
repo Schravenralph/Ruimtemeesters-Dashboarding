@@ -75,7 +75,32 @@ async function findOrCreateClerkUser(clerkUserId: string): Promise<Request['user
   return { id: row.id, email: row.email, name: row.name, role: row.role, organizationId: row.organization_id, attributes: row.attributes || {} };
 }
 
+// Local dev bypass — gated behind an explicit env var, never on in production.
+// Lets you exercise the API from `pnpm dev` without a real Clerk session.
+// Set DEV_BYPASS_AUTH=1 in .env to activate. Pairs with the App.tsx /
+// AuthContext.tsx client-side bypass.
+const DEV_BYPASS_AUTH =
+  process.env.NODE_ENV !== 'production' && process.env.DEV_BYPASS_AUTH === '1';
+
+function devBypassUser(): NonNullable<Request['user']> {
+  return {
+    id: '00000000-0000-4000-8000-000000000d2f', // deterministic so projects/subscriptions stick across restarts
+    email: process.env.DEV_BYPASS_AUTH_EMAIL || 'dev@localhost',
+    name: 'Dev User',
+    role: 'admin',
+    organizationId: process.env.DEV_BYPASS_AUTH_ORG_ID || null,
+    attributes: {},
+  };
+}
+
 export function authenticate(req: Request, res: Response, next: NextFunction): void {
+  // Dev bypass: short-circuit auth in non-prod with explicit opt-in.
+  if (DEV_BYPASS_AUTH) {
+    req.user = devBypassUser();
+    next();
+    return;
+  }
+
   // Service API key for internal chatbot/MCP access
   const apiKey = req.headers['x-api-key'] as string | undefined;
   if (SERVICE_API_KEY && apiKey && safeCompare(apiKey, SERVICE_API_KEY)) {

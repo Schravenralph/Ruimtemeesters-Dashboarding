@@ -109,7 +109,24 @@ function AuthenticatedApp() {
   );
 }
 
+// Local dev bypass: pk_live_ keys reject localhost, so Clerk's <Show> never
+// resolves and the React root stays blank. When running against localhost
+// during dev, skip Clerk and render the authenticated tree directly so the
+// developer can iterate on UI without an SSO round-trip. Prod and any
+// non-localhost host go through the normal Clerk flow.
+const DEV_BYPASS_CLERK =
+  import.meta.env.DEV &&
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
 export default function App() {
+  if (DEV_BYPASS_CLERK) {
+    return (
+      <BrowserRouter>
+        <AuthenticatedApp />
+      </BrowserRouter>
+    );
+  }
   return (
     <ClerkProvider publishableKey={CLERK_KEY}>
       <BrowserRouter>

@@ -1,13 +1,27 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { FilterProvider, useFilters } from './FilterContext';
-import { PresentationProvider } from './PresentationContext';
-import type { ReactNode } from 'react';
+import { PresentationProvider, usePresentations } from './PresentationContext';
+import { useEffect as useReactEffect, type ReactNode } from 'react';
+
+// FilterContext mutates the active presentation. Since PresentationProvider
+// now starts with zero tabs (a real dashboard navigation is required to
+// create one), the test wrapper seeds a single tab so filter setters have
+// somewhere to write.
+function SeedTab({ children }: { children: ReactNode }) {
+  const { presentations, addPresentation } = usePresentations();
+  useReactEffect(() => {
+    if (presentations.length === 0) addPresentation({ themeSlug: 'test-theme', title: 'Test' });
+  }, [presentations.length, addPresentation]);
+  return <>{children}</>;
+}
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
     <PresentationProvider>
-      <FilterProvider>{children}</FilterProvider>
+      <SeedTab>
+        <FilterProvider>{children}</FilterProvider>
+      </SeedTab>
     </PresentationProvider>
   );
 }
