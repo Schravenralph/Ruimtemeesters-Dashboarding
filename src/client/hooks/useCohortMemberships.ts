@@ -64,14 +64,17 @@ export function useCohortMemberships(geoCode: string | null | undefined): UseCoh
 
   const runFetch = useCallback(async (code: string | null | undefined, opts: { bypassCache: boolean }) => {
     const myId = ++requestIdRef.current;
+    // Each early return path also clears isLoading — otherwise a slow in-flight
+    // request can be superseded by a fast cache hit, leaving isLoading stuck
+    // because the prior call's finally is skipped (its myId is no longer current).
     if (!code || !code.startsWith('GM')) {
-      if (requestIdRef.current === myId) setMemberships(null);
+      if (requestIdRef.current === myId) { setMemberships(null); setIsLoading(false); }
       return;
     }
     if (!opts.bypassCache) {
       const cached = readCache(code);
       if (cached) {
-        if (requestIdRef.current === myId) setMemberships(cached);
+        if (requestIdRef.current === myId) { setMemberships(cached); setIsLoading(false); }
         return;
       }
     }
