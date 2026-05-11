@@ -7,6 +7,7 @@ import { ThemeProvider, useThemes } from './contexts/ThemeContext';
 import { PresentationProvider } from './contexts/PresentationContext';
 import { FilterProvider } from './contexts/FilterContext';
 import { ProjectProvider } from './contexts/ProjectContext';
+import { ProjectFiltersBridge } from './components/ProjectFiltersBridge';
 import { Layout } from './components/ui/Layout';
 import { ToastProvider } from './components/ui/Toast';
 import { LoadingOverlay } from './components/ui/Spinner';
@@ -71,6 +72,7 @@ function AuthenticatedApp() {
         <FilterProvider>
           <ProjectProvider>
           <ToastProvider>
+            <ProjectFiltersBridge />
             <SuspenseWrapper>
               <Routes>
                 {/* Public routes */}
