@@ -7,11 +7,20 @@ if (process.env.NODE_ENV === 'production' && !process.env.CLERK_SECRET_KEY) {
 
 export const env = {
   port: parseInt(process.env.PORT || '5022', 10),
-  // Bind to loopback by default. The API serves authenticated routes and
-  // the DEV_BYPASS_AUTH path returns admin-level credentials — wildcard
-  // binding on a public-facing host exposes both. Opt into LAN access via
-  // SERVER_HOST=0.0.0.0 only on a trusted private network.
-  host: process.env.SERVER_HOST || '127.0.0.1',
+  // Default by environment:
+  //   - production (Docker container): 0.0.0.0 — container needs to accept
+  //     traffic from docker-proxy; the host is only reachable via the proxy
+  //     and a reverse proxy in front does TLS / auth.
+  //   - development (dev machine): 127.0.0.1 — the API serves authenticated
+  //     routes and DEV_BYPASS_AUTH returns admin credentials, so wildcard
+  //     binding on a public-facing dev box exposes both.
+  // Override via SERVER_HOST in either direction (e.g. 0.0.0.0 on a private
+  // dev LAN for a teammate; 127.0.0.1 in prod if running on the host).
+  // Production runs inside a Docker container; the 0.0.0.0 literal is the
+  // container's listen address, NOT the host's. docker-proxy forwards from
+  // host:port to container:port, and a reverse proxy in front handles TLS +
+  // Clerk auth before traffic ever reaches this listener.
+  host: process.env.SERVER_HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1'), // public-bind-ok
   nodeEnv: process.env.NODE_ENV || 'development',
   db: {
     host: process.env.DB_HOST || 'localhost',
