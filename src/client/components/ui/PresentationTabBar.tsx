@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, X } from 'lucide-react';
 import { usePresentations, routePathForPresentation } from '../../contexts/PresentationContext';
@@ -37,7 +37,9 @@ export function PresentationTabBar() {
   // Position the picker fixed to the viewport (not absolute inside the tab
   // bar) — the tab bar uses overflow-x-auto, which implicitly clips overflow-y
   // and would chop the dropdown to a thin strip. Recompute on resize/scroll.
-  useEffect(() => {
+  // useLayoutEffect (not useEffect) so the position lands before the first
+  // paint — otherwise the menu briefly renders at the viewport origin.
+  useLayoutEffect(() => {
     if (!pickerOpen || !triggerRef.current) { setMenuPos(null); return; }
     const place = () => {
       const el = triggerRef.current;
