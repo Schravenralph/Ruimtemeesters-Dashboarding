@@ -8,7 +8,7 @@ UPDATE themes SET kpi_config = '[
 UPDATE themes SET kpi_config = '[
   {"label": "Bevolking totaal", "dataSource": "bevolking", "format": "compact", "deltaDirection": "neutral"},
   {"label": "0-14 jaar", "dataSource": "bevolking", "dimension": "age_group", "dimensionValue": "0-14", "format": "compact", "deltaDirection": "neutral"},
-  {"label": "65+ jaar", "dataSource": "bevolking", "dimension": "age_group", "dimensionValue": "65-74", "format": "compact", "deltaDirection": "neutral"}
+  {"label": "65+ jaar", "dataSource": "bevolking", "dimension": "age_group", "dimensionValues": ["65-74", "75+"], "format": "compact", "deltaDirection": "neutral"}
 ]'::jsonb WHERE slug = 'bevolking' AND supercategory = 'wonen';
 
 UPDATE themes SET kpi_config = '[

@@ -72,6 +72,10 @@ export const ThemeKpiEntry = z.object({
   dataSource: z.string(),
   dimension: z.string().optional().nullable(),
   dimensionValue: z.string().optional().nullable(),
+  // Multi-bin sum: fire one query per value and sum the result + references
+  // element-wise. Used e.g. for "65+ jaar" = 65-74 + 75+.
+  // Linear aggregates only — incompatible with percentiles/envelopes.
+  dimensionValues: z.array(z.string()).optional().nullable(),
   format: z.enum(['number', 'compact', 'percent']).optional(),
   deltaDirection: z.enum(['higher-is-good', 'higher-is-bad', 'neutral']).optional(),
 });
