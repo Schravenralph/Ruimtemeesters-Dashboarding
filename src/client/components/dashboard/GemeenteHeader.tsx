@@ -12,7 +12,7 @@ import type { GeoArea } from '@shared/api/contracts';
  * For non-gemeente focal levels, summary chips are hidden but picker stays.
  */
 export function GemeenteHeader() {
-  const { filters, setGeoCode, setGeoLevel } = useFilters();
+  const { filters } = useFilters();
   const { memberships } = useCohortMemberships(filters.geoCode);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [focalArea, setFocalArea] = useState<{ name: string; level: string } | null>(null);
@@ -44,9 +44,10 @@ export function GemeenteHeader() {
   const isGemeente = filters.geoLevel === 'gemeente';
   const stedelijkheid = memberships?.memberships.find(m => m.cohortType === 'stedelijkheid');
 
-  const handleSelect = (area: { code: string; level?: string }) => {
-    setGeoCode(area.code);
-    if (area.level) setGeoLevel(area.level as 'land' | 'provincie' | 'corop' | 'gemeente');
+  // GeoHierarchyBrowser (and the MapSelector / search paths it composes) already
+  // call setGeoCode + setGeoLevel before invoking onSelect. We only need to
+  // close the picker here.
+  const handleSelect = (_area: { code: string; level?: string }) => {
     setPickerOpen(false);
   };
 

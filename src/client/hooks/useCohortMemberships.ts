@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getCohortMemberships } from '../services/api/cohorts';
 import type { CohortMembershipsResponse } from '@shared/api/contracts';
 
@@ -57,62 +57,49 @@ export function useCohortMemberships(geoCode: string | null | undefined): UseCoh
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Monotonic counter — each invocation captures its own value; only the latest
+  // resolution wins, so manual refetch() and effect-driven fetches both stay
+  // race-safe without duplicated cancellation logic.
+  const requestIdRef = useRef(0);
 
-  const fetchData = useCallback(async () => {
-    if (!geoCode || !geoCode.startsWith('GM')) {
-      setMemberships(null);
+  const runFetch = useCallback(async (code: string | null | undefined, opts: { bypassCache: boolean }) => {
+    const myId = ++requestIdRef.current;
+    // Each early return path also clears isLoading — otherwise a slow in-flight
+    // request can be superseded by a fast cache hit, leaving isLoading stuck
+    // because the prior call's finally is skipped (its myId is no longer current).
+    if (!code || !code.startsWith('GM')) {
+      if (requestIdRef.current === myId) { setMemberships(null); setIsLoading(false); }
       return;
     }
-    const cached = readCache(geoCode);
-    if (cached) {
-      setMemberships(cached);
-      return;
+    if (!opts.bypassCache) {
+      const cached = readCache(code);
+      if (cached) {
+        if (requestIdRef.current === myId) { setMemberships(cached); setIsLoading(false); }
+        return;
+      }
     }
-    setIsLoading(true);
-    setError(null);
+    setIsLoading(true); setError(null);
     try {
-      const data = await getCohortMemberships(geoCode);
-      writeCache(geoCode, data);
+      const data = await getCohortMemberships(code);
+      if (requestIdRef.current !== myId) return; // a newer call has superseded us
+      writeCache(code, data);
       setMemberships(data);
     } catch (err) {
+      if (requestIdRef.current !== myId) return;
       setError(err instanceof Error ? err.message : 'Failed to fetch cohort memberships');
       setMemberships(null);
     } finally {
-      setIsLoading(false);
+      if (requestIdRef.current === myId) setIsLoading(false);
     }
-  }, [geoCode]);
+  }, []);
 
-  // Race-safe effect: a rapid sequence of geoCode changes can race in-flight
-  // fetches. The cancelled flag prevents a stale resolution from clobbering
-  // state set by a later request. Bugbot R1 #63.
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      if (!geoCode || !geoCode.startsWith('GM')) {
-        if (!cancelled) setMemberships(null);
-        return;
-      }
-      const cached = readCache(geoCode);
-      if (cached) {
-        if (!cancelled) setMemberships(cached);
-        return;
-      }
-      if (!cancelled) { setIsLoading(true); setError(null); }
-      try {
-        const data = await getCohortMemberships(geoCode);
-        if (cancelled) return;
-        writeCache(geoCode, data);
-        setMemberships(data);
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Failed to fetch cohort memberships');
-        setMemberships(null);
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [geoCode]);
+    void runFetch(geoCode, { bypassCache: false });
+  }, [geoCode, runFetch]);
 
-  return { memberships, isLoading, error, refetch: fetchData };
+  const refetch = useCallback(() => {
+    void runFetch(geoCode, { bypassCache: true });
+  }, [geoCode, runFetch]);
+
+  return { memberships, isLoading, error, refetch };
 }
