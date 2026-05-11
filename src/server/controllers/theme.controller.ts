@@ -12,7 +12,7 @@ export async function listThemes(req: Request, res: Response): Promise<void> {
 
   let sql = `
     SELECT t.id, t.slug, t.name, t.description, t.icon, t."order", t.is_system,
-           t.supercategory, t.is_overview,
+           t.supercategory, t.is_overview, t.kpi_config,
            json_agg(json_build_object(
              'id', ti.id,
              'title', ti.title,
@@ -49,6 +49,7 @@ export async function listThemes(req: Request, res: Response): Promise<void> {
       isSystem: row.is_system,
       supercategory: row.supercategory,
       isOverview: row.is_overview,
+      kpiConfig: row.kpi_config ?? [],
       tiles: row.tiles[0]?.id ? row.tiles : [],
     }));
 
