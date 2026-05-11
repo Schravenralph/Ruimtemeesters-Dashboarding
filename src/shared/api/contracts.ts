@@ -242,6 +242,23 @@ export const ReferencesBlock = z.object({
 });
 export type ReferencesBlock = z.infer<typeof ReferencesBlock>;
 
+// ── Project Dashboard (SPEC-D) ───────────────────────────────────────────────
+// project_dashboards row shape — cloned at bootstrap from the system theme's
+// template. Tile list + layout are owned per-project from this point on.
+
+export const ProjectDashboard = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  sourceThemeSlug: z.string(),
+  sourceTemplateVersion: z.number(),
+  name: z.string(),
+  slug: z.string(),
+  tiles: z.array(TileConfig),
+  layout: z.array(LayoutItem),
+  isDefault: z.boolean(),
+});
+export type ProjectDashboard = z.infer<typeof ProjectDashboard>;
+
 // ── RBAC ─────────────────────────────────────────────────────────────────────
 
 export const Role = z.enum(['admin', 'editor', 'viewer', 'guest']);

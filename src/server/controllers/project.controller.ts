@@ -121,6 +121,82 @@ export async function getProject(req: AuthRequest, res: Response): Promise<void>
   });
 }
 
+// Resolve a project row by uuid or slug for the caller's org.
+async function resolveProject(organizationId: string, idOrSlug: string): Promise<{ id: string } | null> {
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+  const where = isUuid ? 'id = $2 AND organization_id = $1' : 'slug = $2 AND organization_id = $1';
+  const r = await query<{ id: string }>(`SELECT id FROM projects WHERE ${where}`, [organizationId, idOrSlug]);
+  return r.rowCount ? r.rows[0] : null;
+}
+
+export async function getProjectDashboard(req: AuthRequest, res: Response): Promise<void> {
+  const user = req.user;
+  if (!user) { res.status(401).json({ error: 'Authentication required' }); return; }
+  if (!user.organizationId) { res.status(403).json({ error: 'Not in an organization' }); return; }
+
+  const { idOrSlug, dashboardSlug } = req.params;
+  if (typeof idOrSlug !== 'string' || typeof dashboardSlug !== 'string' || !idOrSlug || !dashboardSlug) {
+    res.status(400).json({ error: 'idOrSlug and dashboardSlug required' });
+    return;
+  }
+
+  const project = await resolveProject(user.organizationId, idOrSlug);
+  if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+
+  const result = await query<{
+    id: string; project_id: string; source_theme_slug: string; source_template_version: number;
+    name: string; slug: string; tiles: unknown; layout: unknown; is_default: boolean;
+  }>(
+    `SELECT id, project_id, source_theme_slug, source_template_version, name, slug,
+            tiles, layout, is_default
+     FROM project_dashboards WHERE project_id = $1 AND slug = $2`,
+    [project.id, dashboardSlug],
+  );
+  if (result.rowCount === 0) { res.status(404).json({ error: 'Dashboard not found' }); return; }
+
+  const r = result.rows[0];
+  res.json({
+    id: r.id,
+    projectId: r.project_id,
+    sourceThemeSlug: r.source_theme_slug,
+    sourceTemplateVersion: r.source_template_version,
+    name: r.name,
+    slug: r.slug,
+    tiles: r.tiles ?? [],
+    layout: r.layout ?? [],
+    isDefault: r.is_default,
+  });
+}
+
+export async function putProjectDashboardLayout(req: AuthRequest, res: Response): Promise<void> {
+  const user = req.user;
+  if (!user) { res.status(401).json({ error: 'Authentication required' }); return; }
+  if (!user.organizationId) { res.status(403).json({ error: 'Not in an organization' }); return; }
+
+  const { idOrSlug, dashboardSlug } = req.params;
+  if (typeof idOrSlug !== 'string' || typeof dashboardSlug !== 'string' || !idOrSlug || !dashboardSlug) {
+    res.status(400).json({ error: 'idOrSlug and dashboardSlug required' });
+    return;
+  }
+  const { layout } = req.body ?? {};
+  if (!Array.isArray(layout)) {
+    res.status(400).json({ error: 'layout must be an array of LayoutItems' });
+    return;
+  }
+
+  const project = await resolveProject(user.organizationId, idOrSlug);
+  if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+
+  const result = await query<{ id: string }>(
+    `UPDATE project_dashboards SET layout = $3::jsonb
+     WHERE project_id = $1 AND slug = $2 RETURNING id`,
+    [project.id, dashboardSlug, JSON.stringify(layout)],
+  );
+  if (result.rowCount === 0) { res.status(404).json({ error: 'Dashboard not found' }); return; }
+
+  res.json({ ok: true });
+}
+
 export async function patchProject(req: AuthRequest, res: Response): Promise<void> {
   const user = req.user;
   if (!user) { res.status(401).json({ error: 'Authentication required' }); return; }

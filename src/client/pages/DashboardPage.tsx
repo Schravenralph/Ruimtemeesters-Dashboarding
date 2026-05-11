@@ -29,16 +29,18 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePresentations } from '../contexts/PresentationContext';
 import { getLayout, saveLayout } from '../services/api/dashboards';
 import { getTheme } from '../services/api/themes';
-import type { ThemeConfig, LayoutItem } from '@shared/api/contracts';
+import { getProjectDashboard, saveProjectDashboardLayout } from '../services/api/project-dashboards';
+import type { ThemeConfig, LayoutItem, TileConfig, ProjectDashboard } from '@shared/api/contracts';
 
 export function DashboardPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, projectSlug } = useParams<{ slug: string; projectSlug?: string }>();
   const { themes, setActiveTheme, isLoading: themesLoading } = useThemes();
   const { user } = useAuth();
   const { filters } = useFilters();
   const { presentations, setActive, addPresentation, updatePresentation } = usePresentations();
 
   const [theme, setTheme] = useState<ThemeConfig | null>(null);
+  const [projectDashboard, setProjectDashboard] = useState<ProjectDashboard | null>(null);
   const [layout, setLayout] = useState<LayoutItem[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,25 +65,57 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (!slug) return;
+    let cancelled = false;
+
+    async function loadProjectScoped(themeData: ThemeConfig) {
+      if (cancelled || !slug || !projectSlug) return;
+      try {
+        const dashboard = await getProjectDashboard(projectSlug, slug);
+        if (cancelled) return;
+        setProjectDashboard(dashboard);
+        setLayout(dashboard.layout ?? []);
+      } catch {
+        // Fall back to system-theme layout if the project dashboard is missing.
+        // Awaited so the loading indicator stays until the fallback resolves —
+        // otherwise the finally fires before loadLayout completes.
+        if (!cancelled) await loadLayout(themeData.id);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
 
     // Try to find theme from cached list first
     const cached = themes.find(t => t.slug === slug);
     if (cached) {
       setTheme(cached);
       setActiveTheme(cached);
-      loadLayout(cached.id);
-      return;
+      if (projectSlug) {
+        setProjectDashboard(null);
+        loadProjectScoped(cached);
+      } else {
+        setProjectDashboard(null);
+        loadLayout(cached.id);
+      }
+      return () => { cancelled = true; };
     }
 
     // Otherwise fetch from API
     getTheme(slug)
       .then(themeData => {
+        if (cancelled) return;
         setTheme(themeData);
         setActiveTheme(themeData);
-        loadLayout(themeData.id);
+        if (projectSlug) {
+          setProjectDashboard(null);
+          loadProjectScoped(themeData);
+        } else {
+          setProjectDashboard(null);
+          loadLayout(themeData.id);
+        }
       })
-      .catch(() => setIsLoading(false));
-  }, [slug, themes, setActiveTheme]);
+      .catch(() => { if (!cancelled) setIsLoading(false); });
+    return () => { cancelled = true; };
+  }, [slug, projectSlug, themes, setActiveTheme]);
 
   async function loadLayout(themeId: string) {
     try {
@@ -96,14 +130,23 @@ export function DashboardPage() {
 
   async function handleSaveLayout() {
     if (!theme) return;
-    await saveLayout(theme.id, layout);
+    if (projectSlug && projectDashboard) {
+      await saveProjectDashboardLayout(projectSlug, projectDashboard.slug, layout);
+    } else {
+      await saveLayout(theme.id, layout);
+    }
     setIsEditing(false);
   }
+
+  // Project-scoped routes get their tiles + layout from project_dashboards; theme
+  // routes fall through to the system theme's tiles. tilesSource is the single
+  // source of truth for every downstream component.
+  const tilesSource: TileConfig[] = projectDashboard?.tiles ?? theme?.tiles ?? [];
 
   async function handleExportAll() {
     if (!theme) return;
     const { exportBulkPdf } = await import('../utils/export');
-    await exportBulkPdf(theme.tiles, theme.name);
+    await exportBulkPdf(tilesSource, projectDashboard?.name ?? theme.name);
   }
 
   if (themesLoading || isLoading) {
@@ -118,7 +161,7 @@ export function DashboardPage() {
     );
   }
 
-  const mainDataSource = theme.tiles[0]?.dataSource || undefined;
+  const mainDataSource = tilesSource[0]?.dataSource || undefined;
 
   return (
     <div>
@@ -250,7 +293,7 @@ export function DashboardPage() {
 
       {/* Tile Grid */}
       <TileGrid
-        tiles={theme.tiles}
+        tiles={tilesSource}
         layout={layout.length > 0 ? layout : undefined}
         editable={isEditing}
         onLayoutChange={setLayout}
