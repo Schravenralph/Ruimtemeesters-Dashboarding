@@ -40,7 +40,9 @@ export function PresentationTabBar() {
   useEffect(() => {
     if (!pickerOpen || !triggerRef.current) { setMenuPos(null); return; }
     const place = () => {
-      const r = triggerRef.current!.getBoundingClientRect();
+      const el = triggerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
       setMenuPos({ top: r.bottom + 4, left: r.left });
     };
     place();
