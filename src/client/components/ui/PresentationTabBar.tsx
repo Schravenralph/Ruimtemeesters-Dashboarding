@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, X } from 'lucide-react';
 import { usePresentations, routePathForPresentation } from '../../contexts/PresentationContext';
@@ -21,6 +21,8 @@ export function PresentationTabBar() {
   const { projectSlug } = useParams<{ projectSlug?: string }>();
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
 
   // Close the picker on click-outside.
   useEffect(() => {
@@ -30,6 +32,28 @@ export function PresentationTabBar() {
     };
     window.addEventListener('mousedown', onClick);
     return () => window.removeEventListener('mousedown', onClick);
+  }, [pickerOpen]);
+
+  // Position the picker fixed to the viewport (not absolute inside the tab
+  // bar) — the tab bar uses overflow-x-auto, which implicitly clips overflow-y
+  // and would chop the dropdown to a thin strip. Recompute on resize/scroll.
+  // useLayoutEffect (not useEffect) so the position lands before the first
+  // paint — otherwise the menu briefly renders at the viewport origin.
+  useLayoutEffect(() => {
+    if (!pickerOpen || !triggerRef.current) { setMenuPos(null); return; }
+    const place = () => {
+      const el = triggerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setMenuPos({ top: r.bottom + 4, left: r.left });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
   }, [pickerOpen]);
 
   // Themes already open in a tab for the *current* project scope. The picker
@@ -99,6 +123,7 @@ export function PresentationTabBar() {
       {presentations.length < MAX_TABS && (
         <div ref={pickerRef} className="relative">
           <button
+            ref={triggerRef}
             onClick={() => setPickerOpen(o => !o)}
             className="flex items-center gap-1 px-3 py-2 text-sm text-gray-400 hover:text-blue-600 border-b-2 border-transparent"
             title="Nieuw tabblad — kies een thema"
@@ -107,8 +132,12 @@ export function PresentationTabBar() {
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
-          {pickerOpen && (
-            <div role="menu" className="absolute left-0 top-full z-30 mt-1 w-64 rounded-lg border border-gray-200 bg-white shadow-lg max-h-80 overflow-y-auto">
+          {pickerOpen && menuPos && (
+            <div
+              role="menu"
+              style={{ position: 'fixed', top: menuPos.top, left: menuPos.left }}
+              className="z-50 w-64 rounded-lg border border-gray-200 bg-white shadow-lg max-h-80 overflow-y-auto"
+            >
               <div className="px-3 py-2 text-xs font-medium uppercase tracking-wider text-gray-500 border-b border-gray-100">
                 Open thema
               </div>

@@ -1,13 +1,27 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { FilterProvider, useFilters } from './FilterContext';
-import { PresentationProvider } from './PresentationContext';
-import type { ReactNode } from 'react';
+import { PresentationProvider, usePresentations } from './PresentationContext';
+import { useEffect as useReactEffect, type ReactNode } from 'react';
+
+// FilterContext mutates the active presentation. Since PresentationProvider
+// now starts with zero tabs (a real dashboard navigation is required to
+// create one), the test wrapper seeds a single tab so filter setters have
+// somewhere to write.
+function SeedTab({ children }: { children: ReactNode }) {
+  const { presentations, addPresentation } = usePresentations();
+  useReactEffect(() => {
+    if (presentations.length === 0) addPresentation({ themeSlug: 'test-theme', title: 'Test' });
+  }, [presentations.length, addPresentation]);
+  return <>{children}</>;
+}
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
     <PresentationProvider>
-      <FilterProvider>{children}</FilterProvider>
+      <SeedTab>
+        <FilterProvider>{children}</FilterProvider>
+      </SeedTab>
     </PresentationProvider>
   );
 }
@@ -70,6 +84,19 @@ describe('FilterContext', () => {
     const { result } = renderHook(() => useFilters(), { wrapper });
     act(() => result.current.setDimension('age_group', '25-44'));
     expect(result.current.filters.dimensions.age_group).toBe('25-44');
+  });
+
+  it('back-to-back setters compose without clobbering (GlobalSearch race)', () => {
+    // GlobalSearch fires setGeoCode then setGeoLevel synchronously. Before
+    // the ref fix they shared one stale closure of activePresentation.filters
+    // and the second call reverted the first. Lock that down.
+    const { result } = renderHook(() => useFilters(), { wrapper });
+    act(() => {
+      result.current.setGeoCode('GM0772');
+      result.current.setGeoLevel('gemeente');
+    });
+    expect(result.current.filters.geoCode).toBe('GM0772');
+    expect(result.current.filters.geoLevel).toBe('gemeente');
   });
 
   it('resets all filters', () => {
