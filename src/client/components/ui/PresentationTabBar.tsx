@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, X } from 'lucide-react';
 import { usePresentations, routePathForPresentation } from '../../contexts/PresentationContext';
 import { useThemes } from '../../contexts/ThemeContext';
+import { useProjects } from '../../contexts/ProjectContext';
 
 const MAX_TABS = 10;
 
@@ -17,8 +18,13 @@ const MAX_TABS = 10;
 export function PresentationTabBar() {
   const { presentations, activeId, removePresentation } = usePresentations();
   const { themes } = useThemes();
+  const { projects } = useProjects();
   const navigate = useNavigate();
   const { projectSlug } = useParams<{ projectSlug?: string }>();
+
+  // Look up a project name by slug for tab disambiguation. Falls back to the
+  // slug itself if the list hasn't loaded yet — better than rendering nothing.
+  const projectNameBySlug = new Map(projects.map(p => [p.slug, p.name]));
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -86,10 +92,17 @@ export function PresentationTabBar() {
     <div className="flex items-center border-b border-gray-200 bg-white px-4 overflow-x-auto no-print">
       {presentations.map(pres => {
         const isActive = pres.id === activeId;
+        // Project-scoped tabs surface the project name as a tiny header line
+        // above the theme title so two tabs of the same theme in different
+        // projects are visually distinguishable (issue #74).
+        const projectName = pres.projectSlug
+          ? (projectNameBySlug.get(pres.projectSlug) ?? pres.projectSlug)
+          : null;
+        const tooltip = projectName ? `${projectName} · ${pres.title}` : pres.title;
         return (
           <div
             key={pres.id}
-            className={`group flex items-center gap-1 px-3 py-2 text-sm border-b-2 whitespace-nowrap transition-colors ${
+            className={`group flex items-center gap-1 px-3 py-1.5 text-sm border-b-2 whitespace-nowrap transition-colors ${
               isActive
                 ? 'border-blue-600 text-blue-600 font-medium'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -97,10 +110,17 @@ export function PresentationTabBar() {
           >
             <button
               onClick={() => navigate(routePathForPresentation(pres))}
-              className="truncate max-w-[180px] cursor-pointer"
-              title={pres.title}
+              className="cursor-pointer text-left max-w-[200px]"
+              title={tooltip}
             >
-              {pres.title}
+              {projectName && (
+                <span className={`block text-[10px] leading-tight uppercase tracking-wide truncate ${
+                  isActive ? 'text-blue-500/80' : 'text-gray-400'
+                }`}>
+                  {projectName}
+                </span>
+              )}
+              <span className="block truncate">{pres.title}</span>
             </button>
             <button
               onClick={(e) => {
