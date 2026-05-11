@@ -75,8 +75,10 @@ export function DashboardPage() {
         setProjectDashboard(dashboard);
         setLayout(dashboard.layout ?? []);
       } catch {
-        // Fall back to system-theme layout if the project dashboard is missing
-        if (!cancelled) loadLayout(themeData.id);
+        // Fall back to system-theme layout if the project dashboard is missing.
+        // Awaited so the loading indicator stays until the fallback resolves —
+        // otherwise the finally fires before loadLayout completes.
+        if (!cancelled) await loadLayout(themeData.id);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
