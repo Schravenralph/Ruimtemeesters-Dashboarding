@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { ThemeKpiEntry, DataPoint, ReferencesBlock, ReferenceSeries } from '@shared/api/contracts';
+import type { ThemeKpiEntry, DataPoint, ReferencesBlock, ReferenceSeries, SeriesPoint } from '@shared/api/contracts';
 import { useFilters } from '../../contexts/FilterContext';
 import { usePresentations } from '../../contexts/PresentationContext';
 import { queryData } from '../../services/api/data';
@@ -10,7 +10,7 @@ interface KpiStripProps {
   kpiConfig: ThemeKpiEntry[];
 }
 
-interface KpiResult {
+export interface KpiResult {
   data: DataPoint[];
   references: ReferenceSeries[];
 }
@@ -22,6 +22,39 @@ function blockToArray(block: ReferencesBlock | undefined): ReferenceSeries[] {
   if (block.provincie) out.push(block.provincie);
   if (block.land) out.push(block.land);
   return out;
+}
+
+// Sum two SeriesPoint[] element-wise by year. Linear aggregates only.
+export function sumSeries(a: SeriesPoint[], b: SeriesPoint[]): SeriesPoint[] {
+  const byYear = new Map<number, number>();
+  for (const p of a) byYear.set(p.year, p.value);
+  for (const p of b) byYear.set(p.year, (byYear.get(p.year) ?? 0) + p.value);
+  return Array.from(byYear.entries())
+    .sort(([y1], [y2]) => y1 - y2)
+    .map(([year, value]) => ({ year, value }));
+}
+
+// Merge per-bin KpiResults by summing data values + reference series of the same kind.
+export function mergeKpiResults(results: KpiResult[]): KpiResult {
+  if (results.length === 0) return { data: [], references: [] };
+  if (results.length === 1) return results[0];
+
+  const summedValue = results.reduce((s, r) => s + (r.data[0]?.value ?? 0), 0);
+  const head = results[0].data[0];
+  const data: DataPoint[] = head ? [{ ...head, value: summedValue }] : [];
+
+  const byKind = new Map<ReferenceSeries['kind'], ReferenceSeries>();
+  for (const r of results) {
+    for (const ref of r.references) {
+      const existing = byKind.get(ref.kind);
+      if (!existing) {
+        byKind.set(ref.kind, { kind: ref.kind, label: ref.label, series: [...ref.series] });
+      } else {
+        byKind.set(ref.kind, { ...existing, series: sumSeries(existing.series, ref.series) });
+      }
+    }
+  }
+  return { data, references: Array.from(byKind.values()) };
 }
 
 /**
@@ -59,19 +92,27 @@ export function KpiStrip({ kpiConfig }: KpiStripProps) {
     setIsLoading(true);
     Promise.all(
       kpiConfig.map(async (entry) => {
-        const response = await queryData({
-          source: entry.dataSource,
-          geoCode: filters.geoCode,
-          year: filters.period.year,
-          dimension: entry.dimension ?? undefined,
-          dimensionValue: entry.dimensionValue ?? undefined,
-          ...(refsParam ? { references: refsParam } : {}),
-          ...(refsParam && refVis?.cohortType ? { cohortType: refVis.cohortType } : {}),
-        });
-        return {
-          data: response.data,
-          references: blockToArray(response.references),
-        };
+        const values: (string | undefined)[] = entry.dimensionValues?.length
+          ? entry.dimensionValues
+          : [entry.dimensionValue ?? undefined];
+        const perValue = await Promise.all(
+          values.map(async (val) => {
+            const response = await queryData({
+              source: entry.dataSource,
+              geoCode: filters.geoCode,
+              year: filters.period.year,
+              dimension: entry.dimension ?? undefined,
+              dimensionValue: val,
+              ...(refsParam ? { references: refsParam } : {}),
+              ...(refsParam && refVis?.cohortType ? { cohortType: refVis.cohortType } : {}),
+            });
+            return {
+              data: response.data,
+              references: blockToArray(response.references),
+            };
+          }),
+        );
+        return mergeKpiResults(perValue);
       }),
     )
       .then((all) => {
