@@ -30,6 +30,10 @@ export interface Presentation {
   // rather than /dashboard/:themeSlug. Tab clicks reconstruct the route from these
   // two fields, so the URL stays the source of truth for what's rendered.
   projectSlug?: string | null;
+  // True once ProjectFiltersBridge has pushed the project's defaultGeoCode
+  // into this tab's filters. Stops the bridge from re-applying it later and
+  // clobbering user edits.
+  hydratedFromProject?: boolean;
   filters: FilterState;
   chartType: ChartType;
   transformation: TransformationType;
