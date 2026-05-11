@@ -12,10 +12,10 @@ describe('NumberDisplay', () => {
   it('omits delta chips when no references provided', () => {
     render(<NumberDisplay value={100} label="Test" />);
     expect(screen.queryByText(/vs cohort/)).toBeNull();
-    expect(screen.queryByText(/vs NL/)).toBeNull();
+    expect(screen.queryByText(/vs landelijk/)).toBeNull();
   });
 
-  it('renders vs-cohort + vs-NL chips when references provided (SPEC-B)', () => {
+  it('renders vs-cohort + vs-landelijk chips when references provided (SPEC-B)', () => {
     render(
       <NumberDisplay
         value={100}
@@ -27,7 +27,7 @@ describe('NumberDisplay', () => {
       />,
     );
     expect(screen.getByText(/vs cohort/)).toBeDefined();
-    expect(screen.getByText(/vs NL/)).toBeDefined();
+    expect(screen.getByText(/vs landelijk/)).toBeDefined();
     // 100 vs 80 = +25%
     expect(screen.getByText(/\+25\.0%/)).toBeDefined();
     // 100 vs 90 = +11.1%
