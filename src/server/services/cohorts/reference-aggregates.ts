@@ -240,7 +240,11 @@ export async function computeReferences(opts: ReferenceComputeOptions): Promise<
     const series = await computeMeanSeries(codes, opts.source, opts.yearFilter, opts.dimension, opts.dimensionValue, opts.dataOrigin);
     block.land = {
       kind: 'land',
-      label: 'Nederland',
+      // The series is the AVG across all gemeenten (see computeMeanSeries) —
+      // i.e. "mean Dutch gemeente", not the NL total. Labelled as
+      // "Landelijk gemiddelde" so the visual + chip stop implying a comparison
+      // against NL absolute totals (issue #76).
+      label: 'Landelijk gemiddelde',
       series,
     };
   }

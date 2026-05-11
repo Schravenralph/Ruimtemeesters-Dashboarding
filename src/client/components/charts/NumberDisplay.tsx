@@ -88,8 +88,15 @@ export function NumberDisplay({
             </span>
           )}
           {land && landRef !== null && (
-            <span className={`px-2 py-0.5 rounded-full bg-gray-50 ${getDeltaColour(deltaDirection, landDeltaPct ?? 0)} font-medium`}>
-              vs NL: {landDeltaPct !== null ? formatDeltaPct(value, landRef) : '—'}
+            <span
+              className={`px-2 py-0.5 rounded-full bg-gray-50 ${getDeltaColour(deltaDirection, landDeltaPct ?? 0)} font-medium`}
+              // The 'land' series is the mean across all Dutch gemeenten, not
+              // the NL total. Calling it "vs NL" implied a total-vs-total
+              // comparison and turned harmless gemeente size differences into
+              // implausible +300% deltas (issue #76).
+              title="Vergelijking met landelijk gemiddelde per gemeente"
+            >
+              vs landelijk: {landDeltaPct !== null ? formatDeltaPct(value, landRef) : '—'}
             </span>
           )}
         </div>
