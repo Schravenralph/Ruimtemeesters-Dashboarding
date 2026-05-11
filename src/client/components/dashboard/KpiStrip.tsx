@@ -89,6 +89,9 @@ export function KpiStrip({ kpiConfig }: KpiStripProps) {
     if (kpiConfig.length === 0) return;
 
     let cancelled = false;
+    // Reset results so the skeleton shows during refetch instead of stale values
+    // from the previous geoCode/year/refs.
+    setResults({});
     setIsLoading(true);
     Promise.all(
       kpiConfig.map(async (entry) => {
