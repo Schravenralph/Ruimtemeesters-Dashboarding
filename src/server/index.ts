@@ -3,8 +3,8 @@ import { env } from './env.js';
 import { pool } from './db/pool.js';
 import { startSyncScheduler, stopSyncScheduler } from './services/cbs/sync-scheduler.js';
 
-const server = app.listen(env.port, () => {
-  console.log(`Server running on port ${env.port} in ${env.nodeEnv} mode`);
+const server = app.listen(env.port, env.host, () => {
+  console.log(`Server running on ${env.host}:${env.port} in ${env.nodeEnv} mode`);
   startSyncScheduler().catch(err => console.error('Scheduler start failed:', err));
 });
 

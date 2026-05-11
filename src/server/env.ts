@@ -7,6 +7,11 @@ if (process.env.NODE_ENV === 'production' && !process.env.CLERK_SECRET_KEY) {
 
 export const env = {
   port: parseInt(process.env.PORT || '5022', 10),
+  // Bind to loopback by default. The API serves authenticated routes and
+  // the DEV_BYPASS_AUTH path returns admin-level credentials — wildcard
+  // binding on a public-facing host exposes both. Opt into LAN access via
+  // SERVER_HOST=0.0.0.0 only on a trusted private network.
+  host: process.env.SERVER_HOST || '127.0.0.1',
   nodeEnv: process.env.NODE_ENV || 'development',
   db: {
     host: process.env.DB_HOST || 'localhost',
