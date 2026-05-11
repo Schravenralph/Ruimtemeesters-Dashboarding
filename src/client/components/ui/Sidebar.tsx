@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Home, Building2, TrendingDown,
-  ChevronLeft, ChevronRight, Plus, Settings,
+  ChevronLeft, ChevronRight, Plus, Settings, FolderOpen,
   Brain, TrendingUp, Zap, Leaf, Trash2, BarChart3, Target, Map,
   Cloud, Sun, Recycle, Database,
 } from 'lucide-react';
@@ -81,27 +81,45 @@ export function Sidebar() {
           );
         })}
 
-        {/* Custom dashboards section */}
+        {/* Persoonlijk — projects + legacy custom dashboards.
+            ADR-002 demoted CustomDashboards out of the main nav; this
+            section now leads with "Nieuw project" (the canonical create
+            action) and surfaces "Mijn dashboards" as a clearly-labelled
+            destination, not a misleading "Nieuw dashboard" button that
+            actually opened a list page. (issue #75) */}
         {user && (
           <>
             <div className="mx-3 my-3 border-t border-gray-800" />
             <div className="px-3 mb-2">
               {!collapsed && (
                 <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Mijn Dashboards
+                  Persoonlijk
                 </span>
               )}
             </div>
             <button
-              onClick={() => navigate('/mijn-dashboards')}
+              onClick={() => navigate('/projects/new')}
               className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                location.pathname === '/mijn-dashboards'
+                location.pathname === '/projects/new'
                   ? 'bg-blue-600/20 text-blue-400'
                   : 'text-gray-400 hover:bg-gray-800 hover:text-white'
               }`}
+              title={collapsed ? 'Nieuw project' : undefined}
             >
               <Plus className="h-5 w-5 shrink-0" />
-              {!collapsed && <span>Nieuw dashboard</span>}
+              {!collapsed && <span>Nieuw project</span>}
+            </button>
+            <button
+              onClick={() => navigate('/mijn-dashboards')}
+              className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                location.pathname.startsWith('/mijn-dashboards')
+                  ? 'bg-blue-600/20 text-blue-400'
+                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+              }`}
+              title={collapsed ? 'Mijn dashboards' : undefined}
+            >
+              <FolderOpen className="h-5 w-5 shrink-0" />
+              {!collapsed && <span>Mijn dashboards</span>}
             </button>
           </>
         )}
