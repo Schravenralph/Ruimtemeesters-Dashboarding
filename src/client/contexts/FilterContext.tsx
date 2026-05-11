@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useCallback, useRef, type ReactNode } from 'react';
 import type { FilterState, GeoLevel } from '@shared/api/contracts';
 import { usePresentations } from './PresentationContext';
 
@@ -45,11 +45,20 @@ export function FilterProvider({ children }: { children: ReactNode }) {
 
   const filters = activePresentation?.filters ?? defaultFilters;
 
+  // Mirror the active presentation's filters into a ref so back-to-back
+  // setX calls compound on the latest in-progress state rather than each
+  // reading the stale closure (which caused later setters to clobber the
+  // earlier setter's update). Example: GlobalSearch calls setGeoCode then
+  // setGeoLevel — without this, geoLevel wins and geoCode reverts to 'NL'.
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
   const updateFilters = useCallback((updater: (prev: FilterState) => FilterState) => {
-    if (!activeId || !activePresentation) return;
-    const newFilters = updater(activePresentation.filters);
-    updatePresentation(activeId, { filters: newFilters });
-  }, [activeId, activePresentation, updatePresentation]);
+    if (!activeId) return;
+    const next = updater(filtersRef.current);
+    filtersRef.current = next;
+    updatePresentation(activeId, { filters: next });
+  }, [activeId, updatePresentation]);
 
   const setGeoLevel = useCallback((level: GeoLevel) => {
     updateFilters(prev => ({ ...prev, geoLevel: level }));

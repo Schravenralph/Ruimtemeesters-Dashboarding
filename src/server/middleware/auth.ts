@@ -84,11 +84,14 @@ const DEV_BYPASS_AUTH =
 
 function devBypassUser(): NonNullable<Request['user']> {
   return {
-    id: '00000000-0000-4000-8000-000000000d2f', // deterministic so projects/subscriptions stick across restarts
-    email: process.env.DEV_BYPASS_AUTH_EMAIL || 'dev@localhost',
+    // Default to the seeded admin user so FK-references (projects.created_by,
+    // dashboard_layouts.user_id, etc.) resolve cleanly. Override via
+    // DEV_BYPASS_AUTH_USER_ID if you need a specific account.
+    id: process.env.DEV_BYPASS_AUTH_USER_ID || '10000000-0000-0000-0000-000000000001',
+    email: process.env.DEV_BYPASS_AUTH_EMAIL || 'admin@ruimtemeesters.nl',
     name: 'Dev User',
     role: 'admin',
-    organizationId: process.env.DEV_BYPASS_AUTH_ORG_ID || null,
+    organizationId: process.env.DEV_BYPASS_AUTH_ORG_ID || '00000000-0000-0000-0000-000000000001',
     attributes: {},
   };
 }

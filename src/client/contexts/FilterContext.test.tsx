@@ -86,6 +86,19 @@ describe('FilterContext', () => {
     expect(result.current.filters.dimensions.age_group).toBe('25-44');
   });
 
+  it('back-to-back setters compose without clobbering (GlobalSearch race)', () => {
+    // GlobalSearch fires setGeoCode then setGeoLevel synchronously. Before
+    // the ref fix they shared one stale closure of activePresentation.filters
+    // and the second call reverted the first. Lock that down.
+    const { result } = renderHook(() => useFilters(), { wrapper });
+    act(() => {
+      result.current.setGeoCode('GM0772');
+      result.current.setGeoLevel('gemeente');
+    });
+    expect(result.current.filters.geoCode).toBe('GM0772');
+    expect(result.current.filters.geoLevel).toBe('gemeente');
+  });
+
   it('resets all filters', () => {
     const { result } = renderHook(() => useFilters(), { wrapper });
     act(() => {
