@@ -6,6 +6,7 @@ import { AppConfigProvider, useAppConfig } from './contexts/AppConfigContext';
 import { ThemeProvider, useThemes } from './contexts/ThemeContext';
 import { PresentationProvider } from './contexts/PresentationContext';
 import { FilterProvider } from './contexts/FilterContext';
+import { ProjectProvider } from './contexts/ProjectContext';
 import { Layout } from './components/ui/Layout';
 import { ToastProvider } from './components/ui/Toast';
 import { LoadingOverlay } from './components/ui/Spinner';
@@ -25,6 +26,7 @@ const DataDownloadPage = lazy(() => import('./pages/DataDownloadPage').then(m =>
 const EmbedPage = lazy(() => import('./pages/EmbedPage').then(m => ({ default: m.EmbedPage })));
 const ReportPage = lazy(() => import('./pages/ReportPage').then(m => ({ default: m.ReportPage })));
 const CatalogPage = lazy(() => import('./pages/CatalogPage').then(m => ({ default: m.CatalogPage })));
+const NewProjectWizardPage = lazy(() => import('./pages/NewProjectWizardPage').then(m => ({ default: m.NewProjectWizardPage })));
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<LoadingOverlay message="Pagina laden..." />}>{children}</Suspense>;
@@ -67,6 +69,7 @@ function AuthenticatedApp() {
       <ThemeProvider>
         <PresentationProvider>
         <FilterProvider>
+          <ProjectProvider>
           <ToastProvider>
             <SuspenseWrapper>
               <Routes>
@@ -79,6 +82,10 @@ function AuthenticatedApp() {
                 <Route path="/" element={<Layout><Navigate to="/dashboard" replace /></Layout>} />
                 <Route path="/dashboard" element={<Layout><DashboardRedirect /></Layout>} />
                 <Route path="/dashboard/:slug" element={<Layout><DashboardPage /></Layout>} />
+                {/* SPEC-D project routes */}
+                <Route path="/projects/new" element={<Layout><NewProjectWizardPage /></Layout>} />
+                <Route path="/p/:projectSlug" element={<Layout><DashboardRedirect /></Layout>} />
+                <Route path="/p/:projectSlug/:slug" element={<Layout><DashboardPage /></Layout>} />
                 <Route path="/mijn-dashboards" element={<Layout><CustomDashboardsPage /></Layout>} />
                 <Route path="/mijn-dashboards/:id" element={<Layout><CustomDashboardEditorPage /></Layout>} />
                 <Route path="/admin" element={<Layout><AdminPage /></Layout>} />
@@ -93,6 +100,7 @@ function AuthenticatedApp() {
               </Routes>
             </SuspenseWrapper>
           </ToastProvider>
+          </ProjectProvider>
         </FilterProvider>
         </PresentationProvider>
       </ThemeProvider>
