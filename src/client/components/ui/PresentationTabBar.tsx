@@ -41,8 +41,19 @@ export function PresentationTabBar() {
 
   const handlePick = (themeSlug: string) => {
     setPickerOpen(false);
-    const path = projectSlug ? `/p/${projectSlug}/${themeSlug}` : `/dashboard/${themeSlug}`;
-    navigate(path);
+    navigate(routePathForPresentation({ themeSlug, projectSlug: projectSlug ?? null }));
+  };
+
+  // Closing the active tab must also navigate — otherwise the URL keeps
+  // pointing at the closed dashboard while activeId already moved to the
+  // fallback tab, and DashboardPage would keep rendering the closed view.
+  const handleClose = (pres: typeof presentations[number]) => {
+    const wasActive = pres.id === activeId;
+    removePresentation(pres.id);
+    if (!wasActive) return;
+    const remaining = presentations.filter(p => p.id !== pres.id);
+    const fallback = remaining[remaining.length - 1];
+    navigate(fallback ? routePathForPresentation(fallback) : '/dashboard');
   };
 
   if (presentations.length === 0) return null;
@@ -70,7 +81,7 @@ export function PresentationTabBar() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                removePresentation(pres.id);
+                handleClose(pres);
               }}
               className={`rounded p-0.5 transition-opacity ${
                 isActive
