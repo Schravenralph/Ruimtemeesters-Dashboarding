@@ -335,6 +335,19 @@ export const UserTemplate = z.object({
 });
 export type UserTemplate = z.infer<typeof UserTemplate>;
 
+// Request shape for POST /api/user-templates (issue #93). user_id and
+// organization_id are derived server-side from req.user; the client only
+// supplies content + visibility.
+export const CreateUserTemplateRequest = z.object({
+  name: z.string().min(1).max(255),
+  description: z.string().max(2000).optional().nullable(),
+  sourceThemeSlug: z.string().max(255).optional().nullable(),
+  tiles: z.array(TileConfig),
+  layout: z.array(LayoutItem),
+  visibility: UserTemplateVisibility.default('private'),
+});
+export type CreateUserTemplateRequest = z.infer<typeof CreateUserTemplateRequest>;
+
 // ── Sync Demand Subscriber (ADR-006) ─────────────────────────────────────────
 // See migration 031-033 and docs/adr/ADR-006-sync-demand-subscriber-model.md.
 // Aggregator + endpoints + UI follow in EPIC #108 children #101-#105.
