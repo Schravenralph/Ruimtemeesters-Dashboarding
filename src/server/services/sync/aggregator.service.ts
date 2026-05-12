@@ -10,6 +10,7 @@
  */
 
 import { query, getClient } from '../../db/pool.js';
+import { notifySubscribers } from './subscriber-notifier.js';
 
 /**
  * Estimate the typical between-fire interval, in minutes, for the common 5-field
@@ -144,6 +145,7 @@ export async function aggregate(dataSourceKey: string): Promise<AggregateResult>
     }
 
     const changed = effectiveCron !== schedule.cron_expression;
+    const previousCron = schedule.cron_expression;
     if (changed) {
       await client.query(
         `UPDATE sync_schedules SET cron_expression = $1, updated_at = NOW() WHERE id = $2`,
@@ -152,6 +154,20 @@ export async function aggregate(dataSourceKey: string): Promise<AggregateResult>
     }
 
     await client.query('COMMIT');
+
+    // Subscriber notifications fire AFTER COMMIT so subscribers can't see
+    // a notification referring to a cron that didn't land. Best-effort:
+    // a notify failure must not surface as an aggregate failure.
+    if (changed) {
+      const r = await query<{ name: string }>(`SELECT name FROM data_sources WHERE key = $1`, [dataSourceKey]);
+      const sourceLabel = r.rowCount ? r.rows[0].name : dataSourceKey;
+      await notifySubscribers({
+        dataSourceKey,
+        event: 'frequency_changed',
+        payload: { sourceLabel, newCron: effectiveCron, previousCron },
+      }).catch(err => console.error(`[Aggregator] subscriber notify failed for ${dataSourceKey}:`, err));
+    }
+
     return {
       dataSourceKey,
       effectiveCron,
