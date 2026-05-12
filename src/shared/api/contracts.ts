@@ -311,6 +311,30 @@ export const ThemeReadinessResponse = z.object({
 });
 export type ThemeReadinessResponse = z.infer<typeof ThemeReadinessResponse>;
 
+// ── User Templates (ADR-005) ─────────────────────────────────────────────────
+// Personal reusable templates for new-project bootstrap. See migration 030
+// and docs/adr/ADR-005-user-templates-carve-out.md. Endpoints to follow in
+// separate PRs per EPIC #107 children.
+
+export const UserTemplateVisibility = z.enum(['private', 'org', 'public']);
+export type UserTemplateVisibility = z.infer<typeof UserTemplateVisibility>;
+
+export const UserTemplate = z.object({
+  id: z.string(),
+  userId: z.string(),
+  organizationId: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  sourceThemeSlug: z.string().nullable(),
+  tiles: z.array(TileConfig),
+  layout: z.array(LayoutItem),
+  visibility: UserTemplateVisibility,
+  version: z.number().int().min(1).default(1),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type UserTemplate = z.infer<typeof UserTemplate>;
+
 // ── RBAC ─────────────────────────────────────────────────────────────────────
 
 export const Role = z.enum(['admin', 'editor', 'viewer', 'guest']);
