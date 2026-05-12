@@ -286,6 +286,27 @@ export const ThemeApplyResponse = z.object({
 });
 export type ThemeApplyResponse = z.infer<typeof ThemeApplyResponse>;
 
+// ── Theme Readiness (cycle 4 / forge-2026-05-12-004) ─────────────────────────
+// Per-theme view of the ADR-002 "shipped" bar, surfaced via the admin panel.
+
+export const ThemeReadinessEntry = z.object({
+  slug: z.string(),
+  name: z.string(),
+  supercategory: z.string().nullable(),
+  tileCount: z.number(),
+  kpiConfigCount: z.number(),
+  templateSeeded: z.boolean(),
+  templateVersion: z.number().nullable(),
+  distinctDataSources: z.array(z.string()),
+  shipped: z.boolean(),
+});
+export type ThemeReadinessEntry = z.infer<typeof ThemeReadinessEntry>;
+
+export const ThemeReadinessResponse = z.object({
+  themes: z.array(ThemeReadinessEntry),
+});
+export type ThemeReadinessResponse = z.infer<typeof ThemeReadinessResponse>;
+
 // ── RBAC ─────────────────────────────────────────────────────────────────────
 
 export const Role = z.enum(['admin', 'editor', 'viewer', 'guest']);
