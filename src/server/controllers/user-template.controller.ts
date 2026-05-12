@@ -1,0 +1,63 @@
+/**
+ * User templates controller (EPIC #107 / ADR-005 / issue #93).
+ *
+ * v1 only exposes create. List + delete land with #94's wizard cycle.
+ */
+
+import type { Request, Response } from 'express';
+import { query } from '../db/pool.js';
+import { CreateUserTemplateRequest } from '../../shared/api/contracts.js';
+
+function rowToTemplate(r: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    organizationId: r.organization_id,
+    name: r.name,
+    description: r.description ?? null,
+    sourceThemeSlug: r.source_theme_slug ?? null,
+    tiles: r.tiles ?? [],
+    layout: r.layout ?? [],
+    visibility: r.visibility,
+    version: r.version,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+export async function createUserTemplate(req: Request, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+  if (!req.user.organizationId) {
+    res.status(400).json({ error: 'User has no organization — cannot create a template' });
+    return;
+  }
+
+  const parsed = CreateUserTemplateRequest.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid template payload', details: parsed.error.flatten() });
+    return;
+  }
+  const body = parsed.data;
+
+  const result = await query(
+    `INSERT INTO user_templates
+       (user_id, organization_id, name, description, source_theme_slug, tiles, layout, visibility)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::user_template_visibility)
+     RETURNING *`,
+    [
+      req.user.id,
+      req.user.organizationId,
+      body.name,
+      body.description ?? null,
+      body.sourceThemeSlug ?? null,
+      JSON.stringify(body.tiles),
+      JSON.stringify(body.layout),
+      body.visibility,
+    ],
+  );
+
+  res.status(201).json(rowToTemplate(result.rows[0] as Record<string, unknown>));
+}
