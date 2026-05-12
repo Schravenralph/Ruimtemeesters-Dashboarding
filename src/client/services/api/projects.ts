@@ -16,7 +16,9 @@ export interface ProjectDetail extends Project {
 
 export interface CreateProjectInput {
   name: string;
-  themeSlug: string;
+  /** Exactly one of themeSlug or userTemplateId is required. */
+  themeSlug?: string;
+  userTemplateId?: string;
   defaultGeoCode?: string;
 }
 
