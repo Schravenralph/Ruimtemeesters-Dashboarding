@@ -3,8 +3,10 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 import type { ThemeConfig, UserTemplate } from '@shared/api/contracts';
 
 const listMock = vi.hoisted(() => vi.fn());
+const updateMock = vi.hoisted(() => vi.fn());
 vi.mock('../../services/api/user-templates', () => ({
   listUserTemplates: listMock,
+  updateUserTemplate: updateMock,
 }));
 
 import { TemplateGalleryStep, type GallerySelection } from './TemplateGalleryStep';
@@ -26,7 +28,7 @@ const tpl: UserTemplate = {
   ], layout: [], visibility: 'private', version: 1, createdAt: 't', updatedAt: 't',
 };
 
-beforeEach(() => { listMock.mockReset(); cleanup(); });
+beforeEach(() => { listMock.mockReset(); updateMock.mockReset(); cleanup(); });
 
 describe('<TemplateGalleryStep>', () => {
   it('renders the Systeem tab by default with grouped themes', () => {
@@ -76,5 +78,35 @@ describe('<TemplateGalleryStep>', () => {
     render(<TemplateGalleryStep themes={[wonen]} selection={{ kind: 'none' }} onSelect={() => {}} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Publiek' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Network down');
+  });
+
+  it('Mijn tab renders a Zichtbaarheid select per card', async () => {
+    listMock.mockResolvedValueOnce([tpl]);
+    render(<TemplateGalleryStep themes={[wonen]} selection={{ kind: 'none' }} onSelect={() => {}} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Mijn' }));
+    await screen.findByText('Mijn Wonen Snapshot');
+    const select = screen.getByLabelText(/Zichtbaarheid/i) as HTMLSelectElement;
+    expect(select.value).toBe('private');
+  });
+
+  it('changing the visibility select fires updateUserTemplate', async () => {
+    listMock.mockResolvedValueOnce([tpl]);
+    updateMock.mockResolvedValueOnce({ ...tpl, visibility: 'org' });
+    render(<TemplateGalleryStep themes={[wonen]} selection={{ kind: 'none' }} onSelect={() => {}} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Mijn' }));
+    const select = await screen.findByLabelText(/Zichtbaarheid/i);
+    fireEvent.change(select, { target: { value: 'org' } });
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith('tpl-1', { visibility: 'org' }));
+  });
+
+  it('reverts the select and shows an error when the PATCH rejects', async () => {
+    listMock.mockResolvedValueOnce([tpl]);
+    updateMock.mockRejectedValueOnce(new Error('PATCH boom'));
+    render(<TemplateGalleryStep themes={[wonen]} selection={{ kind: 'none' }} onSelect={() => {}} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Mijn' }));
+    const select = await screen.findByLabelText(/Zichtbaarheid/i) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'public' } });
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('PATCH boom'));
+    expect(select.value).toBe('private');
   });
 });

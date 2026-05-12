@@ -348,6 +348,16 @@ export const CreateUserTemplateRequest = z.object({
 });
 export type CreateUserTemplateRequest = z.infer<typeof CreateUserTemplateRequest>;
 
+// Patch shape for PATCH /api/user-templates/:id (issue #95). Owner OR
+// org admin only. At least one of name/description/visibility must be
+// supplied — guard runtime-side in the controller.
+export const UpdateUserTemplateRequest = z.object({
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().max(2000).nullable().optional(),
+  visibility: UserTemplateVisibility.optional(),
+});
+export type UpdateUserTemplateRequest = z.infer<typeof UpdateUserTemplateRequest>;
+
 // ── Sync Demand Subscriber (ADR-006) ─────────────────────────────────────────
 // See migration 031-033 and docs/adr/ADR-006-sync-demand-subscriber-model.md.
 // Aggregator + endpoints + UI follow in EPIC #108 children #101-#105.
