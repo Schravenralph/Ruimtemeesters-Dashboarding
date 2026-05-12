@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
-import { CreateUserTemplateRequest } from '../../shared/api/contracts.js';
+import { CreateUserTemplateRequest, UpdateUserTemplateRequest } from '../../shared/api/contracts.js';
 
 function rowToTemplate(r: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -96,4 +96,60 @@ export async function createUserTemplate(req: Request, res: Response): Promise<v
   );
 
   res.status(201).json(rowToTemplate(result.rows[0] as Record<string, unknown>));
+}
+
+export async function updateUserTemplate(req: Request, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+  const id = req.params.id;
+  if (!id || typeof id !== 'string') {
+    res.status(400).json({ error: 'id is required' });
+    return;
+  }
+
+  const parsed = UpdateUserTemplateRequest.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid template patch', details: parsed.error.flatten() });
+    return;
+  }
+  const body = parsed.data;
+  if (body.name === undefined && body.description === undefined && body.visibility === undefined) {
+    res.status(400).json({ error: 'At least one of name, description, or visibility must be supplied' });
+    return;
+  }
+
+  const existing = await query<{ id: string; user_id: string; organization_id: string }>(
+    `SELECT id, user_id, organization_id FROM user_templates WHERE id = $1`,
+    [id],
+  );
+  if (!existing.rowCount) {
+    res.status(404).json({ error: 'Template not found' });
+    return;
+  }
+  const row = existing.rows[0];
+  const isOwner = row.user_id === req.user.id;
+  const isOrgAdmin = req.user.role === 'admin' && row.organization_id === req.user.organizationId;
+  if (!isOwner && !isOrgAdmin) {
+    res.status(403).json({ error: 'Not authorised to edit this template' });
+    return;
+  }
+
+  const result = await query(
+    `UPDATE user_templates
+        SET name = COALESCE($2, name),
+            description = CASE WHEN $3::text = '__keep__' THEN description ELSE $3 END,
+            visibility = COALESCE($4::user_template_visibility, visibility),
+            updated_at = NOW()
+      WHERE id = $1
+      RETURNING *`,
+    [
+      id,
+      body.name ?? null,
+      body.description === undefined ? '__keep__' : body.description,
+      body.visibility ?? null,
+    ],
+  );
+  res.json(rowToTemplate(result.rows[0] as Record<string, unknown>));
 }
