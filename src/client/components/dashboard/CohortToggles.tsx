@@ -4,25 +4,58 @@ import type { CohortType } from '@shared/api/contracts';
 import { usePresentations } from '../../contexts/PresentationContext';
 import { useCohortMemberships } from '../../hooks/useCohortMemberships';
 import { useFilters } from '../../contexts/FilterContext';
+import { useThemes } from '../../contexts/ThemeContext';
+
+/**
+ * Pure resolver: given an override, the theme's configured default, and the
+ * cohort types that have data populated for the focal gemeente, returns the
+ * cohort_type to display. Exported for unit testing.
+ *
+ * Falls back to 'populatiegrootte' when the theme's configured default has
+ * no data (e.g. woningmarktregio not yet loaded). The fellBack flag lets
+ * the UI surface a tooltip explaining the substitution.
+ */
+export function pickActiveCohortType(
+  override: CohortType | undefined,
+  configuredDefault: CohortType,
+  availableTypes: CohortType[],
+): { active: CohortType; fellBack: boolean } {
+  if (override) return { active: override, fellBack: false };
+  if (availableTypes.includes(configuredDefault)) {
+    return { active: configuredDefault, fellBack: false };
+  }
+  return { active: 'populatiegrootte', fellBack: true };
+}
 
 /**
  * SPEC-C T3: cohort visibility toggles + cohort-type selector.
  *
  * Lives next to GemeenteHeader. Updates the active presentation's referenceVisibility.
  * Hidden when the focal isn't a gemeente (cohorts are gemeente-scoped in v1).
+ *
+ * Per-theme default cohort_type lives on themes.default_cohort_type (mig 029,
+ * ADR-003). If the configured default has no data populated yet, falls back
+ * to 'populatiegrootte' and surfaces a tooltip.
  */
 export function CohortToggles() {
   const { filters } = useFilters();
   const { activePresentation, updatePresentation } = usePresentations();
   const { memberships } = useCohortMemberships(filters.geoCode);
+  const { themes } = useThemes();
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
 
   if (filters.geoLevel !== 'gemeente') return null;
   if (!activePresentation) return null;
 
   const refVis = activePresentation.referenceVisibility;
-  const themeDefault = (memberships?.defaultByTheme[activePresentation.themeSlug] ?? 'populatiegrootte') as CohortType;
-  const activeCohortType = refVis.cohortType ?? themeDefault;
+  const activeTheme = themes.find(t => t.slug === activePresentation.themeSlug);
+  const configuredDefault = (activeTheme?.defaultCohortType ?? 'populatiegrootte') as CohortType;
+  const availableTypes = (memberships?.memberships.map(m => m.cohortType) ?? []) as CohortType[];
+  const { active: activeCohortType, fellBack } = pickActiveCohortType(
+    refVis.cohortType,
+    configuredDefault,
+    availableTypes,
+  );
   const activeMembership = memberships?.memberships.find(m => m.cohortType === activeCohortType);
 
   const setCohortType = (t: CohortType | undefined) => {
@@ -54,6 +87,15 @@ export function CohortToggles() {
           <span>{activeMembership?.name ?? `Cohort: ${activeCohortType}`}</span>
           {activeMembership && (
             <span className="text-gray-400">({activeMembership.memberCount})</span>
+          )}
+          {fellBack && (
+            <span
+              className="ml-1 text-amber-600"
+              title={`Cohort '${configuredDefault}' is nog niet geladen — toont 'populatiegrootte' als fallback.`}
+              aria-label={`${configuredDefault} nog niet geladen`}
+            >
+              ⚠
+            </span>
           )}
           <ChevronDown className="h-3 w-3 text-gray-500" />
         </button>

@@ -60,19 +60,14 @@ export async function getCohortMemberships(req: Request, res: Response): Promise
     return;
   }
 
-  // Build defaultByTheme map from cohort_definitions.theme_default_for arrays.
-  // Deterministic order: cohort_type ASC, then cohort_key ASC, then sort_order — first wins per theme.
-  const defaultRows = await query<{ theme_slug: string; cohort_type: string }>(
-    `
-    SELECT UNNEST(theme_default_for) AS theme_slug, cohort_type, cohort_key, sort_order
-    FROM cohort_definitions
-    WHERE array_length(theme_default_for, 1) > 0
-    ORDER BY cohort_type, cohort_key, sort_order
-    `,
+  // Per-theme default cohort_type lives on themes.default_cohort_type
+  // (migration 029, ADR-003). Single source of truth per theme.
+  const defaultRows = await query<{ slug: string; default_cohort_type: string }>(
+    `SELECT slug, default_cohort_type FROM themes WHERE is_system = true`,
   );
   const defaultByTheme: Record<string, string> = {};
   for (const r of defaultRows.rows) {
-    if (!defaultByTheme[r.theme_slug]) defaultByTheme[r.theme_slug] = r.cohort_type;
+    defaultByTheme[r.slug] = r.default_cohort_type;
   }
 
   res.json({
