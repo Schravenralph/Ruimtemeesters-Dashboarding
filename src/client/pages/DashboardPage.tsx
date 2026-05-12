@@ -31,6 +31,7 @@ import { getLayout, saveLayout } from '../services/api/dashboards';
 import { getTheme } from '../services/api/themes';
 import { getProjectDashboard, saveProjectDashboardLayout, getThemeDiff } from '../services/api/project-dashboards';
 import { ThemeUpdateDiff } from '../components/dashboard/ThemeUpdateDiff';
+import { SyncDemandPicker } from '../components/dashboard/SyncDemandPicker';
 import type { ThemeConfig, LayoutItem, TileConfig, ProjectDashboard } from '@shared/api/contracts';
 
 export function DashboardPage() {
@@ -252,6 +253,7 @@ export function DashboardPage() {
                     Bijwerken van thema
                   </Button>
                 )}
+                <SyncDemandPicker tiles={tilesSource} />
                 <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
                   <Edit3 className="h-4 w-4" />
                   Layout bewerken
