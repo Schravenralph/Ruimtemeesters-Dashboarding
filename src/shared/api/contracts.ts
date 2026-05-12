@@ -373,6 +373,23 @@ export const SyncSubscriber = z.object({
 });
 export type SyncSubscriber = z.infer<typeof SyncSubscriber>;
 
+export const SyncDemandsAdminRow = z.object({
+  dataSourceKey: z.string(),
+  name: z.string(),
+  activeDemandCount: z.number(),
+  expiredDemandCount: z.number(),
+  strictestActiveCron: z.string().nullable(),
+  currentScheduleCron: z.string().nullable(),
+  maxFrequencyCron: z.string().nullable(),
+  oldestExpiry: z.string().nullable(),
+});
+export type SyncDemandsAdminRow = z.infer<typeof SyncDemandsAdminRow>;
+
+export const SyncDemandsAdminResponse = z.object({
+  rows: z.array(SyncDemandsAdminRow),
+});
+export type SyncDemandsAdminResponse = z.infer<typeof SyncDemandsAdminResponse>;
+
 // ── RBAC ─────────────────────────────────────────────────────────────────────
 
 export const Role = z.enum(['admin', 'editor', 'viewer', 'guest']);
