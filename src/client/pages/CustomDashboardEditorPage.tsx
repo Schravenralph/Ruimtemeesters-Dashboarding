@@ -7,6 +7,7 @@ import { LoadingOverlay } from '../components/ui/Spinner';
 import { TileGrid } from '../components/dashboard/TileGrid';
 import { FilterBar } from '../components/filters/FilterBar';
 import { TilePicker } from '../components/dashboard/TilePicker';
+import { SaveAsTemplateButton } from '../components/dashboard/SaveAsTemplateButton';
 import {
   listCustomDashboards,
   updateCustomDashboard,
@@ -114,6 +115,7 @@ export function CustomDashboardEditorPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <SaveAsTemplateButton tiles={tiles} layout={layout} sourceThemeSlug={null} />
           <Button variant="secondary" onClick={() => setShowPicker(true)}>
             <Plus className="h-4 w-4" />
             Tegel toevoegen
