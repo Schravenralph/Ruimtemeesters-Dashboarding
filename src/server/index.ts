@@ -2,10 +2,12 @@ import app from './app.js';
 import { env } from './env.js';
 import { pool } from './db/pool.js';
 import { startSyncScheduler, stopSyncScheduler } from './services/cbs/sync-scheduler.js';
+import { startSyncDecayRunner, stopSyncDecayRunner } from './services/sync/decay-runner.js';
 
 const server = app.listen(env.port, env.host, () => {
   console.log(`Server running on ${env.host}:${env.port} in ${env.nodeEnv} mode`);
   startSyncScheduler().catch(err => console.error('Scheduler start failed:', err));
+  startSyncDecayRunner();
 });
 
 // Graceful shutdown
@@ -17,6 +19,7 @@ async function shutdown(signal: string) {
   });
 
   stopSyncScheduler();
+  stopSyncDecayRunner();
 
   try {
     await pool.end();
