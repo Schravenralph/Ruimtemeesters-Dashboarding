@@ -10,12 +10,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: 5022
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/dashboarding
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:?missing DB_PASSWORD in .env}@db:5432/dashboarding
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: dashboarding
       DB_USER: postgres
-      DB_PASSWORD: postgres
+      DB_PASSWORD: ${DB_PASSWORD:?missing DB_PASSWORD in .env}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}
@@ -46,7 +46,7 @@ services:
     environment:
       POSTGRES_DB: dashboarding
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?missing DB_PASSWORD in .env}
     ports:
       - "127.0.0.1:6433:5432"
     volumes:
