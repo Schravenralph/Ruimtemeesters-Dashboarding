@@ -11,6 +11,7 @@ import cron, { type ScheduledTask } from 'node-cron';
 import { query } from '../../db/pool.js';
 import { syncGeneric, classifySyncStatus, type GenericSyncConfig, type SubsetFilters } from './cbs-generic-sync.js';
 import { notifySyncFinished, type NotifyOn } from './sync-notifier.js';
+import { notifySubscribers } from '../sync/subscriber-notifier.js';
 
 interface ScheduleRow {
   id: string;
@@ -81,6 +82,24 @@ async function runScheduled(schedule: ScheduleRow): Promise<void> {
     sourceLabel: schedule.source_name,
     trigger: 'scheduled',
   });
+
+  // Subscriber notifications (ADR-006 / EPIC #108). Only fire on a real
+  // data-arrived event — empty / errored runs leave the dashboard state
+  // unchanged, so there's nothing for a subscriber to react to. The
+  // schedule owner already heard via notifySyncFinished; skip them to
+  // avoid double-fire.
+  if (result.errors.length === 0 && result.rowsInserted > 0) {
+    await notifySubscribers({
+      dataSourceKey: schedule.data_source_key,
+      event: 'data_arrived',
+      payload: {
+        sourceLabel: schedule.source_name,
+        rowsInserted: result.rowsInserted,
+        syncRunId: result.syncRunId ?? null,
+      },
+      alreadyNotifiedUserIds: schedule.created_by ? [schedule.created_by] : [],
+    }).catch(err => console.error(`[SyncScheduler] subscriber notify failed for ${schedule.data_source_key}:`, err));
+  }
 }
 
 function scheduleJob(schedule: ScheduleRow): void {
