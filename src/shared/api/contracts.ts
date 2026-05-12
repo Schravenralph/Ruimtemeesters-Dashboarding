@@ -335,6 +335,44 @@ export const UserTemplate = z.object({
 });
 export type UserTemplate = z.infer<typeof UserTemplate>;
 
+// ── Sync Demand Subscriber (ADR-006) ─────────────────────────────────────────
+// See migration 031-033 and docs/adr/ADR-006-sync-demand-subscriber-model.md.
+// Aggregator + endpoints + UI follow in EPIC #108 children #101-#105.
+
+export const SyncDemandRequest = z.object({
+  id: z.string(),
+  dataSourceKey: z.string(),
+  requestedCron: z.string(),
+  userId: z.string(),
+  dashboardContext: z.record(z.unknown()).nullable(),
+  expiresAt: z.string(),
+  createdAt: z.string(),
+});
+export type SyncDemandRequest = z.infer<typeof SyncDemandRequest>;
+
+export const SyncSubscriberKind = z.enum(['user', 'project_dashboard']);
+export type SyncSubscriberKind = z.infer<typeof SyncSubscriberKind>;
+
+export const SyncSubscriberEvent = z.enum(['data_arrived', 'frequency_changed']);
+export type SyncSubscriberEvent = z.infer<typeof SyncSubscriberEvent>;
+
+export const SyncSubscriberNotificationPref = z.object({
+  in_app: z.boolean().default(true),
+  email: z.boolean().default(false),
+  events: z.array(SyncSubscriberEvent).default(['data_arrived', 'frequency_changed']),
+});
+export type SyncSubscriberNotificationPref = z.infer<typeof SyncSubscriberNotificationPref>;
+
+export const SyncSubscriber = z.object({
+  id: z.string(),
+  subscriberKind: SyncSubscriberKind,
+  subscriberId: z.string(),
+  dataSourceKey: z.string(),
+  notificationPref: SyncSubscriberNotificationPref,
+  createdAt: z.string(),
+});
+export type SyncSubscriber = z.infer<typeof SyncSubscriber>;
+
 // ── RBAC ─────────────────────────────────────────────────────────────────────
 
 export const Role = z.enum(['admin', 'editor', 'viewer', 'guest']);
