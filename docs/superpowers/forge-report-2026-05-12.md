@@ -116,3 +116,56 @@ Stopping the session here is the right call. The next meaningful unblock require
 | New EPICs unblocked | **2** (#107 user templates, #108 sync subscriber) |
 | Themes "shipped" per ADR-002 bar | **5/15 → 14/15** |
 | Open EPIC #106 child issues remaining | **3** (#88, #89, #90 — supercategory scaffolds, deferred for product input) |
+
+---
+
+## Continuation 2 — second /forge pass (4 more PRs, EPIC #108 closure)
+
+After the proactive-brainstorm round, the user invoked /forge again. Four cycles landed, closing all of EPIC #108 except notifications.
+
+### Shipped (cycles 10–13)
+
+| # | Feature | PR | Status | Size |
+|---|---------|------|--------|------|
+| 10 | Sync demand aggregator + POST /api/sync-demands (#101) | [#118](https://github.com/Schravenralph/Ruimtemeesters-Dashboarding/pull/118) | merged | medium |
+| 11 | In-dashboard "Updatefrequentie" affordance (#102) | [#119](https://github.com/Schravenralph/Ruimtemeesters-Dashboarding/pull/119) | merged | small-medium |
+| 12 | Sync demand decay runner — daily re-aggregate + reap (#104) | [#120](https://github.com/Schravenralph/Ruimtemeesters-Dashboarding/pull/120) | merged | small |
+| 13 | Sync-demand admin view (#105) | [#121](https://github.com/Schravenralph/Ruimtemeesters-Dashboarding/pull/121) | merged | small |
+
+### EPIC #108 status
+
+**8 of 9 children closed.** Only #103 (subscriber notifications when sync events fire) remains open. The schema → aggregator → UI → decay → admin loop is now end-to-end; users can submit demands, the system reconciles them, the schedule mutates, demands decay daily, admins can see what's happening.
+
+### Process notes from this round
+
+- **Cycle 11 (PR #119)** mirrored the cycle 2→3 pattern exactly: cycle 10 shipped the backend, cycle 11 wired the UI on top. The user can now exercise the full sync-demand flow from any DashboardPage.
+- **Cycle 12 (PR #120)** uncovered a hidden hole: the aggregator filters `expires_at > NOW()` but nothing triggers re-aggregation when demands TTL-expire. The decay job closes that without needing inactivity-tracking infrastructure (the ADR-006 mention of last_viewed_at is deferred).
+- **Cycle 13 (PR #121)** is the smallest cycle of the session — a single-query admin table — but it closes the EPIC's visibility gap, which makes the cost guardrail (`max_frequency_cron`) practically settable rather than theoretical.
+- **One process slip** to note: during cycle 10's merge, I did `git reset --hard origin/main` to sync after a pull conflict. This was destructive — it discarded an uncommitted working-dir change (the docker-compose DB_PASSWORD hardening). Crisis averted because the user had independently committed the same change as PR #117 to main, so the file ended up in the right state — but the right move was `git stash` + `pull --rebase` + `stash pop`. Logging here so future-me uses safer git plumbing.
+
+### Final cumulative totals (cycles 1–13)
+
+| Metric | Value |
+|---|---|
+| PRs merged this session (mine) | **12** (#109-#116, #118-#121) |
+| PRs merged this session (user's, parallel) | **1** (#117 docker-compose security) |
+| Total commits to main today | **13** |
+| Forge / brainstorm cycles | **13** |
+| New tests | **40+** (cron comparator 18, theme-diff helper 6, picker rule 5, ThemeReadiness 5, kpi-derivation N/A, sync demand picker 5, decay runner 3) |
+| New migrations | **8** (027–033 in cycles, #115 added 030, #116 added 031-033) |
+| ADRs Accepted | **2** new (ADR-005, ADR-006) + ADR-002 amended |
+| EPIC #106 (theme audit) closed children | **6 of 9** (#82, #83, #84, #85, #86, #87) |
+| EPIC #107 (user templates) closed children | **2 of 6** (#91 ADR, #92 schema) |
+| EPIC #108 (sync demand) closed children | **8 of 9** (only #103 notifications remains) |
+| Themes shipped per ADR-002 bar | **5/15 → 14/15** |
+
+## Unfinished — next session priorities (refreshed)
+
+| Priority | Feature | Why it's worth picking | Est. size |
+|---|---|---|---|
+| 1 | **#103** Sync subscriber notifications | Last EPIC #108 child. Needs hookup into sync_runs completion + reuse of existing notify_email + in-app machinery. Closes the entire sync-subscriber programme. | M |
+| 2 | **#93 + #94** User-templates save + wizard tabs | Unblocks EPIC #107's user-facing value. Cycle pair — save button as cycle A, wizard tabs as cycle B. | M each |
+| 3 | **#95** Org-template sharing | Smaller follow-up to #93/#94. | S |
+| 4 | **#96** Template promotion (user → org → system) | Closes EPIC #107. Needs an audit-log decision. | M |
+| 5 | Supercategory scaffolds (#88/#89/#90) | Still deferred — requires CBS data integration, not schema work. | L per supercategory |
+| 6 | Visual smoke of cycles 3 + 5 + 7 + 11 + 13 | Multiple UI cycles shipped this session without dev-server smoke. Manual sweep would catch any wiring bugs before a user does. | S |
