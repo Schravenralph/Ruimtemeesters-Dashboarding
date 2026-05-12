@@ -54,3 +54,7 @@ Concretely:
 - `docs/superpowers/specs/2026-03-26-multi-domain-supercategories-design.md` — supercategory + theme model.
 - ADR-003 — per-municipality drilldown with referential cohort.
 - ADR-004 — theme-as-template at project creation.
+
+## Subsequent decisions
+
+- **ADR-005 (2026-05-12)** carves out **user templates ("Mijn templates")** as an exception to the maintenance-only rule. User templates are reusable starting points for new-project bootstrap, with a private/org/public visibility model and a promotion path to system templates. The rationale: they expand prebuilt-content supply over time and feed *into* the prebuilt front door rather than competing with it. The maintenance-only stance on the original customisation surface (tile picker, drag-and-drop, Mijn Dashboards) remains in force.
