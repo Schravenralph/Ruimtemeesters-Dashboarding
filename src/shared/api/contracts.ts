@@ -259,6 +259,33 @@ export const ProjectDashboard = z.object({
 });
 export type ProjectDashboard = z.infer<typeof ProjectDashboard>;
 
+// ── Theme Update Diff (cycle 11 / forge-2026-05-12-002) ──────────────────────
+// Diff between a project_dashboards row and the latest dashboard_templates row
+// for its source theme. Surfaced by GET /api/projects/.../theme-diff and
+// consumed by POST /api/projects/.../theme-apply with selected tileIds.
+
+export const ThemeDiffEntry = z.object({
+  kind: z.enum(['added', 'removed', 'modified']),
+  tileId: z.string(),
+  before: TileConfig.optional(),
+  after: TileConfig.optional(),
+});
+export type ThemeDiffEntry = z.infer<typeof ThemeDiffEntry>;
+
+export const ThemeDiffResponse = z.object({
+  projectVersion: z.number(),
+  templateVersion: z.number(),
+  diff: z.array(ThemeDiffEntry),
+});
+export type ThemeDiffResponse = z.infer<typeof ThemeDiffResponse>;
+
+export const ThemeApplyResponse = z.object({
+  appliedCount: z.number(),
+  newProjectVersion: z.number(),
+  fullyApplied: z.boolean(),
+});
+export type ThemeApplyResponse = z.infer<typeof ThemeApplyResponse>;
+
 // ── RBAC ─────────────────────────────────────────────────────────────────────
 
 export const Role = z.enum(['admin', 'editor', 'viewer', 'guest']);

@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
 import { bootstrapProject } from '../services/projects/project-bootstrap.service.js';
+import { computeDiff, applyDiff } from '../services/projects/theme-diff.service.js';
 
 /**
  * SPEC-D project endpoints.
@@ -195,6 +196,54 @@ export async function putProjectDashboardLayout(req: AuthRequest, res: Response)
   if (result.rowCount === 0) { res.status(404).json({ error: 'Dashboard not found' }); return; }
 
   res.json({ ok: true });
+}
+
+export async function getThemeDiff(req: AuthRequest, res: Response): Promise<void> {
+  const user = req.user;
+  if (!user) { res.status(401).json({ error: 'Authentication required' }); return; }
+  if (!user.organizationId) { res.status(403).json({ error: 'Not in an organization' }); return; }
+
+  const { idOrSlug, dashboardSlug } = req.params;
+  if (typeof idOrSlug !== 'string' || typeof dashboardSlug !== 'string' || !idOrSlug || !dashboardSlug) {
+    res.status(400).json({ error: 'idOrSlug and dashboardSlug required' });
+    return;
+  }
+
+  const result = await computeDiff(user.organizationId, idOrSlug, dashboardSlug);
+  if ('notFound' in result) {
+    res.status(404).json({ error: `${result.notFound} not found` });
+    return;
+  }
+  res.json(result);
+}
+
+export async function postThemeApply(req: AuthRequest, res: Response): Promise<void> {
+  const user = req.user;
+  if (!user) { res.status(401).json({ error: 'Authentication required' }); return; }
+  if (!user.organizationId) { res.status(403).json({ error: 'Not in an organization' }); return; }
+
+  const { idOrSlug, dashboardSlug } = req.params;
+  if (typeof idOrSlug !== 'string' || typeof dashboardSlug !== 'string' || !idOrSlug || !dashboardSlug) {
+    res.status(400).json({ error: 'idOrSlug and dashboardSlug required' });
+    return;
+  }
+  const { tileIds } = req.body ?? {};
+  if (!Array.isArray(tileIds) || !tileIds.every((s: unknown) => typeof s === 'string')) {
+    res.status(400).json({ error: 'tileIds must be an array of strings' });
+    return;
+  }
+
+  try {
+    const result = await applyDiff(user.organizationId, idOrSlug, dashboardSlug, tileIds);
+    if ('notFound' in result) {
+      res.status(404).json({ error: `${result.notFound} not found` });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Apply failed';
+    res.status(500).json({ error: msg });
+  }
 }
 
 export async function patchProject(req: AuthRequest, res: Response): Promise<void> {
