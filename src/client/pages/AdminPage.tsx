@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, Users, Database, ClipboardList, Upload, Palette, Key, Webhook, BarChart3, RefreshCw, Activity, Gauge } from 'lucide-react';
+import { Shield, Users, Database, ClipboardList, Upload, Palette, Key, Webhook, BarChart3, RefreshCw, Activity, Gauge, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { UserManagement } from '../components/admin/UserManagement';
 import { PolicyEditor } from '../components/admin/PolicyEditor';
@@ -9,12 +9,13 @@ import { DataImportPanel } from '../components/admin/DataImportPanel';
 import { DataQualityPanel } from '../components/admin/DataQualityPanel';
 import { ThemeManager } from '../components/admin/ThemeManager';
 import { ThemeReadiness } from '../components/admin/ThemeReadiness';
+import { SyncDemandsAdmin } from '../components/admin/SyncDemandsAdmin';
 import { ApiKeyManager } from '../components/admin/ApiKeyManager';
 import { WebhookManager } from '../components/admin/WebhookManager';
 import { AnalyticsDashboard } from '../components/admin/AnalyticsDashboard';
 import { DataSyncPanel } from '../components/admin/DataSyncPanel';
 
-type Tab = 'policies' | 'users' | 'themes' | 'readiness' | 'data' | 'quality' | 'import' | 'sync' | 'audit' | 'apikeys' | 'webhooks' | 'analytics';
+type Tab = 'policies' | 'users' | 'themes' | 'readiness' | 'data' | 'quality' | 'import' | 'sync' | 'syncdemands' | 'audit' | 'apikeys' | 'webhooks' | 'analytics';
 
 export function AdminPage() {
   const { user } = useAuth();
@@ -37,6 +38,7 @@ export function AdminPage() {
     { key: 'quality', label: 'Datakwaliteit', icon: Activity },
     { key: 'import', label: 'Data import', icon: Upload },
     { key: 'sync', label: 'CBS Sync', icon: RefreshCw },
+    { key: 'syncdemands', label: 'Sync demand', icon: Clock },
     { key: 'audit', label: 'Audit Log', icon: ClipboardList },
     { key: 'apikeys', label: 'API Sleutels', icon: Key },
     { key: 'webhooks', label: 'Webhooks', icon: Webhook },
@@ -77,6 +79,7 @@ export function AdminPage() {
       {activeTab === 'quality' && <DataQualityPanel />}
       {activeTab === 'import' && <DataImportPanel />}
       {activeTab === 'sync' && <DataSyncPanel />}
+      {activeTab === 'syncdemands' && <SyncDemandsAdmin />}
       {activeTab === 'audit' && <AuditLog />}
       {activeTab === 'apikeys' && <ApiKeyManager />}
       {activeTab === 'webhooks' && <WebhookManager />}
