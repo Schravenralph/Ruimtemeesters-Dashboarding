@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Download, Edit3, Save, X, FolderOpen, Table2, Printer } from 'lucide-react';
+import { Download, Edit3, Save, X, FolderOpen, Table2, Printer, RefreshCw } from 'lucide-react';
 import { useThemes } from '../contexts/ThemeContext';
 import { useFilters } from '../contexts/FilterContext';
 import { FilterBar } from '../components/filters/FilterBar';
@@ -29,7 +29,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePresentations } from '../contexts/PresentationContext';
 import { getLayout, saveLayout } from '../services/api/dashboards';
 import { getTheme } from '../services/api/themes';
-import { getProjectDashboard, saveProjectDashboardLayout } from '../services/api/project-dashboards';
+import { getProjectDashboard, saveProjectDashboardLayout, getThemeDiff } from '../services/api/project-dashboards';
+import { ThemeUpdateDiff } from '../components/dashboard/ThemeUpdateDiff';
 import type { ThemeConfig, LayoutItem, TileConfig, ProjectDashboard } from '@shared/api/contracts';
 
 export function DashboardPage() {
@@ -46,6 +47,8 @@ export function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showComparisonTable, setShowComparisonTable] = useState(false);
   const [showWorkspace, setShowWorkspace] = useState(false);
+  const [themeUpdateAvailable, setThemeUpdateAvailable] = useState(false);
+  const [themeDiffOpen, setThemeDiffOpen] = useState(false);
 
   // Each route (slug + optional projectSlug) has exactly one tab. Mounting or
   // navigating here either activates the matching tab or creates it. This is
@@ -121,6 +124,30 @@ export function DashboardPage() {
       .catch(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
   }, [slug, projectSlug, themes, setActiveTheme]);
+
+  // After a project dashboard loads, check whether the source theme has a
+  // newer template version. If so, surface the "Bijwerken van thema" button.
+  useEffect(() => {
+    if (!projectSlug || !projectDashboard) {
+      setThemeUpdateAvailable(false);
+      return;
+    }
+    let cancelled = false;
+    getThemeDiff(projectSlug, projectDashboard.slug)
+      .then(d => {
+        if (!cancelled) setThemeUpdateAvailable(d.templateVersion > d.projectVersion);
+      })
+      .catch(() => { if (!cancelled) setThemeUpdateAvailable(false); });
+    return () => { cancelled = true; };
+  }, [projectSlug, projectDashboard]);
+
+  async function refreshProjectDashboard() {
+    if (!projectSlug || !projectDashboard) return;
+    const next = await getProjectDashboard(projectSlug, projectDashboard.slug);
+    setProjectDashboard(next);
+    setLayout(next.layout ?? []);
+    setThemeUpdateAvailable(false);
+  }
 
   async function loadLayout(themeId: string) {
     try {
@@ -218,10 +245,18 @@ export function DashboardPage() {
                 </Button>
               </>
             ) : (
-              <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
-                <Edit3 className="h-4 w-4" />
-                Layout bewerken
-              </Button>
+              <>
+                {projectSlug && projectDashboard && themeUpdateAvailable && (
+                  <Button variant="secondary" size="sm" onClick={() => setThemeDiffOpen(true)}>
+                    <RefreshCw className="h-4 w-4" />
+                    Bijwerken van thema
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
+                  <Edit3 className="h-4 w-4" />
+                  Layout bewerken
+                </Button>
+              </>
             )
           )}
         </div>
@@ -309,6 +344,17 @@ export function DashboardPage() {
 
       {/* Workspace Manager Modal */}
       <WorkspaceManager isOpen={showWorkspace} onClose={() => setShowWorkspace(false)} />
+
+      {/* Theme update diff modal (project routes only) */}
+      {projectSlug && projectDashboard && (
+        <ThemeUpdateDiff
+          isOpen={themeDiffOpen}
+          onClose={() => setThemeDiffOpen(false)}
+          projectSlug={projectSlug}
+          dashboardSlug={projectDashboard.slug}
+          onApplied={() => { void refreshProjectDashboard(); }}
+        />
+      )}
     </div>
   );
 }
