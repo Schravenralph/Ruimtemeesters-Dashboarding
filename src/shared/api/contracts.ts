@@ -93,6 +93,10 @@ export const ThemeConfig = z.object({
   supercategory: z.string().optional(),
   isOverview: z.boolean().optional(),
   kpiConfig: z.array(ThemeKpiEntry).optional().default([]),
+  // ADR-003 per-theme cohort default. Wonen → woningmarktregio, others → populatiegrootte.
+  // Set as a typed column on themes (migration 029), exposed here as a string to avoid
+  // forward references; downstream code may parse via CohortType.parse() if needed.
+  defaultCohortType: z.string().default('populatiegrootte'),
 });
 export type ThemeConfig = z.infer<typeof ThemeConfig>;
 

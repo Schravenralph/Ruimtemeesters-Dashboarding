@@ -12,7 +12,7 @@ export async function listThemes(req: Request, res: Response): Promise<void> {
 
   let sql = `
     SELECT t.id, t.slug, t.name, t.description, t.icon, t."order", t.is_system,
-           t.supercategory, t.is_overview, t.kpi_config,
+           t.supercategory, t.is_overview, t.kpi_config, t.default_cohort_type,
            json_agg(json_build_object(
              'id', ti.id,
              'title', ti.title,
@@ -50,6 +50,7 @@ export async function listThemes(req: Request, res: Response): Promise<void> {
       supercategory: row.supercategory,
       isOverview: row.is_overview,
       kpiConfig: row.kpi_config ?? [],
+      defaultCohortType: row.default_cohort_type,
       tiles: row.tiles[0]?.id ? row.tiles : [],
     }));
 
@@ -71,7 +72,7 @@ export async function getTheme(req: Request, res: Response): Promise<void> {
 
   const result = await query(
     `SELECT t.id, t.slug, t.name, t.description, t.icon, t."order", t.is_system,
-            t.supercategory, t.is_overview, t.kpi_config,
+            t.supercategory, t.is_overview, t.kpi_config, t.default_cohort_type,
             json_agg(json_build_object(
               'id', ti.id,
               'title', ti.title,
@@ -101,6 +102,7 @@ export async function getTheme(req: Request, res: Response): Promise<void> {
     supercategory: row.supercategory,
     isOverview: row.is_overview,
     kpiConfig: row.kpi_config ?? [],
+    defaultCohortType: row.default_cohort_type,
     tiles: row.tiles[0]?.id ? row.tiles : [],
   });
 }
