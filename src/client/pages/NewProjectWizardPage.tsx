@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, FolderKanban, Check } from 'lucide-react';
 import { useThemes } from '../contexts/ThemeContext';
 import { useProjects } from '../contexts/ProjectContext';
 import { createProject } from '../services/api/projects';
+import { TemplateGalleryStep, type GallerySelection } from '../components/wizard/TemplateGalleryStep';
 
 /**
  * SPEC-D §"Bootstrap Wizard": three-step new-project flow.
@@ -17,29 +18,31 @@ export function NewProjectWizardPage() {
   const { refetchProjects, setCurrentProjectSlug } = useProjects();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [themeSlug, setThemeSlug] = useState<string | null>(null);
+  const [selection, setSelection] = useState<GallerySelection>({ kind: 'none' });
   const [name, setName] = useState('');
   const [defaultGeoCode, setDefaultGeoCode] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Group themes by supercategory for the picker.
-  const grouped = themes.reduce<Record<string, typeof themes>>((acc, t) => {
-    const key = t.supercategory ?? 'overig';
-    (acc[key] ??= []).push(t);
-    return acc;
-  }, {});
+  const selectedTheme =
+    selection.kind === 'theme' ? themes.find(t => t.slug === selection.themeSlug) : undefined;
 
-  const selectedTheme = themes.find(t => t.slug === themeSlug);
+  const summaryLabel =
+    selection.kind === 'theme'
+      ? selectedTheme?.name ?? 'thema'
+      : selection.kind === 'template'
+      ? 'jouw template'
+      : '';
 
   const submit = async () => {
-    if (!themeSlug || !name.trim()) return;
+    if (selection.kind === 'none' || !name.trim()) return;
     setSubmitting(true);
     setError(null);
     try {
       const result = await createProject({
         name: name.trim(),
-        themeSlug,
+        themeSlug: selection.kind === 'theme' ? selection.themeSlug : undefined,
+        userTemplateId: selection.kind === 'template' ? selection.userTemplateId : undefined,
         defaultGeoCode: defaultGeoCode.trim() || undefined,
       });
       await refetchProjects();
@@ -76,28 +79,15 @@ export function NewProjectWizardPage() {
       {/* Step 1 */}
       {step === 1 && (
         <div className="space-y-6">
-          {Object.entries(grouped).map(([supercat, list]) => (
-            <section key={supercat}>
-              <h2 className="mb-2 text-xs font-semibold uppercase text-gray-500">{supercat}</h2>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {list.map(t => (
-                  <button
-                    key={t.slug}
-                    type="button"
-                    onClick={() => setThemeSlug(t.slug)}
-                    className={`rounded-lg border px-4 py-3 text-left transition ${themeSlug === t.slug ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
-                  >
-                    <div className="text-sm font-semibold text-gray-900">{t.name}</div>
-                    {t.description && <div className="mt-0.5 text-xs text-gray-500">{t.description}</div>}
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
+          <TemplateGalleryStep
+            themes={themes}
+            selection={selection}
+            onSelect={setSelection}
+          />
           <div className="flex justify-end">
             <button
               type="button"
-              disabled={!themeSlug}
+              disabled={selection.kind === 'none'}
               onClick={() => setStep(2)}
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:bg-gray-300"
             >
@@ -153,10 +143,10 @@ export function NewProjectWizardPage() {
       )}
 
       {/* Step 3 */}
-      {step === 3 && selectedTheme && (
+      {step === 3 && selection.kind !== 'none' && (
         <div className="space-y-4">
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
-            <p>We maken het project <strong>{name}</strong> aan, abonneren je organisatie op de databronnen van het thema <strong>{selectedTheme.name}</strong> en openen het standaarddashboard.</p>
+            <p>We maken het project <strong>{name}</strong> aan op basis van <strong>{summaryLabel}</strong>, abonneren je organisatie op de bijbehorende databronnen en openen het standaarddashboard.</p>
             {defaultGeoCode && <p className="mt-2 text-gray-600">Focus-gemeente: <code>{defaultGeoCode}</code></p>}
           </div>
           {error && <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}

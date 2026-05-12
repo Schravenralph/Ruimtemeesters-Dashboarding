@@ -24,13 +24,15 @@ export async function createProject(req: AuthRequest, res: Response): Promise<vo
   if (!user) { res.status(401).json({ error: 'Authentication required' }); return; }
   if (!user.organizationId) { res.status(400).json({ error: 'User is not in an organization' }); return; }
 
-  const { name, themeSlug, defaultGeoCode } = req.body ?? {};
+  const { name, themeSlug, userTemplateId, defaultGeoCode } = req.body ?? {};
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     res.status(400).json({ error: 'name is required' });
     return;
   }
-  if (!themeSlug || typeof themeSlug !== 'string') {
-    res.status(400).json({ error: 'themeSlug is required' });
+  const hasTheme = typeof themeSlug === 'string' && themeSlug.length > 0;
+  const hasUserTemplate = typeof userTemplateId === 'string' && userTemplateId.length > 0;
+  if (hasTheme === hasUserTemplate) {
+    res.status(400).json({ error: 'Exactly one of themeSlug or userTemplateId is required' });
     return;
   }
   if (defaultGeoCode !== undefined && defaultGeoCode !== null && typeof defaultGeoCode !== 'string') {
@@ -43,13 +45,15 @@ export async function createProject(req: AuthRequest, res: Response): Promise<vo
       organizationId: user.organizationId,
       userId: user.id,
       name: name.trim(),
-      themeSlug,
+      themeSlug: hasTheme ? themeSlug : undefined,
+      userTemplateId: hasUserTemplate ? userTemplateId : undefined,
       defaultGeoCode: defaultGeoCode ?? undefined,
     });
     res.status(201).json(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Bootstrap failed';
-    res.status(500).json({ error: msg });
+    const status = /not visible|Unknown/i.test(msg) ? 400 : 500;
+    res.status(status).json({ error: msg });
   }
 }
 

@@ -25,6 +25,42 @@ function rowToTemplate(r: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
+export type UserTemplateScope = 'mine' | 'org' | 'public';
+
+export async function listUserTemplates(req: Request, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+  const scope = (req.query.scope as string | undefined) ?? 'mine';
+  if (scope !== 'mine' && scope !== 'org' && scope !== 'public') {
+    res.status(400).json({ error: `Invalid scope "${scope}" (expected mine|org|public)` });
+    return;
+  }
+
+  let sql: string;
+  let params: unknown[];
+  if (scope === 'mine') {
+    sql = `SELECT * FROM user_templates WHERE user_id = $1 ORDER BY updated_at DESC`;
+    params = [req.user.id];
+  } else if (scope === 'org') {
+    if (!req.user.organizationId) {
+      res.json({ rows: [] });
+      return;
+    }
+    sql = `SELECT * FROM user_templates
+           WHERE organization_id = $1 AND visibility = 'org'
+           ORDER BY updated_at DESC`;
+    params = [req.user.organizationId];
+  } else {
+    sql = `SELECT * FROM user_templates WHERE visibility = 'public' ORDER BY updated_at DESC`;
+    params = [];
+  }
+
+  const result = await query(sql, params);
+  res.json({ rows: result.rows.map(r => rowToTemplate(r as Record<string, unknown>)) });
+}
+
 export async function createUserTemplate(req: Request, res: Response): Promise<void> {
   if (!req.user) {
     res.status(401).json({ error: 'Authentication required' });
