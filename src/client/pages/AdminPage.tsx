@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, Users, Database, ClipboardList, Upload, Palette, Key, Webhook, BarChart3, RefreshCw, Activity, Gauge, Clock } from 'lucide-react';
+import { Shield, Users, Database, ClipboardList, Upload, Palette, Key, Webhook, BarChart3, RefreshCw, Activity, Gauge, Clock, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { UserManagement } from '../components/admin/UserManagement';
 import { PolicyEditor } from '../components/admin/PolicyEditor';
@@ -10,12 +10,13 @@ import { DataQualityPanel } from '../components/admin/DataQualityPanel';
 import { ThemeManager } from '../components/admin/ThemeManager';
 import { ThemeReadiness } from '../components/admin/ThemeReadiness';
 import { SyncDemandsAdmin } from '../components/admin/SyncDemandsAdmin';
+import { TemplatePromotions } from '../components/admin/TemplatePromotions';
 import { ApiKeyManager } from '../components/admin/ApiKeyManager';
 import { WebhookManager } from '../components/admin/WebhookManager';
 import { AnalyticsDashboard } from '../components/admin/AnalyticsDashboard';
 import { DataSyncPanel } from '../components/admin/DataSyncPanel';
 
-type Tab = 'policies' | 'users' | 'themes' | 'readiness' | 'data' | 'quality' | 'import' | 'sync' | 'syncdemands' | 'audit' | 'apikeys' | 'webhooks' | 'analytics';
+type Tab = 'policies' | 'users' | 'themes' | 'readiness' | 'templatepromotions' | 'data' | 'quality' | 'import' | 'sync' | 'syncdemands' | 'audit' | 'apikeys' | 'webhooks' | 'analytics';
 
 export function AdminPage() {
   const { user } = useAuth();
@@ -34,6 +35,7 @@ export function AdminPage() {
     { key: 'users', label: 'Gebruikers', icon: Users },
     { key: 'themes', label: 'Thema\'s', icon: Palette },
     { key: 'readiness', label: 'Themaprestatie', icon: Gauge },
+    { key: 'templatepromotions', label: 'Template promoties', icon: Sparkles },
     { key: 'data', label: 'Databronnen', icon: Database },
     { key: 'quality', label: 'Datakwaliteit', icon: Activity },
     { key: 'import', label: 'Data import', icon: Upload },
@@ -75,6 +77,7 @@ export function AdminPage() {
       {activeTab === 'users' && <UserManagement />}
       {activeTab === 'themes' && <ThemeManager />}
       {activeTab === 'readiness' && <ThemeReadiness />}
+      {activeTab === 'templatepromotions' && <TemplatePromotions />}
       {activeTab === 'data' && <DataSourceManager />}
       {activeTab === 'quality' && <DataQualityPanel />}
       {activeTab === 'import' && <DataImportPanel />}
