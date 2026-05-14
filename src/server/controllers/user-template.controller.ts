@@ -98,6 +98,43 @@ export async function createUserTemplate(req: Request, res: Response): Promise<v
   res.status(201).json(rowToTemplate(result.rows[0] as Record<string, unknown>));
 }
 
+export async function deleteUserTemplate(req: Request, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+  const id = req.params.id;
+  if (!id || typeof id !== 'string') {
+    res.status(400).json({ error: 'id is required' });
+    return;
+  }
+
+  const existing = await query<{ id: string; user_id: string; organization_id: string; visibility: 'private' | 'org' | 'public' }>(
+    `SELECT id, user_id, organization_id, visibility FROM user_templates WHERE id = $1`,
+    [id],
+  );
+  if (!existing.rowCount) {
+    res.status(404).json({ error: 'Template not found' });
+    return;
+  }
+  const row = existing.rows[0];
+  const isOwner = row.user_id === req.user.id;
+  // Org admins can delete `org` templates inside their own org. They cannot
+  // delete `public` templates (cross-org reach — owner-only, or escalate
+  // to platform admin via a separate flow).
+  const isOrgAdminOnOrgTpl =
+    req.user.role === 'admin' &&
+    row.organization_id === req.user.organizationId &&
+    row.visibility === 'org';
+  if (!isOwner && !isOrgAdminOnOrgTpl) {
+    res.status(403).json({ error: 'Not authorised to delete this template' });
+    return;
+  }
+
+  await query(`DELETE FROM user_templates WHERE id = $1`, [id]);
+  res.status(204).end();
+}
+
 export async function updateUserTemplate(req: Request, res: Response): Promise<void> {
   if (!req.user) {
     res.status(401).json({ error: 'Authentication required' });

@@ -1,6 +1,6 @@
 import { Router, type Router as RouterType } from 'express';
 import { authenticate } from '../middleware/auth.js';
-import { createUserTemplate, listUserTemplates, updateUserTemplate } from '../controllers/user-template.controller.js';
+import { createUserTemplate, listUserTemplates, updateUserTemplate, deleteUserTemplate } from '../controllers/user-template.controller.js';
 
 const router: RouterType = Router();
 
@@ -11,5 +11,6 @@ const router: RouterType = Router();
 router.get('/', authenticate, listUserTemplates);
 router.post('/', authenticate, createUserTemplate);
 router.patch('/:id', authenticate, updateUserTemplate);
+router.delete('/:id', authenticate, deleteUserTemplate);
 
 export default router;
