@@ -30,3 +30,7 @@ export interface UpdateUserTemplateInput {
 export async function updateUserTemplate(id: string, body: UpdateUserTemplateInput): Promise<UserTemplate> {
   return api.patch(`/user-templates/${id}`, body);
 }
+
+export async function deleteUserTemplate(id: string): Promise<void> {
+  await api.delete(`/user-templates/${id}`);
+}

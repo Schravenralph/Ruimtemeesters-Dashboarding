@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ThemeConfig, UserTemplate, UserTemplateVisibility } from '@shared/api/contracts';
-import { listUserTemplates, updateUserTemplate, type UserTemplateScope } from '../../services/api/user-templates';
+import { listUserTemplates, updateUserTemplate, deleteUserTemplate, type UserTemplateScope } from '../../services/api/user-templates';
+import { Trash2 } from 'lucide-react';
 
 /**
  * Issue #94 — first wizard step, with tabs for system themes + the three
@@ -56,6 +57,23 @@ export function TemplateGalleryStep({ themes, selection, onSelect }: Props) {
       .catch(err => setError(err instanceof Error ? err.message : 'Kon templates niet ophalen'))
       .finally(() => setLoadingTab(curr => (curr === tab ? null : curr)));
   }, [tab, templates]);
+
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`Template "${name}" definitief verwijderen?`)) return;
+    const previousMine = templates.mijn ?? [];
+    setTemplates(prev => ({ ...prev, mijn: (prev.mijn ?? []).filter(t => t.id !== id) }));
+    try {
+      await deleteUserTemplate(id);
+      // If the deleted template was selected, clear selection.
+      if (selection.kind === 'template' && selection.userTemplateId === id) {
+        onSelect({ kind: 'none' });
+      }
+    } catch (err) {
+      // Revert + surface error.
+      setTemplates(prev => ({ ...prev, mijn: previousMine }));
+      setError(err instanceof Error ? err.message : 'Kon template niet verwijderen');
+    }
+  }
 
   async function handleVisibilityChange(id: string, visibility: UserTemplateVisibility) {
     const previous = templates.mijn?.find(t => t.id === id)?.visibility;
@@ -173,6 +191,15 @@ export function TemplateGalleryStep({ themes, selection, onSelect }: Props) {
                         <option value="org">Organisatie</option>
                         <option value="public">Publiek</option>
                       </select>
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(t.id, t.name)}
+                        className="ml-auto inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs text-gray-500 hover:bg-rose-50 hover:text-rose-700"
+                        aria-label={`Template "${t.name}" verwijderen`}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Verwijderen
+                      </button>
                     </div>
                   )}
                 </div>
