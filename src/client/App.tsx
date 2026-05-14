@@ -28,6 +28,7 @@ const EmbedPage = lazy(() => import('./pages/EmbedPage').then(m => ({ default: m
 const ReportPage = lazy(() => import('./pages/ReportPage').then(m => ({ default: m.ReportPage })));
 const CatalogPage = lazy(() => import('./pages/CatalogPage').then(m => ({ default: m.CatalogPage })));
 const NewProjectWizardPage = lazy(() => import('./pages/NewProjectWizardPage').then(m => ({ default: m.NewProjectWizardPage })));
+const MijnTemplatesPage = lazy(() => import('./pages/MijnTemplatesPage').then(m => ({ default: m.MijnTemplatesPage })));
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<LoadingOverlay message="Pagina laden..." />}>{children}</Suspense>;
@@ -90,6 +91,7 @@ function AuthenticatedApp() {
                 <Route path="/p/:projectSlug/:slug" element={<Layout><DashboardPage /></Layout>} />
                 <Route path="/mijn-dashboards" element={<Layout><CustomDashboardsPage /></Layout>} />
                 <Route path="/mijn-dashboards/:id" element={<Layout><CustomDashboardEditorPage /></Layout>} />
+                <Route path="/mijn-templates" element={<Layout><MijnTemplatesPage /></Layout>} />
                 <Route path="/admin" element={<Layout><AdminPage /></Layout>} />
                 <Route path="/instellingen" element={<Layout><SettingsPage /></Layout>} />
                 <Route path="/help" element={<Layout><HelpPage /></Layout>} />
