@@ -7,18 +7,28 @@ if (process.env.NODE_ENV === 'production' && !process.env.CLERK_SECRET_KEY) {
 
 export const env = {
   port: parseInt(process.env.PORT || '5022', 10),
-  // Default by environment:
+  // Bind address policy:
   //   - production (Docker container): '::' — IPv6 wildcard, dual-stacks
   //     to IPv4 on Linux. Matches Node's pre-fix default; required because
   //     the in-container HEALTHCHECK uses `localhost` which Alpine resolves
   //     to `::1`. Binding to plain 0.0.0.0 is IPv4-only and the healthcheck
   //     would never connect. The container is only reachable from the host
   //     via docker-proxy, with a reverse proxy in front doing TLS + Clerk.
-  //   - development (dev machine): 127.0.0.1 — the API serves authenticated
-  //     routes and DEV_BYPASS_AUTH returns admin credentials, so wildcard
-  //     binding on a public-facing dev box exposes both.
-  // Override via SERVER_HOST in either direction.
-  host: process.env.SERVER_HOST || (process.env.NODE_ENV === 'production' ? '::' : '127.0.0.1'),
+  //     SERVER_HOST can override (e.g. for diagnostics) but in-container
+  //     this is essentially fixed.
+  //
+  //   - development (dev machine): ALWAYS 127.0.0.1. The dev API exposes
+  //     DEV_BYPASS_AUTH (admin credentials) and unauthenticated diagnostic
+  //     routes; wildcard binding on a public-facing dev box exposes both.
+  //     SERVER_HOST is intentionally ignored here — previous setups where
+  //     an external shell did `SERVER_HOST=0.0.0.0 pnpm run dev:server`
+  //     bound the dev server to the public interface and triggered the
+  //     public-port-audit alert (2026-05-13/14). If you genuinely need
+  //     LAN access for testing, run a reverse proxy on a loopback-binding
+  //     dev server rather than re-introducing the override here.
+  host: process.env.NODE_ENV === 'production'
+    ? (process.env.SERVER_HOST || '::')
+    : '127.0.0.1',
   nodeEnv: process.env.NODE_ENV || 'development',
   db: {
     host: process.env.DB_HOST || 'localhost',
