@@ -27,9 +27,19 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
   const isLineChart = tile.chartType === 'line';
   const lineDim = tile.dimensions[0];
 
+  // Tile-level filter: a template can pin the tile to a single dimension value
+  // (e.g. `metric='tekort_percentage'` for the woningtekort theme) via
+  // `tile.config.dimensionValue`. Both query hooks accept this; previously only
+  // the URL query params plumbed it, leaving template authors no way to express
+  // a per-tile filter declaratively.
+  const configDimensionValue = typeof tile.config?.dimensionValue === 'string'
+    ? tile.config.dimensionValue
+    : undefined;
+
   const { data: snapshotData, references: snapshotReferences, isLoading: snapLoading, error: snapError } = useDataQuery({
     source: tile.dataSource,
     dimension: isDimensionComparison ? undefined : lineDim,
+    dimensionValue: configDimensionValue,
     enabled: !isLineChart,
   });
 
@@ -38,6 +48,8 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
   // line charts use the snapshot path's references when available, otherwise empty.
   const { data: timeSeriesData, isLoading: tsLoading, error: tsError } = useTimeSeriesQuery({
     source: tile.dataSource,
+    dimension: lineDim,
+    dimensionValue: configDimensionValue,
     enabled: isLineChart,
   });
 
