@@ -59,14 +59,20 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     // Browsing a dimension without a specific value:
     // 1. Exclude 'totaal' from the active dimension (it's a subtotal row)
     // 2. Pin all OTHER dimensions to 'totaal' to avoid cross-product double-counting
+    //    — but skip dims that have a registry default filter (the default
+    //    filter loop below will set them). Without this skip, sources like
+    //    `energie` (sector has no 'totaal') return zero rows for any
+    //    dimension-based query, even though the registry says
+    //    sector='woningen' is the canonical default.
     const dimCol = sourceDef.dimensionColumns.find(c =>
       c.replace(/_/g, '') === dimension.replace(/_/g, ''),
     );
     if (dimCol) {
       conditions.push(`d.${safeIdent(dimCol)} != 'totaal'`);
       constrainedCols.add(dimCol);
+      const defaultFilterCols = new Set(Object.keys(sourceDef.defaultFilters || {}));
       for (const otherCol of sourceDef.dimensionColumns) {
-        if (otherCol !== dimCol) {
+        if (otherCol !== dimCol && !defaultFilterCols.has(otherCol)) {
           conditions.push(`d.${safeIdent(otherCol)} = 'totaal'`);
         }
       }
@@ -273,6 +279,11 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
   // Track constrained columns to avoid default filter conflicts
   const tsConstrainedCols = new Set<string>();
 
+  // Skip force-totaal on dims that have a registry default filter — see
+  // matching note in queryData. Affects `energie` (sector has no 'totaal')
+  // and `afval` (metric has no 'totaal').
+  const tsDefaultFilterCols = new Set(Object.keys(sourceDef.defaultFilters || {}));
+
   if (dimension && dimensionValue) {
     const dimCol = sourceDef.dimensionColumns.find(c =>
       c.replace(/_/g, '') === dimension.replace(/_/g, ''),
@@ -282,7 +293,7 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
       params.push(dimensionValue);
       tsConstrainedCols.add(dimCol);
       for (const otherCol of sourceDef.dimensionColumns) {
-        if (otherCol !== dimCol) {
+        if (otherCol !== dimCol && !tsDefaultFilterCols.has(otherCol)) {
           conditions.push(`d.${safeIdent(otherCol)} = 'totaal'`);
         }
       }
@@ -295,7 +306,7 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
       conditions.push(`d.${safeIdent(dimCol)} != 'totaal'`);
       tsConstrainedCols.add(dimCol);
       for (const otherCol of sourceDef.dimensionColumns) {
-        if (otherCol !== dimCol) {
+        if (otherCol !== dimCol && !tsDefaultFilterCols.has(otherCol)) {
           conditions.push(`d.${safeIdent(otherCol)} = 'totaal'`);
         }
       }
