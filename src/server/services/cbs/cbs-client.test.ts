@@ -68,7 +68,13 @@ describe('parseCbsPeriod', () => {
     expect(parseCbsPeriod('2024MM03')).toBe(2024);
   });
 
+  it('parses quarterly KW codes by extracting the year', () => {
+    expect(parseCbsPeriod('2024KW01')).toBe(2024);
+    expect(parseCbsPeriod('2024KW04')).toBe(2024);
+  });
+
   it('returns null for unknown formats', () => {
-    expect(parseCbsPeriod('2024KW1')).toBeNull();
+    expect(parseCbsPeriod('2024QQ')).toBeNull();
+    expect(parseCbsPeriod('garbage')).toBeNull();
   });
 });

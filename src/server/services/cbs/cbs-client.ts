@@ -156,6 +156,13 @@ export function parseCbsPeriod(period: string): number | null {
   const monthMatch = period.match(/^(\d{4})MM/);
   if (monthMatch) return parseInt(monthMatch[1], 10);
 
+  // Quarterly "2024KW01" — extract year. Quarterly observations aggregate
+  // up to the year in syncGeneric's (region, year, dims) key, summing
+  // the four quarters into one yearly row, matching the cross-source
+  // yearly grain used by JJ-only tables.
+  const quarterMatch = period.match(/^(\d{4})KW/);
+  if (quarterMatch) return parseInt(quarterMatch[1], 10);
+
   return null;
 }
 
