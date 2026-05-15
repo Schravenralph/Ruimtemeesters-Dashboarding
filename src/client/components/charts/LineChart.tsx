@@ -193,16 +193,27 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
         <YAxis tick={{ fontSize: 12 }} tickFormatter={formatNumber} />
         <Tooltip formatter={(value: number) => formatNumber(value)} />
         <Legend />
-        {dimensionValues.map((dimVal, i) => (
-          <Line
-            key={dimVal}
-            type="monotone"
-            dataKey={dimVal}
-            stroke={colors[i % colors.length]}
-            strokeWidth={2}
-            dot={{ r: 3 }}
-          />
-        ))}
+        {dimensionValues.map((dimVal, i) => {
+          // When the only dimension value is the synthetic "totaal" row,
+          // the chart is effectively a single-series time series for the
+          // focal gemeente — surface that identity in the legend/tooltip
+          // instead of the opaque "totaal" string.
+          const lineName =
+            dimensionValues.length === 1 && dimVal === 'totaal' && focalLabel
+              ? focalLabel
+              : dimVal;
+          return (
+            <Line
+              key={dimVal}
+              type="monotone"
+              dataKey={dimVal}
+              name={lineName}
+              stroke={colors[i % colors.length]}
+              strokeWidth={2}
+              dot={{ r: 3 }}
+            />
+          );
+        })}
         {renderReferenceLines(presentRefsMulti)}
       </ComposedChart>
     </ResponsiveContainer>
