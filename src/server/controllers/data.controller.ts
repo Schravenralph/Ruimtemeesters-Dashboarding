@@ -118,6 +118,13 @@ export async function queryData(req: Request, res: Response): Promise<void> {
   const dimPartition = sourceDef.dimensionColumns
     .map(c => `d.${safeIdent(c)}`)
     .join(', ');
+  // Empty dimensionColumns (e.g. cbs_nieuwbouw — one row per geo×year, no
+  // categorical split) needs the dim section omitted entirely rather than
+  // expanded to '', which would leave stray commas in the SQL template.
+  const dimSelectSection = dimSelects ? `${dimSelects},` : '';
+  const dimOuterSelect = sourceDef.dimensionColumns.length
+    ? `${sourceDef.dimensionColumns.map(c => safeIdent(c)).join(', ')},`
+    : '';
 
   const hasConfidence = TABLES_WITH_CONFIDENCE.includes(sourceDef.tableName);
   const confidenceSelect = hasConfidence ? ', d.confidence_lower, d.confidence_upper' : '';
@@ -133,7 +140,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
     sql = `
       WITH ranked AS (
         SELECT d.geo_code, g.name as geo_name, d.year,
-               ${dimSelects},
+               ${dimSelectSection}
                d.${safeIdent(sourceDef.valueColumn)} as value,
                d.source as data_source${confidenceSelect},
                ROW_NUMBER() OVER (
@@ -149,7 +156,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
         JOIN geo_areas g ON g.code = d.geo_code
         ${whereClause}
       )
-      SELECT geo_code, geo_name, year, ${sourceDef.dimensionColumns.map(c => safeIdent(c)).join(', ')},
+      SELECT geo_code, geo_name, year, ${dimOuterSelect}
              value, data_source${hasConfidence ? ', confidence_lower, confidence_upper' : ''}
       FROM ranked WHERE rn = 1
       ORDER BY year, geo_name
@@ -158,7 +165,7 @@ export async function queryData(req: Request, res: Response): Promise<void> {
   } else {
     sql = `
       SELECT d.geo_code, g.name as geo_name, d.year,
-             ${dimSelects},
+             ${dimSelectSection}
              d.${safeIdent(sourceDef.valueColumn)} as value,
              d.source as data_source${confidenceSelect}
       FROM ${safeIdent(sourceDef.tableName)} d
