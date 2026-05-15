@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import type { ThemeConfig, Supercategory } from '@shared/api/contracts';
 import { listThemes } from '../services/api/themes';
 import { listSupercategories } from '../services/api/supercategories';
+import { useAuth } from './AuthContext';
 
 interface ThemeContextValue {
   themes: ThemeConfig[];
@@ -20,6 +21,7 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [themes, setThemes] = useState<ThemeConfig[]>([]);
   const [activeTheme, setActiveTheme] = useState<ThemeConfig | null>(null);
   const [supercategories, setSupercategories] = useState<Supercategory[]>([]);
@@ -56,7 +58,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  useEffect(() => { void load(true); }, [load]);
+  // Wait for auth to finish + user to be authenticated before loading themes.
+  // Both /api/themes and /api/supercategories are auth-gated; firing them
+  // before the Clerk session token is in `api.token` returns 401 and leaves
+  // the gallery empty until a manual reload.
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      setIsLoading(false);
+      return;
+    }
+    void load(true);
+  }, [authLoading, isAuthenticated, load]);
 
   const refresh = useCallback(() => load(false), [load]);
 
