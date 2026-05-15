@@ -185,16 +185,24 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
           {hasConfidence && (
             <Area type="monotone" dataKey="confidenceBand" name="95% betrouwbaarheid" fill="#8b5cf6" fillOpacity={0.12} stroke="none" />
           )}
-          {hasPrognose ? (
-            <>
-              <Line type="monotone" dataKey="actuals" name={`${focalLabel ?? 'Gemeente'} — actueel (CBS)`} stroke={colors[0]} strokeWidth={2.5} dot={{ r: 2, strokeWidth: 0 }} connectNulls={false} />
-              <Line type="monotone" dataKey="prognose" name={`${focalLabel ?? 'Gemeente'} — prognose (TSA)`} stroke="#8b5cf6" strokeWidth={2.5} strokeDasharray="6 3" dot={{ r: 2, fill: '#8b5cf6', strokeWidth: 0 }} connectNulls={false} />
-              <Legend
-                wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-                formatter={(value: string) => <span style={{ color: '#374151' }}>{value}</span>}
-              />
-            </>
-          ) : (
+          {/* Each Line must be a direct child of ComposedChart — Recharts 2.x
+              walks children via React.Children.map, which does NOT unwrap
+              React Fragments. Wrapping the conditional in <>…</> made
+              Recharts see one opaque Fragment instead of two Lines, so
+              the SVG rendered the axes/reference band but no lines (#162). */}
+          {hasPrognose && (
+            <Line type="monotone" dataKey="actuals" name={`${focalLabel ?? 'Gemeente'} — actueel (CBS)`} stroke={colors[0]} strokeWidth={2.5} dot={{ r: 2, strokeWidth: 0 }} connectNulls={false} />
+          )}
+          {hasPrognose && (
+            <Line type="monotone" dataKey="prognose" name={`${focalLabel ?? 'Gemeente'} — prognose (TSA)`} stroke="#8b5cf6" strokeWidth={2.5} strokeDasharray="6 3" dot={{ r: 2, fill: '#8b5cf6', strokeWidth: 0 }} connectNulls={false} />
+          )}
+          {hasPrognose && (
+            <Legend
+              wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+              formatter={(value: string) => <span style={{ color: '#374151' }}>{value}</span>}
+            />
+          )}
+          {!hasPrognose && (
             <Line type="monotone" dataKey="value" name={focalLabel ?? 'Gemeente'} stroke={colors[0]} strokeWidth={2} dot={{ r: 3 }} />
           )}
           {comparisonData && comparisonData.length > 0 && (
