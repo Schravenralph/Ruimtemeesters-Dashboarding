@@ -87,17 +87,53 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
     const prognoseYears = data.filter(isPrognose).map(d => d.year);
     const lastPrognoseYear = prognoseYears.length > 0 ? Math.max(...prognoseYears) : null;
 
-    const chartData = data.map(d => ({
-      name: String(d.year),
-      actuals: !isPrognose(d) ? d.value : undefined,
-      prognose: isPrognose(d) ? d.value : undefined,
-      value: d.value,
-      ...(d.confidenceLower != null && d.confidenceUpper != null
-        ? { confidenceBand: [d.confidenceLower, d.confidenceUpper] }
-        : {}),
-    }));
+    // Group by year so the boundary year — where both cbs_actuals and a
+    // ruimtemeesters_prognose row exist (e.g. 2025 for Amsterdam) — collapses
+    // to a single row. Two rows with the same `name` break Recharts' category
+    // axis and the bridge logic, leaving the line invisible (#162).
+    const rowByYear = new Map<number, {
+      name: string;
+      actuals: number | undefined;
+      prognose: number | undefined;
+      value: number;
+      confidenceBand?: [number, number];
+    }>();
+    for (const d of data) {
+      const existing = rowByYear.get(d.year);
+      const isP = isPrognose(d);
+      if (!existing) {
+        rowByYear.set(d.year, {
+          name: String(d.year),
+          actuals: isP ? undefined : d.value,
+          prognose: isP ? d.value : undefined,
+          value: d.value,
+          ...(d.confidenceLower != null && d.confidenceUpper != null
+            ? { confidenceBand: [d.confidenceLower, d.confidenceUpper] }
+            : {}),
+        });
+      } else {
+        // Boundary year overlap: actual wins for the y-value; prognose can
+        // still contribute its confidence band so the uncertainty fan is
+        // anchored at the handoff.
+        if (isP) {
+          if (existing.prognose === undefined) existing.prognose = d.value;
+          if (existing.confidenceBand === undefined
+              && d.confidenceLower != null && d.confidenceUpper != null) {
+            existing.confidenceBand = [d.confidenceLower, d.confidenceUpper];
+          }
+        } else {
+          existing.actuals = d.value;
+          existing.value = d.value;
+        }
+      }
+    }
+    const chartData = [...rowByYear.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, row]) => row);
 
-    // Add bridge point: last actual year also appears in prognose series for continuity
+    // Add bridge point: last actual year also appears in prognose series for continuity.
+    // After grouping there is at most one row per year, so the bridge always
+    // lands on the row that holds the actual value at the transition.
     if (hasPrognose && transitionYear) {
       const bridgeIdx = chartData.findIndex(d => d.name === String(transitionYear));
       if (bridgeIdx >= 0 && chartData[bridgeIdx].actuals !== undefined) {

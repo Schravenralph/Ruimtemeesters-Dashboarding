@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { queryData } from '../../services/api/data';
 import { MiniChart } from './MiniChart';
 import { useFilters } from '../../contexts/FilterContext';
-import { formatNumber, formatCompact } from '../../utils/format';
+import { formatCompact } from '../../utils/format';
 import type { DataPoint } from '@shared/api/contracts';
 
 interface OverviewItem {
@@ -76,9 +76,22 @@ export function OverviewGrid({ supercategory }: OverviewGridProps) {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       {items.map(item => {
         const Icon = item.icon;
-        const total = item.data
-          .filter(d => d.year === filters.period.year)
-          .reduce((sum, d) => sum + d.value, 0);
+        const selectedYear = filters.period.year;
+        // Year coercion: API can return d.year as either string or number
+        // depending on driver/source. Without Number(), strict equality
+        // silently misses every row (#154).
+        const rowsForSelected = item.data.filter(d => Number(d.year) === selectedYear);
+        // Fall back to the most recent year with data so a stale selectedYear
+        // (e.g. user picked 2024 on a tile that only covers up to 2023) shows
+        // useful info instead of a misleading "0 datapunten".
+        const availableYears = item.data.map(d => Number(d.year)).filter(y => Number.isFinite(y));
+        const fallbackYear = availableYears.length > 0 ? Math.max(...availableYears) : null;
+        const usingFallback = rowsForSelected.length === 0 && fallbackYear !== null && fallbackYear !== selectedYear;
+        const effectiveYear = usingFallback ? fallbackYear : selectedYear;
+        const effectiveRows = usingFallback
+          ? item.data.filter(d => Number(d.year) === fallbackYear)
+          : rowsForSelected;
+        const total = effectiveRows.reduce((sum, d) => sum + d.value, 0);
 
         return (
           <button
@@ -98,7 +111,8 @@ export function OverviewGrid({ supercategory }: OverviewGridProps) {
                   {formatCompact(total)}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {item.data.filter(d => d.year === filters.period.year).length} datapunten in {filters.period.year}
+                  {effectiveRows.length} datapunten in {effectiveYear}
+                  {usingFallback && <span className="text-gray-300"> (meest recente)</span>}
                 </p>
               </div>
               <div className="w-24 h-10">
