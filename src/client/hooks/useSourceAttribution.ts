@@ -26,6 +26,7 @@ async function fetchAttributions(): Promise<SourceAttribution[]> {
   inflight = api.get<{ sources: SourceAttribution[] }>('/datasources/attribution')
     .then(r => {
       cachedSources = r.sources;
+      inflight = null;
       return r.sources;
     })
     .catch(() => {
