@@ -216,6 +216,7 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
                   error={error}
                   config={mergedConfig as Record<string, unknown>}
                   references={references}
+                  focalLabel={focalLabel}
                 />
               </div>
             </div>
