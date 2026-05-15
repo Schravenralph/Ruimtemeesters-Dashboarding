@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Download, Maximize2, MoreVertical, X } from 'lucide-react';
+import { Download, ExternalLink, Maximize2, MoreVertical, X } from 'lucide-react';
 import type { TileConfig, ChartType, DataPoint } from '@shared/api/contracts';
 import { ChartRenderer } from '../charts/ChartRenderer';
 import { useDataQuery } from '../../hooks/useDataQuery';
 import { useTimeSeriesQuery } from '../../hooks/useTimeSeriesQuery';
 import { useFilters } from '../../contexts/FilterContext';
+import { useSourceAttribution } from '../../hooks/useSourceAttribution';
 
 interface DashboardTileProps {
   tile: TileConfig;
@@ -16,6 +17,7 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
   const [isExpanded, setIsExpanded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const { filters } = useFilters();
+  const attribution = useSourceAttribution(tile.dataSource);
 
   // Only apply dimension comparison to tiles that use the compared dimension
   const tileHasComparedDimension = filters.comparedDimension != null
@@ -150,9 +152,40 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
         </div>
 
         {/* Tile Footer */}
-        {tile.description && (
-          <div className="border-t border-gray-100 px-4 py-2">
-            <p className="text-xs text-gray-500">{tile.description}</p>
+        {(tile.description || attribution) && (
+          <div className="border-t border-gray-100 px-4 py-2 space-y-1">
+            {tile.description && (
+              <p className="text-xs text-gray-500">{tile.description}</p>
+            )}
+            {attribution && (
+              <p className="text-[10px] text-gray-400 leading-snug">
+                <span className="font-medium text-gray-500">Bron:</span>{' '}
+                {attribution.cbsTableId ? (
+                  <>
+                    CBS {attribution.cbsTableId}
+                    {attribution.cbsTableTitle && (
+                      <> — <span title={attribution.cbsTableTitle}>{truncate(attribution.cbsTableTitle, 90)}</span></>
+                    )}
+                    {attribution.statlineUrl && (
+                      <a
+                        href={attribution.statlineUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-1 inline-flex items-center text-gray-400 hover:text-blue-600"
+                        title="Bekijk op CBS StatLine"
+                      >
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    )}
+                  </>
+                ) : (
+                  <>{attribution.name}</>
+                )}
+                {attribution.lastSyncAt && (
+                  <> · Bijgewerkt: {formatSyncDate(attribution.lastSyncAt)}</>
+                )}
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -187,4 +220,18 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
       )}
     </>
   );
+}
+
+function truncate(s: string, max: number): string {
+  return s.length <= max ? s : s.slice(0, max - 1) + '…';
+}
+
+function formatSyncDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('nl-NL', {
+      day: 'numeric', month: 'short', year: 'numeric',
+    });
+  } catch {
+    return iso.slice(0, 10);
+  }
 }
