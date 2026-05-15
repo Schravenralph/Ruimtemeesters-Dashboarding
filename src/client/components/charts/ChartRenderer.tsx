@@ -54,6 +54,8 @@ interface ChartRendererProps {
   config?: ChartConfig;
   /** SPEC-B: cohort/provincie/land reference series. Forwarded only to Tier-1 chart types. */
   references?: ReferenceSeries[];
+  /** Display label for the focal geo, used in legends (#147). */
+  focalLabel?: string;
 }
 
 function getColors(config?: ChartConfig): string[] {
@@ -98,7 +100,7 @@ function applyFilters(data: DataPoint[], config?: ChartConfig): DataPoint[] {
   return filtered;
 }
 
-export function ChartRenderer({ chartType, data, isLoading, error, config, references }: ChartRendererProps) {
+export function ChartRenderer({ chartType, data, isLoading, error, config, references, focalLabel }: ChartRendererProps) {
   if (isLoading) {
     return <LoadingOverlay message="Data laden..." />;
   }
@@ -132,7 +134,7 @@ export function ChartRenderer({ chartType, data, isLoading, error, config, refer
     case 'horizontal-bar':
       return <HorizontalBarChartComponent data={processedData} colors={colors} references={refs} />;
     case 'line':
-      return <LineChartComponent data={processedData} colors={colors} references={refs} />;
+      return <LineChartComponent data={processedData} colors={colors} references={refs} focalLabel={focalLabel} />;
     case 'stacked-area':
       return <StackedAreaChartComponent data={processedData} colors={colors} />;
     case 'pie':

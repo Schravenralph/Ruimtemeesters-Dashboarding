@@ -6,6 +6,7 @@ import { useDataQuery } from '../../hooks/useDataQuery';
 import { useTimeSeriesQuery } from '../../hooks/useTimeSeriesQuery';
 import { useFilters } from '../../contexts/FilterContext';
 import { useSourceAttribution } from '../../hooks/useSourceAttribution';
+import { useFocalGeoArea, formatFocalLabel } from '../../hooks/useFocalGeoArea';
 
 interface DashboardTileProps {
   tile: TileConfig;
@@ -18,6 +19,8 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
   const [showMenu, setShowMenu] = useState(false);
   const { filters } = useFilters();
   const attribution = useSourceAttribution(tile.dataSource);
+  const focalArea = useFocalGeoArea();
+  const focalLabel = formatFocalLabel(focalArea);
 
   // Only apply dimension comparison to tiles that use the compared dimension
   const tileHasComparedDimension = filters.comparedDimension != null
@@ -148,6 +151,7 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
             error={error}
             config={mergedConfig as Record<string, unknown>}
             references={references}
+            focalLabel={focalLabel}
           />
         </div>
 
