@@ -14,6 +14,8 @@ interface LineChartProps {
   comparisonLabel?: string;
   /** SPEC-B: cohort/provincie/land reference series, rendered as dashed lines on the same axis. */
   references?: ReferenceSeries[];
+  /** Display label for the focal series, e.g. "Amsterdam (GM0363)". Falls back to "Gemeente". */
+  focalLabel?: string;
 }
 
 /** Stable dataKey per reference kind so Recharts can render them as additional lines. */
@@ -70,7 +72,7 @@ const DEFAULT_COLORS = [
   '#ec4899', '#06b6d4', '#84cc16',
 ];
 
-export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonData, comparisonLabel, references }: LineChartProps) {
+export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonData, comparisonLabel, references, focalLabel }: LineChartProps) {
   const dimensionValues = [...new Set(data.map(d => d.dimensionValue).filter((v): v is string => !!v))];
 
   if (dimensionValues.length === 0) {
@@ -149,15 +151,15 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
           )}
           {hasPrognose ? (
             <>
-              <Line type="monotone" dataKey="actuals" name="Actueel (CBS)" stroke={colors[0]} strokeWidth={2.5} dot={{ r: 2, strokeWidth: 0 }} connectNulls={false} />
-              <Line type="monotone" dataKey="prognose" name="Prognose (TSA)" stroke="#8b5cf6" strokeWidth={2.5} strokeDasharray="6 3" dot={{ r: 2, fill: '#8b5cf6', strokeWidth: 0 }} connectNulls={false} />
+              <Line type="monotone" dataKey="actuals" name={`${focalLabel ?? 'Gemeente'} — actueel (CBS)`} stroke={colors[0]} strokeWidth={2.5} dot={{ r: 2, strokeWidth: 0 }} connectNulls={false} />
+              <Line type="monotone" dataKey="prognose" name={`${focalLabel ?? 'Gemeente'} — prognose (TSA)`} stroke="#8b5cf6" strokeWidth={2.5} strokeDasharray="6 3" dot={{ r: 2, fill: '#8b5cf6', strokeWidth: 0 }} connectNulls={false} />
               <Legend
                 wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
                 formatter={(value: string) => <span style={{ color: '#374151' }}>{value}</span>}
               />
             </>
           ) : (
-            <Line type="monotone" dataKey="value" name="Gemeente" stroke={colors[0]} strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="value" name={focalLabel ?? 'Gemeente'} stroke={colors[0]} strokeWidth={2} dot={{ r: 3 }} />
           )}
           {comparisonData && comparisonData.length > 0 && (
             <ReferenceLine y={comparisonData.reduce((sum, d) => sum + d.value, 0) / comparisonData.length} stroke="#ef4444" strokeDasharray="8 4" label={{ value: comparisonLabel || 'Vergelijking', position: 'right', fontSize: 11, fill: '#ef4444' }} />
@@ -191,16 +193,27 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
         <YAxis tick={{ fontSize: 12 }} tickFormatter={formatNumber} />
         <Tooltip formatter={(value: number) => formatNumber(value)} />
         <Legend />
-        {dimensionValues.map((dimVal, i) => (
-          <Line
-            key={dimVal}
-            type="monotone"
-            dataKey={dimVal}
-            stroke={colors[i % colors.length]}
-            strokeWidth={2}
-            dot={{ r: 3 }}
-          />
-        ))}
+        {dimensionValues.map((dimVal, i) => {
+          // When the only dimension value is the synthetic "totaal" row,
+          // the chart is effectively a single-series time series for the
+          // focal gemeente — surface that identity in the legend/tooltip
+          // instead of the opaque "totaal" string.
+          const lineName =
+            dimensionValues.length === 1 && dimVal === 'totaal' && focalLabel
+              ? focalLabel
+              : dimVal;
+          return (
+            <Line
+              key={dimVal}
+              type="monotone"
+              dataKey={dimVal}
+              name={lineName}
+              stroke={colors[i % colors.length]}
+              strokeWidth={2}
+              dot={{ r: 3 }}
+            />
+          );
+        })}
         {renderReferenceLines(presentRefsMulti)}
       </ComposedChart>
     </ResponsiveContainer>
