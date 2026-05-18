@@ -17,9 +17,24 @@ export function PrognoseBadgePopover({ dataSource, geoCode }: PrognoseBadgePopov
   const meta = useTsaMeta(dataSource, geoCode);
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Click-outside to close (hover alone is too brittle for a popover with
-  // a link in it).
+  // Delayed close so the cursor can cross the small visual gap between the
+  // trigger row and the popover without dismissing. Without this, mouseleave
+  // on the wrapper fires before mouseenter on the absolute-positioned popover
+  // and the user can never reach the StatLine link inside.
+  const cancelClose = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => setOpen(false), 180);
+  };
+  useEffect(() => () => cancelClose(), []);
+
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
@@ -29,12 +44,18 @@ export function PrognoseBadgePopover({ dataSource, geoCode }: PrognoseBadgePopov
     return () => document.removeEventListener('mousedown', onClick);
   }, [open]);
 
+  // The confidence badge should reflect known data — null/loading must not
+  // claim "95% betrouwbaarheid" because that's a measurement of the data,
+  // not a UI default. Same for the model count.
+  const knownConfidence = meta?.confidence != null;
+  const knownModels = meta?.models != null;
+
   return (
     <div
       ref={wrapperRef}
       className="relative flex items-center gap-2"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      onMouseEnter={() => { cancelClose(); setOpen(true); }}
+      onMouseLeave={scheduleClose}
     >
       <Brain className="h-4 w-4 text-purple-600" />
       <button
@@ -47,15 +68,19 @@ export function PrognoseBadgePopover({ dataSource, geoCode }: PrognoseBadgePopov
         <Info className="h-3 w-3 text-purple-400" />
       </button>
       <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full ml-auto">
-        {meta?.models ?? 7} modellen &middot; {meta?.confidence ?? 95}% betrouwbaarheid
+        {knownModels && knownConfidence
+          ? `${meta!.models} modellen · ${meta!.confidence}% betrouwbaarheid`
+          : knownModels
+            ? `${meta!.models} modellen`
+            : 'TSA Engine'}
       </span>
 
       {open && meta && meta.hasPrognose && (
         <div
           role="dialog"
           className="absolute left-0 top-full mt-2 z-30 w-[360px] rounded-lg border border-purple-200 bg-white p-4 shadow-xl text-sm"
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
         >
           <div className="mb-3 flex items-start gap-2">
             <Brain className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
