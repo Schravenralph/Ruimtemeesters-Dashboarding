@@ -85,6 +85,7 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
     const actualYears = data.filter(d => !isPrognose(d)).map(d => d.year);
     const transitionYear = actualYears.length > 0 ? Math.max(...actualYears) : null;
     const prognoseYears = data.filter(isPrognose).map(d => d.year);
+    const firstPrognoseYear = prognoseYears.length > 0 ? Math.min(...prognoseYears) : null;
     const lastPrognoseYear = prognoseYears.length > 0 ? Math.max(...prognoseYears) : null;
 
     // Group by year so the boundary year — where both cbs_actuals and a
@@ -178,7 +179,7 @@ export function LineChartComponent({ data, colors = DEFAULT_COLORS, comparisonDa
               stroke="#8b5cf6"
               strokeDasharray="4 4"
               strokeWidth={1.5}
-              label={{ value: 'Prognose →', position: 'insideTopRight', fontSize: 11, fill: '#7c3aed', fontWeight: 600 }}
+              label={{ value: firstPrognoseYear ? `Prognose vanaf ${firstPrognoseYear}` : 'Prognose →', position: 'insideTopRight', fontSize: 11, fill: '#7c3aed', fontWeight: 600 }}
             />
           )}
           {/* Confidence band */}

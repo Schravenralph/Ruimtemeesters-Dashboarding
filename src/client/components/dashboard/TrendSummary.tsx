@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Activity, Brain, ArrowRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, ArrowRight } from 'lucide-react';
 import { api } from '../../services/api/client';
 import { useFilters } from '../../contexts/FilterContext';
 import { useTimeSeriesQuery } from '../../hooks/useTimeSeriesQuery';
@@ -7,6 +7,7 @@ import { formatCompact, formatPercent } from '../../utils/format';
 import { isPrognoseSource } from '../../utils/prognose';
 import { LineChartComponent } from '../charts/LineChart';
 import { Spinner } from '../ui/Spinner';
+import { PrognoseBadgePopover } from './PrognoseBadgePopover';
 
 interface TrendData {
   source: string;
@@ -78,12 +79,8 @@ export function TrendSummary({ dataSource }: TrendSummaryProps) {
       {/* Prognose Hero Card — "Now vs Future" */}
       {hasPrognose && latestActual && latestPrognose && (
         <div className="mb-4 rounded-lg bg-gradient-to-r from-blue-50 via-purple-50 to-purple-50 border border-purple-100 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Brain className="h-4 w-4 text-purple-600" />
-            <span className="text-sm font-semibold text-purple-800">AI Prognose (TSA Engine)</span>
-            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full ml-auto">
-              7 modellen &middot; 95% betrouwbaarheid
-            </span>
+          <div className="mb-3">
+            <PrognoseBadgePopover dataSource={dataSource} geoCode={filters.geoCode} />
           </div>
           <div className="flex items-center gap-6">
             <div className="text-center">
