@@ -53,6 +53,15 @@ async function findOrCreateClerkUser(clerkUserId: string): Promise<Request['user
   const clerkRole = (clerkUser.publicMetadata?.role as string) || '';
   const role = (clerkRole === 'director' || clerkRole === 'manager') ? 'admin' : 'viewer';
 
+  // Both the email-link path and the new-user path need the default org,
+  // because a previously org-less account would otherwise stay org-less
+  // after Clerk linking — same broken theme-picker/ABAC experience as a
+  // brand-new signup. Org defaults to Ruimtemeesters; configurable via
+  // DEFAULT_SIGNUP_ORG_SLUG for multi-tenant deployments. If the slug
+  // doesn't resolve, the column stays NULL and the user is still
+  // created/linked — better an org-less user than a 500 on auth.
+  const defaultOrgSlug = process.env.DEFAULT_SIGNUP_ORG_SLUG || 'ruimtemeesters';
+
   // Check if user exists by email (link existing account)
   result = await query(
     'SELECT id, email, name, role, organization_id, attributes FROM users WHERE email = $1',
@@ -60,19 +69,23 @@ async function findOrCreateClerkUser(clerkUserId: string): Promise<Request['user
   );
 
   if (result.rows.length > 0) {
-    // Link Clerk ID to existing user
-    await query('UPDATE users SET clerk_id = $1 WHERE email = $2', [clerkUserId, email]);
-    const row = result.rows[0];
+    // Link Clerk ID to existing user. COALESCE preserves any explicit
+    // assignment but backfills NULL with the default org so legacy users
+    // (or users seeded without an org) don't stay locked out.
+    const updated = await query(
+      `UPDATE users
+         SET clerk_id = $1,
+             organization_id = COALESCE(organization_id, (SELECT id FROM organizations WHERE slug = $3))
+       WHERE email = $2
+       RETURNING id, email, name, role, organization_id, attributes`,
+      [clerkUserId, email, defaultOrgSlug],
+    );
+    const row = updated.rows[0];
     return { id: row.id, email: row.email, name: row.name, role: row.role, organizationId: row.organization_id, attributes: row.attributes || {} };
   }
 
   // Create new user — assign the default organization so the signup flow
-  // doesn't leave new accounts org-less (which breaks the theme picker and
-  // every ABAC-gated query). Org defaults to Ruimtemeesters but is
-  // configurable via DEFAULT_SIGNUP_ORG_SLUG for multi-tenant deployments.
-  // If the slug doesn't resolve, organization_id stays NULL and the user
-  // is created anyway — better an org-less user than a 500 on signup.
-  const defaultOrgSlug = process.env.DEFAULT_SIGNUP_ORG_SLUG || 'ruimtemeesters';
+  // doesn't leave new accounts org-less.
   result = await query(
     `INSERT INTO users (email, name, role, clerk_id, password_hash, organization_id)
      VALUES ($1, $2, $3, $4, $5, (SELECT id FROM organizations WHERE slug = $6))
