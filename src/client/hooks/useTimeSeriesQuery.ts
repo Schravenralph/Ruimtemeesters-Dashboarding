@@ -14,6 +14,9 @@ interface UseTimeSeriesResult {
   data: DataPoint[];
   isLoading: boolean;
   error: string | null;
+  /** Force a re-fetch (#151). The hook already refetches when its inputs change;
+   * this lets the tile chrome trigger a refresh on demand. */
+  refetch: () => void;
 }
 
 /**
@@ -66,5 +69,5 @@ export function useTimeSeriesQuery({ source, dimension, dimensionValue, enabled 
     fetchData();
   }, [fetchData]);
 
-  return { data, isLoading, error };
+  return { data, isLoading, error, refetch: fetchData };
 }

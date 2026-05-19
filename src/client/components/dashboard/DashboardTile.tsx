@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, ExternalLink, Maximize2, MoreVertical, X } from 'lucide-react';
+import { Download, ExternalLink, Maximize2, MoreVertical, RefreshCw, X } from 'lucide-react';
 import type { TileConfig, ChartType, DataPoint } from '@shared/api/contracts';
 import { ChartRenderer } from '../charts/ChartRenderer';
 import { useDataQuery } from '../../hooks/useDataQuery';
@@ -41,7 +41,7 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
     ? tile.config.dimensionValue
     : undefined;
 
-  const { data: snapshotData, references: snapshotReferences, isLoading: snapLoading, error: snapError } = useDataQuery({
+  const { data: snapshotData, references: snapshotReferences, isLoading: snapLoading, error: snapError, refetch: refetchSnap } = useDataQuery({
     source: tile.dataSource,
     dimension: isDimensionComparison ? undefined : lineDim,
     dimensionValue: configDimensionValue,
@@ -51,7 +51,7 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
   // No dimension → backend returns grand total per year (all dimensions pinned to 'totaal')
   // useTimeSeriesQuery hits /api/data/timeseries which doesn't yet support references —
   // line charts use the snapshot path's references when available, otherwise empty.
-  const { data: timeSeriesData, isLoading: tsLoading, error: tsError } = useTimeSeriesQuery({
+  const { data: timeSeriesData, isLoading: tsLoading, error: tsError, refetch: refetchTs } = useTimeSeriesQuery({
     source: tile.dataSource,
     dimension: lineDim,
     dimensionValue: configDimensionValue,
@@ -61,6 +61,7 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
   const data = isLineChart ? timeSeriesData : snapshotData;
   const isLoading = isLineChart ? tsLoading : snapLoading;
   const error = isLineChart ? tsError : snapError;
+  const refetch = isLineChart ? refetchTs : refetchSnap;
   // SPEC-B: forward references from useDataQuery into ChartRenderer.
   // Time-series path doesn't carry references yet (separate /api/data/timeseries endpoint).
   const references = isLineChart ? [] : snapshotReferences;
@@ -85,6 +86,17 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
             )}
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => refetch()}
+              disabled={isLoading}
+              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={attribution?.lastSyncAt
+                ? `Vernieuwen — laatste sync: ${formatSyncDate(attribution.lastSyncAt)}`
+                : 'Vernieuwen'}
+              aria-label="Vernieuwen"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
             <button
               onClick={() => setIsExpanded(true)}
               className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
