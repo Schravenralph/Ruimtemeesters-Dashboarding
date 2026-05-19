@@ -34,10 +34,24 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 async function findOrCreateClerkUser(clerkUserId: string): Promise<Request['user']> {
-  // Check if user already exists by clerk_id
+  // All three code paths (clerk_id hit, email-link, new user) share the
+  // same default-org backfill: an org-less account anywhere in the system
+  // breaks the theme picker and every ABAC-gated query. Org defaults to
+  // Ruimtemeesters; configurable via DEFAULT_SIGNUP_ORG_SLUG for
+  // multi-tenant deployments. If the slug doesn't resolve, the column
+  // stays NULL and the user is still served — better an org-less user
+  // than a 500 on auth.
+  const defaultOrgSlug = process.env.DEFAULT_SIGNUP_ORG_SLUG || 'ruimtemeesters';
+
+  // Check if user already exists by clerk_id (hot path — every login after
+  // the first lands here). If the row's organization_id is NULL — e.g. a
+  // user seeded before this fix — backfill it on the way through.
   let result = await query(
-    'SELECT id, email, name, role, organization_id, attributes FROM users WHERE clerk_id = $1',
-    [clerkUserId],
+    `UPDATE users
+       SET organization_id = COALESCE(organization_id, (SELECT id FROM organizations WHERE slug = $2))
+     WHERE clerk_id = $1
+     RETURNING id, email, name, role, organization_id, attributes`,
+    [clerkUserId, defaultOrgSlug],
   );
 
   if (result.rows.length > 0) {
@@ -52,15 +66,6 @@ async function findOrCreateClerkUser(clerkUserId: string): Promise<Request['user
   const name = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || 'Gebruiker';
   const clerkRole = (clerkUser.publicMetadata?.role as string) || '';
   const role = (clerkRole === 'director' || clerkRole === 'manager') ? 'admin' : 'viewer';
-
-  // Both the email-link path and the new-user path need the default org,
-  // because a previously org-less account would otherwise stay org-less
-  // after Clerk linking — same broken theme-picker/ABAC experience as a
-  // brand-new signup. Org defaults to Ruimtemeesters; configurable via
-  // DEFAULT_SIGNUP_ORG_SLUG for multi-tenant deployments. If the slug
-  // doesn't resolve, the column stays NULL and the user is still
-  // created/linked — better an org-less user than a 500 on auth.
-  const defaultOrgSlug = process.env.DEFAULT_SIGNUP_ORG_SLUG || 'ruimtemeesters';
 
   // Check if user exists by email (link existing account)
   result = await query(
