@@ -34,10 +34,24 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 async function findOrCreateClerkUser(clerkUserId: string): Promise<Request['user']> {
-  // Check if user already exists by clerk_id
+  // All three code paths (clerk_id hit, email-link, new user) share the
+  // same default-org backfill: an org-less account anywhere in the system
+  // breaks the theme picker and every ABAC-gated query. Org defaults to
+  // Ruimtemeesters; configurable via DEFAULT_SIGNUP_ORG_SLUG for
+  // multi-tenant deployments. If the slug doesn't resolve, the column
+  // stays NULL and the user is still served — better an org-less user
+  // than a 500 on auth.
+  const defaultOrgSlug = process.env.DEFAULT_SIGNUP_ORG_SLUG || 'ruimtemeesters';
+
+  // Check if user already exists by clerk_id (hot path — every login after
+  // the first lands here). If the row's organization_id is NULL — e.g. a
+  // user seeded before this fix — backfill it on the way through.
   let result = await query(
-    'SELECT id, email, name, role, organization_id, attributes FROM users WHERE clerk_id = $1',
-    [clerkUserId],
+    `UPDATE users
+       SET organization_id = COALESCE(organization_id, (SELECT id FROM organizations WHERE slug = $2))
+     WHERE clerk_id = $1
+     RETURNING id, email, name, role, organization_id, attributes`,
+    [clerkUserId, defaultOrgSlug],
   );
 
   if (result.rows.length > 0) {
@@ -60,16 +74,28 @@ async function findOrCreateClerkUser(clerkUserId: string): Promise<Request['user
   );
 
   if (result.rows.length > 0) {
-    // Link Clerk ID to existing user
-    await query('UPDATE users SET clerk_id = $1 WHERE email = $2', [clerkUserId, email]);
-    const row = result.rows[0];
+    // Link Clerk ID to existing user. COALESCE preserves any explicit
+    // assignment but backfills NULL with the default org so legacy users
+    // (or users seeded without an org) don't stay locked out.
+    const updated = await query(
+      `UPDATE users
+         SET clerk_id = $1,
+             organization_id = COALESCE(organization_id, (SELECT id FROM organizations WHERE slug = $3))
+       WHERE email = $2
+       RETURNING id, email, name, role, organization_id, attributes`,
+      [clerkUserId, email, defaultOrgSlug],
+    );
+    const row = updated.rows[0];
     return { id: row.id, email: row.email, name: row.name, role: row.role, organizationId: row.organization_id, attributes: row.attributes || {} };
   }
 
-  // Create new user
+  // Create new user — assign the default organization so the signup flow
+  // doesn't leave new accounts org-less.
   result = await query(
-    'INSERT INTO users (email, name, role, clerk_id, password_hash) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, role, organization_id, attributes',
-    [email, name, role, clerkUserId, 'clerk-sso'],
+    `INSERT INTO users (email, name, role, clerk_id, password_hash, organization_id)
+     VALUES ($1, $2, $3, $4, $5, (SELECT id FROM organizations WHERE slug = $6))
+     RETURNING id, email, name, role, organization_id, attributes`,
+    [email, name, role, clerkUserId, 'clerk-sso', defaultOrgSlug],
   );
   const row = result.rows[0];
   return { id: row.id, email: row.email, name: row.name, role: row.role, organizationId: row.organization_id, attributes: row.attributes || {} };
