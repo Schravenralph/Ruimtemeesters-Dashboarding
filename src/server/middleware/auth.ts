@@ -66,10 +66,18 @@ async function findOrCreateClerkUser(clerkUserId: string): Promise<Request['user
     return { id: row.id, email: row.email, name: row.name, role: row.role, organizationId: row.organization_id, attributes: row.attributes || {} };
   }
 
-  // Create new user
+  // Create new user — assign the default organization so the signup flow
+  // doesn't leave new accounts org-less (which breaks the theme picker and
+  // every ABAC-gated query). Org defaults to Ruimtemeesters but is
+  // configurable via DEFAULT_SIGNUP_ORG_SLUG for multi-tenant deployments.
+  // If the slug doesn't resolve, organization_id stays NULL and the user
+  // is created anyway — better an org-less user than a 500 on signup.
+  const defaultOrgSlug = process.env.DEFAULT_SIGNUP_ORG_SLUG || 'ruimtemeesters';
   result = await query(
-    'INSERT INTO users (email, name, role, clerk_id, password_hash) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, role, organization_id, attributes',
-    [email, name, role, clerkUserId, 'clerk-sso'],
+    `INSERT INTO users (email, name, role, clerk_id, password_hash, organization_id)
+     VALUES ($1, $2, $3, $4, $5, (SELECT id FROM organizations WHERE slug = $6))
+     RETURNING id, email, name, role, organization_id, attributes`,
+    [email, name, role, clerkUserId, 'clerk-sso', defaultOrgSlug],
   );
   const row = result.rows[0];
   return { id: row.id, email: row.email, name: row.name, role: row.role, organizationId: row.organization_id, attributes: row.attributes || {} };
