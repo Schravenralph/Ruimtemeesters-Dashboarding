@@ -31,7 +31,17 @@ export async function queryTimeSeries(params: {
   dimension?: string;
   dimensionValue?: string;
   dimensionType?: string;
-}): Promise<{ data: Array<{ year: number; value: number; source: string; confidenceLower?: number; confidenceUpper?: number }> }> {
+}): Promise<{ data: Array<{
+  year: number;
+  value: number;
+  source: string;
+  confidenceLower?: number;
+  confidenceUpper?: number;
+  /** Per-row dimension value when the caller varied across `dimension`
+   *  without pinning a specific value. Absent when the caller fully
+   *  specified `dimensionValue`. */
+  dimensionValue?: string;
+}> }> {
   return api.get('/data/timeseries', params as Record<string, string>);
 }
 

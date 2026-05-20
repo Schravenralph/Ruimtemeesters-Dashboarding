@@ -52,7 +52,13 @@ export function useTimeSeriesQuery({ source, dimension, dimensionValue, enabled 
         year: d.year,
         value: d.value,
         source: d.source,
-        ...(dimension ? { dimension, dimensionValue: dimensionValue || 'totaal' } : {}),
+        // When the caller specified a dimension but not a value, prefer the
+        // per-row dimension value the API returns; multi-line charts rely
+        // on this to draw one line per dimension value instead of collapsing
+        // everything to "totaal".
+        ...(dimension
+          ? { dimension, dimensionValue: dimensionValue || d.dimensionValue || 'totaal' }
+          : {}),
         ...(d.confidenceLower != null ? { confidenceLower: d.confidenceLower } : {}),
         ...(d.confidenceUpper != null ? { confidenceUpper: d.confidenceUpper } : {}),
       }));

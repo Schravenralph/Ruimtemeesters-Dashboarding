@@ -343,8 +343,19 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
   const tsHasConfidence = TABLES_WITH_CONFIDENCE.includes(sourceDef.tableName);
   const tsConfidenceSelect = tsHasConfidence ? ', d.confidence_lower, d.confidence_upper' : '';
 
+  // When the caller asks for variation across `dimension` (no explicit
+  // dimensionValue), select the dimension column so each row carries its
+  // real value back. Without this the response hardcoded every row's
+  // dimensionValue to 'totaal' even though the WHERE clause specifically
+  // excluded 'totaal' — multi-line tiles collapsed to a single ambiguous
+  // "totaal" series.
+  const dimColForSelect = dimension && !dimensionValue
+    ? sourceDef.dimensionColumns.find(c => c.replace(/_/g, '') === dimension.replace(/_/g, ''))
+    : null;
+  const tsDimSelect = dimColForSelect ? `, d.${safeIdent(dimColForSelect)} AS dimension_value` : '';
+
   const sql = `
-    SELECT d.year, d.${safeIdent(sourceDef.valueColumn)} as value, d.source as data_source${tsConfidenceSelect}
+    SELECT d.year, d.${safeIdent(sourceDef.valueColumn)} as value, d.source as data_source${tsConfidenceSelect}${tsDimSelect}
     FROM ${safeIdent(sourceDef.tableName)} d
     ${whereClause}
     ORDER BY d.year
@@ -361,7 +372,7 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
     confidenceLower: row.confidence_lower ? Number(row.confidence_lower) : undefined,
     confidenceUpper: row.confidence_upper ? Number(row.confidence_upper) : undefined,
     dimension: dimension || sourceDef.dimensionColumns[0],
-    dimensionValue: dimensionValue || 'totaal',
+    dimensionValue: dimensionValue || (row.dimension_value as string | undefined) || 'totaal',
   }));
 
   res.json({ data });
