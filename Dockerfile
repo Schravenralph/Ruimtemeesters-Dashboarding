@@ -1,5 +1,10 @@
 FROM node:22-alpine AS base
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable
+# pnpm version is pinned via package.json `packageManager` field — corepack
+# resolves it on the first pnpm invocation. Don't `corepack prepare …@latest`
+# here; pnpm 11 turned the previously-soft "ignored builds" warning into a
+# hard error, breaking `docker compose build` (#152). Pinning to 10.x keeps
+# host + Docker on the same major.
 
 # Install dependencies
 FROM base AS deps
@@ -25,7 +30,12 @@ RUN pnpm run build:server
 
 # Production image
 FROM node:22-alpine AS production
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable
+# pnpm version is pinned via package.json `packageManager` field — corepack
+# resolves it on the first pnpm invocation. Don't `corepack prepare …@latest`
+# here; pnpm 11 turned the previously-soft "ignored builds" warning into a
+# hard error, breaking `docker compose build` (#152). Pinning to 10.x keeps
+# host + Docker on the same major.
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
