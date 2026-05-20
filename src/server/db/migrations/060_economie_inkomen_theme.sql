@@ -87,7 +87,7 @@ VALUES (
       'dataSource', 'inkomen',
       'dimension', 'huishouden_type',
       'dimensionValue', 'totaal',
-      'format', 'currency',
+      'format', 'compact',
       'deltaDirection', 'higher-is-good'
     )
   )
