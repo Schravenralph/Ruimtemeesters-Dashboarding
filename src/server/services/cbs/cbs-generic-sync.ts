@@ -26,6 +26,11 @@ export interface GenericSyncConfig {
   regionDimension?: string;
   /** Geo levels to accept. Defaults to ['gemeente', 'land']. */
   allowedLevels?: string[];
+  /** Hard-coded column values written to every row. Used when the target
+   *  table has columns the CBS source doesn't carry as a dimension — e.g.
+   *  a `metric` column when the CBS table only exposes one measure via
+   *  measureCode, so there's no source dimension to derive it from. */
+  constantColumns?: Record<string, string>;
 }
 
 export interface SyncResult {
@@ -266,14 +271,15 @@ export async function syncGeneric(
       }
       if (skip) { dimMissCount++; continue; }
 
-      const keyParts = [region.code, year, ...Object.values(dims)];
+      const constants = config.constantColumns ?? {};
+      const keyParts = [region.code, year, ...Object.values(dims), ...Object.values(constants)];
       const aggKey = keyParts.join('|');
 
       const existing = aggregated.get(aggKey);
       if (existing) {
         (existing.value as number) += obs.Value as number;
       } else {
-        aggregated.set(aggKey, { geo_code: region.code, year, ...dims, value: obs.Value });
+        aggregated.set(aggKey, { geo_code: region.code, year, ...dims, ...constants, value: obs.Value });
       }
     }
 
