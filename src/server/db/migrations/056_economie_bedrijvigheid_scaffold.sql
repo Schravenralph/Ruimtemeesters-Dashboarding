@@ -86,7 +86,7 @@ VALUES (
   'bedrijvigheid',
   'Bedrijvigheid',
   'Aantal vestigingen van bedrijven per gemeente over tijd. Anchor-metric voor het Economie-domein.',
-  'briefcase',
+  'Briefcase',
   'economie',
   30,
   '{}'::jsonb,
