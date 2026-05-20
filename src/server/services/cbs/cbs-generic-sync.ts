@@ -31,6 +31,11 @@ export interface GenericSyncConfig {
    *  a `metric` column when the CBS table only exposes one measure via
    *  measureCode, so there's no source dimension to derive it from. */
   constantColumns?: Record<string, string>;
+  /** Multiplier applied to the raw CBS observation value before insert.
+   *  Use when CBS publishes a scaled unit (e.g. "EUR × 1000") that we
+   *  want to store at full magnitude so the standard compact/percent
+   *  formatters render the right order of magnitude (#177). */
+  valueScale?: number;
 }
 
 export interface SyncResult {
@@ -272,14 +277,16 @@ export async function syncGeneric(
       if (skip) { dimMissCount++; continue; }
 
       const constants = config.constantColumns ?? {};
+      const scale = config.valueScale ?? 1;
+      const scaledValue = (obs.Value as number) * scale;
       const keyParts = [region.code, year, ...Object.values(dims), ...Object.values(constants)];
       const aggKey = keyParts.join('|');
 
       const existing = aggregated.get(aggKey);
       if (existing) {
-        (existing.value as number) += obs.Value as number;
+        (existing.value as number) += scaledValue;
       } else {
-        aggregated.set(aggKey, { geo_code: region.code, year, ...dims, ...constants, value: obs.Value });
+        aggregated.set(aggKey, { geo_code: region.code, year, ...dims, ...constants, value: scaledValue });
       }
     }
 
