@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, Home, Building2, TrendingDown,
   ChevronLeft, ChevronRight, Plus, Settings, FolderOpen, Bookmark,
   Brain, TrendingUp, Zap, Leaf, Trash2, BarChart3, Target, Map,
-  Cloud, Sun, Recycle, Database, Briefcase, Banknote, Car,
+  Cloud, Sun, Recycle, Database, Briefcase, Banknote, Car, Shield,
 } from 'lucide-react';
 import { useThemes } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,7 +13,7 @@ import type { ThemeConfig } from '@shared/api/contracts';
 const iconMap: Record<string, typeof LayoutDashboard> = {
   LayoutDashboard, Users, Home, Building2, TrendingDown,
   Brain, TrendingUp, Zap, Leaf, Trash2, BarChart3, Target, Map,
-  Cloud, Sun, Recycle, Briefcase, Banknote, Car,
+  Cloud, Sun, Recycle, Briefcase, Banknote, Car, Shield,
 };
 
 function getIcon(iconName?: string) {
