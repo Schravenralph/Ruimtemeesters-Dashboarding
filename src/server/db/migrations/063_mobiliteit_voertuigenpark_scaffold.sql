@@ -93,7 +93,7 @@ VALUES (
       'dimension', 'voertuig_type',
       'dimensionValue', 'personenauto',
       'format', 'compact',
-      'deltaDirection', 'lower-is-good'
+      'deltaDirection', 'higher-is-bad'
     )
   )
 )

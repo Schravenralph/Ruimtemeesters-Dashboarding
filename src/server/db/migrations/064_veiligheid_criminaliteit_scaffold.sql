@@ -97,7 +97,7 @@ VALUES (
       'dimension', 'misdrijf_type',
       'dimensionValue', 'totaal',
       'format', 'compact',
-      'deltaDirection', 'lower-is-good'
+      'deltaDirection', 'higher-is-bad'
     )
   )
 )
