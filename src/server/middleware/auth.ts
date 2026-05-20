@@ -44,18 +44,30 @@ async function findOrCreateClerkUser(clerkUserId: string): Promise<Request['user
   const defaultOrgSlug = process.env.DEFAULT_SIGNUP_ORG_SLUG || 'ruimtemeesters';
 
   // Check if user already exists by clerk_id (hot path — every login after
-  // the first lands here). If the row's organization_id is NULL — e.g. a
-  // user seeded before this fix — backfill it on the way through.
+  // the first lands here). Reads only in the steady state. If the row's
+  // organization_id is NULL (e.g. seeded before #166), do a one-shot
+  // conditional UPDATE on the way through — subsequent logins take the
+  // pure-SELECT path again. This avoids the MVCC tuple-churn and lock
+  // contention from writing on every login (#167).
   let result = await query(
-    `UPDATE users
-       SET organization_id = COALESCE(organization_id, (SELECT id FROM organizations WHERE slug = $2))
-     WHERE clerk_id = $1
-     RETURNING id, email, name, role, organization_id, attributes`,
-    [clerkUserId, defaultOrgSlug],
+    'SELECT id, email, name, role, organization_id, attributes FROM users WHERE clerk_id = $1',
+    [clerkUserId],
   );
 
   if (result.rows.length > 0) {
-    const row = result.rows[0];
+    let row = result.rows[0];
+    if (row.organization_id == null) {
+      // Conditional UPDATE — the WHERE clause makes it a no-op for any
+      // concurrent login that already filled the slot.
+      const repaired = await query(
+        `UPDATE users
+           SET organization_id = (SELECT id FROM organizations WHERE slug = $2)
+         WHERE clerk_id = $1 AND organization_id IS NULL
+         RETURNING id, email, name, role, organization_id, attributes`,
+        [clerkUserId, defaultOrgSlug],
+      );
+      if (repaired.rows.length > 0) row = repaired.rows[0];
+    }
     return { id: row.id, email: row.email, name: row.name, role: row.role, organizationId: row.organization_id, attributes: row.attributes || {} };
   }
 
