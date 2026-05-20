@@ -8,7 +8,12 @@ export interface SourceAttribution {
   supercategory: string;
   cbsTableId: string | null;
   cbsTableTitle: string | null;
+  /** When we last successfully pulled from CBS. May be null when the source
+   * was seeded before sync-run tracking — fall back to cbsModified. */
   lastSyncAt: string | null;
+  /** CBS-side publication date for the underlying table — secondary
+   * freshness signal when lastSyncAt is null. */
+  cbsModified: string | null;
   statlineUrl: string | null;
 }
 

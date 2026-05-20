@@ -92,7 +92,9 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
               className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               title={attribution?.lastSyncAt
                 ? `Vernieuwen — laatste sync: ${formatSyncDate(attribution.lastSyncAt)}`
-                : 'Vernieuwen'}
+                : attribution?.cbsModified
+                  ? `Vernieuwen — CBS publicatie: ${formatSyncDate(attribution.cbsModified)}`
+                  : 'Vernieuwen'}
               aria-label="Vernieuwen"
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -197,9 +199,11 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
                 ) : (
                   <>{attribution.name}</>
                 )}
-                {attribution.lastSyncAt && (
+                {attribution.lastSyncAt ? (
                   <> · Bijgewerkt: {formatSyncDate(attribution.lastSyncAt)}</>
-                )}
+                ) : attribution.cbsModified ? (
+                  <> · CBS publicatie: {formatSyncDate(attribution.cbsModified)}</>
+                ) : null}
               </p>
             )}
           </div>
