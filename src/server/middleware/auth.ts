@@ -66,7 +66,18 @@ async function findOrCreateClerkUser(clerkUserId: string): Promise<Request['user
          RETURNING id, email, name, role, organization_id, attributes`,
         [clerkUserId, defaultOrgSlug],
       );
-      if (repaired.rows.length > 0) row = repaired.rows[0];
+      if (repaired.rows.length > 0) {
+        row = repaired.rows[0];
+      } else {
+        // Race: another login filled the slot between our SELECT and our
+        // UPDATE. Re-read so we don't return the original stale row with
+        // organization_id=null.
+        const reread = await query(
+          'SELECT id, email, name, role, organization_id, attributes FROM users WHERE clerk_id = $1',
+          [clerkUserId],
+        );
+        if (reread.rows.length > 0) row = reread.rows[0];
+      }
     }
     return { id: row.id, email: row.email, name: row.name, role: row.role, organizationId: row.organization_id, attributes: row.attributes || {} };
   }
