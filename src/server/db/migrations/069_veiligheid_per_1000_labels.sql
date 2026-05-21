@@ -33,5 +33,6 @@ UPDATE themes
        END
      )
      FROM jsonb_array_elements(kpi_config) AS k
-   )
+   ),
+       description = 'Aantal door politie geregistreerde misdrijven per 1000 inwoners per gemeente. Anchor-metric voor de veiligheidsdriehoek-gesprekken met OM en politie — genormaliseerd op bevolkingsomvang zodat gemeenten van verschillende grootte direct vergelijkbaar zijn.'
  WHERE slug = 'criminaliteit';
