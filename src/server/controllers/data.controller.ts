@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { query } from '../db/pool.js';
 import { safeIdent } from '../db/sql-utils.js';
-import { DataQueryParams, type ReferencesBlock } from '../../shared/api/contracts.js';
+import { DataQueryParams, type ReferencesBlock, type CohortType } from '../../shared/api/contracts.js';
 import { getDataSource, getDataSources } from '../services/data-source-registry.js';
 import { computeReferences } from '../services/cohorts/reference-aggregates.js';
 
@@ -267,6 +267,8 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
   const geoCode = req.query.geoCode as string;
   const dimension = req.query.dimension as string;
   const dimensionValue = req.query.dimensionValue as string;
+  const referencesParam = req.query.references as string | undefined;
+  const cohortType = (req.query.cohortType as CohortType | undefined) ?? undefined;
 
   const sourceDef = await getDataSource(source);
   if (!sourceDef) {
@@ -375,7 +377,43 @@ export async function queryTimeSeries(req: Request, res: Response): Promise<void
     dimensionValue: dimensionValue || (row.dimension_value as string | undefined) || 'totaal',
   }));
 
-  res.json({ data });
+  // Optional reference series (cohort/provincie/land mean per year) — wired
+  // the same way as queryData's reference block, but without a yearFilter
+  // so the full multi-year time series is returned for line-chart overlays.
+  let tsReferences: ReferencesBlock | undefined;
+  if (referencesParam && geoCode) {
+    const requested = referencesParam
+      .split(',')
+      .map(s => s.trim())
+      .filter((s): s is 'cohort' | 'provincie' | 'land' => s === 'cohort' || s === 'provincie' || s === 'land');
+    if (requested.length > 0) {
+      try {
+        tsReferences = await computeReferences({
+          source: {
+            tableName: sourceDef.tableName,
+            valueColumn: sourceDef.valueColumn,
+            dimensionColumns: sourceDef.dimensionColumns,
+            defaultFilters: sourceDef.defaultFilters ?? null,
+            supercategory: sourceDef.supercategory,
+          },
+          focalGeoCode: geoCode,
+          // No yearFilter — we want the FULL series, not a single-year aggregate.
+          dimension,
+          dimensionValue,
+          references: requested,
+          cohortType,
+          envelope: false,
+        });
+      } catch (err) {
+        console.error('[queryTimeSeries] references compute failed:', err);
+      }
+    }
+  }
+
+  res.json({
+    data,
+    ...(tsReferences ? { references: tsReferences } : {}),
+  });
 }
 
 export async function getAvailableYears(req: Request, res: Response): Promise<void> {
