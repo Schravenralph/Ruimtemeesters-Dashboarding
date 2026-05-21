@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { ThemeKpiEntry, DataPoint, ReferencesBlock, ReferenceSeries, SeriesPoint } from '@shared/api/contracts';
+import type { ThemeKpiEntry, DataPoint, ReferenceSeries, SeriesPoint } from '@shared/api/contracts';
 import { useFilters } from '../../contexts/FilterContext';
 import { usePresentations } from '../../contexts/PresentationContext';
 import { queryData } from '../../services/api/data';
+import { blockToArray } from '../../utils/referenceSeries';
 import { NumberDisplay } from '../charts/NumberDisplay';
 
 interface KpiStripProps {
@@ -13,15 +14,6 @@ interface KpiStripProps {
 export interface KpiResult {
   data: DataPoint[];
   references: ReferenceSeries[];
-}
-
-function blockToArray(block: ReferencesBlock | undefined): ReferenceSeries[] {
-  if (!block) return [];
-  const out: ReferenceSeries[] = [];
-  if (block.cohort) out.push(block.cohort);
-  if (block.provincie) out.push(block.provincie);
-  if (block.land) out.push(block.land);
-  return out;
 }
 
 // Sum two SeriesPoint[] element-wise by year. Linear aggregates only.

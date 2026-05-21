@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { queryData } from '../services/api/data';
-import type { DataPoint, ReferenceSeries, ReferencesBlock } from '@shared/api/contracts';
+import type { DataPoint, ReferenceSeries } from '@shared/api/contracts';
 import { useFilters } from '../contexts/FilterContext';
 import { usePresentations } from '../contexts/PresentationContext';
+import { blockToArray } from '../utils/referenceSeries';
 
 interface UseDataQueryOptions {
   source: string;
@@ -24,15 +25,6 @@ interface UseDataQueryResult {
   isLoading: boolean;
   error: string | null;
   refetch: () => void;
-}
-
-function blockToArray(block: ReferencesBlock | undefined): ReferenceSeries[] {
-  if (!block) return [];
-  const out: ReferenceSeries[] = [];
-  if (block.cohort) out.push(block.cohort);
-  if (block.provincie) out.push(block.provincie);
-  if (block.land) out.push(block.land);
-  return out;
 }
 
 export function useDataQuery({

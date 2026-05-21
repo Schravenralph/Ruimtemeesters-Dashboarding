@@ -1,33 +1,56 @@
 import { useState, useEffect, useCallback } from 'react';
 import { queryTimeSeries } from '../services/api/data';
 import { useFilters } from '../contexts/FilterContext';
-import type { DataPoint } from '@shared/api/contracts';
+import { usePresentations } from '../contexts/PresentationContext';
+import { blockToArray } from '../utils/referenceSeries';
+import type { DataPoint, ReferenceSeries } from '@shared/api/contracts';
 
 interface UseTimeSeriesOptions {
   source: string;
   dimension?: string;
   dimensionValue?: string;
   enabled?: boolean;
+  /** Default true so Tier-1 line charts get refs without explicit opt-in,
+   *  mirroring useDataQuery. */
+  withReferences?: boolean;
 }
 
 interface UseTimeSeriesResult {
   data: DataPoint[];
   isLoading: boolean;
   error: string | null;
-  /** Force a re-fetch (#151). The hook already refetches when its inputs change;
-   * this lets the tile chrome trigger a refresh on demand. */
+  /** Reference time series (cohort/provincie/land mean per year). Empty
+   *  when references aren't requested or the server failed to compute. */
+  references: ReferenceSeries[];
+  /** Force a re-fetch (#151). */
   refetch: () => void;
 }
 
 /**
  * Fetch full time series (all years) for a given geo area + dimension.
  * Includes both actuals and prognose data, suitable for LineChart rendering.
+ * Returns reference series (cohort/provincie/land) when the active
+ * presentation requests them — mirrors the snapshot useDataQuery flow.
  */
-export function useTimeSeriesQuery({ source, dimension, dimensionValue, enabled = true }: UseTimeSeriesOptions): UseTimeSeriesResult {
+export function useTimeSeriesQuery({
+  source, dimension, dimensionValue, enabled = true, withReferences = true,
+}: UseTimeSeriesOptions): UseTimeSeriesResult {
   const { filters } = useFilters();
+  const { activePresentation } = usePresentations();
   const [data, setData] = useState<DataPoint[]>([]);
+  const [references, setReferences] = useState<ReferenceSeries[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const refVis = activePresentation?.referenceVisibility;
+  const refsParam = (() => {
+    if (!withReferences || !refVis) return undefined;
+    const wanted: string[] = [];
+    if (refVis.cohort) wanted.push('cohort');
+    if (refVis.provincie) wanted.push('provincie');
+    if (refVis.land) wanted.push('land');
+    return wanted.length > 0 ? wanted.join(',') : undefined;
+  })();
 
   const fetchData = useCallback(async () => {
     if (!enabled || !filters.geoCode) return;
@@ -41,11 +64,10 @@ export function useTimeSeriesQuery({ source, dimension, dimensionValue, enabled 
         geoCode: filters.geoCode,
         dimension,
         dimensionValue,
+        ...(refsParam ? { references: refsParam } : {}),
+        ...(refsParam && refVis?.cohortType ? { cohortType: refVis.cohortType } : {}),
       });
 
-      // Map to DataPoint format (include confidence intervals for prognose rendering)
-      // When no dimension is specified (grand total), leave dimensionValue undefined
-      // so LineChartComponent uses the simple line path with prognose features.
       const points: DataPoint[] = response.data.map(d => ({
         geoCode: filters.geoCode,
         geoName: '',
@@ -64,16 +86,17 @@ export function useTimeSeriesQuery({ source, dimension, dimensionValue, enabled 
       }));
 
       setData(points);
+      setReferences(blockToArray(response.references));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch time series');
     } finally {
       setIsLoading(false);
     }
-  }, [source, filters.geoCode, dimension, dimensionValue, enabled]);
+  }, [source, filters.geoCode, dimension, dimensionValue, enabled, refsParam, refVis?.cohortType]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  return { data, isLoading, error, refetch: fetchData };
+  return { data, isLoading, error, references, refetch: fetchData };
 }

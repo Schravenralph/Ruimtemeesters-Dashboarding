@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { DataResponse, Dimension } from '@shared/api/contracts';
+import type { DataResponse, Dimension, ReferencesBlock } from '@shared/api/contracts';
 
 export async function queryData(params: {
   source: string;
@@ -31,6 +31,10 @@ export async function queryTimeSeries(params: {
   dimension?: string;
   dimensionValue?: string;
   dimensionType?: string;
+  /** Comma-separated subset of `cohort,provincie,land`. Server returns a
+   *  `references` block with one full time series per requested kind. */
+  references?: string;
+  cohortType?: string;
 }): Promise<{ data: Array<{
   year: number;
   value: number;
@@ -41,7 +45,9 @@ export async function queryTimeSeries(params: {
    *  without pinning a specific value. Absent when the caller fully
    *  specified `dimensionValue`. */
   dimensionValue?: string;
-}> }> {
+}>;
+  references?: ReferencesBlock;
+}> {
   return api.get('/data/timeseries', params as Record<string, string>);
 }
 

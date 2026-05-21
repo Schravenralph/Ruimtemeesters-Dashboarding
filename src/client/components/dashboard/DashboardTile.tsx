@@ -48,10 +48,17 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
     enabled: !isLineChart,
   });
 
-  // No dimension → backend returns grand total per year (all dimensions pinned to 'totaal')
-  // useTimeSeriesQuery hits /api/data/timeseries which doesn't yet support references —
-  // line charts use the snapshot path's references when available, otherwise empty.
-  const { data: timeSeriesData, isLoading: tsLoading, error: tsError, refetch: refetchTs } = useTimeSeriesQuery({
+  // No dimension → backend returns grand total per year (all dimensions pinned to 'totaal').
+  // /api/data/timeseries now carries the same reference block as the snapshot path —
+  // useTimeSeriesQuery reads referenceVisibility from PresentationContext and
+  // surfaces cohort/provincie/land series alongside the focal trend.
+  const {
+    data: timeSeriesData,
+    references: timeSeriesReferences,
+    isLoading: tsLoading,
+    error: tsError,
+    refetch: refetchTs,
+  } = useTimeSeriesQuery({
     source: tile.dataSource,
     dimension: lineDim,
     dimensionValue: configDimensionValue,
@@ -62,9 +69,7 @@ export function DashboardTile({ tile, onRemove, onExport }: DashboardTileProps) 
   const isLoading = isLineChart ? tsLoading : snapLoading;
   const error = isLineChart ? tsError : snapError;
   const refetch = isLineChart ? refetchTs : refetchSnap;
-  // SPEC-B: forward references from useDataQuery into ChartRenderer.
-  // Time-series path doesn't carry references yet (separate /api/data/timeseries endpoint).
-  const references = isLineChart ? [] : snapshotReferences;
+  const references = isLineChart ? timeSeriesReferences : snapshotReferences;
 
   // Merge dimension comparison values into tile config (only for non-line relevant tiles).
   // Line chart tiles use time series (grand totals), so dimension comparison doesn't apply.
