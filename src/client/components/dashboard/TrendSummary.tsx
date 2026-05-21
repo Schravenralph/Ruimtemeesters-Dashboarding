@@ -41,8 +41,11 @@ export function TrendSummary({ dataSource }: TrendSummaryProps) {
 
   // Fetch full time series (actuals + prognose) for the line chart.
   // No dimension specified → backend pins all dimensions to 'totaal' (grand total).
+  // TrendSummary doesn't render reference series — skip the expensive
+  // server-side reference compute the hook now requests by default.
   const { data: timeSeriesData, isLoading: tsLoading } = useTimeSeriesQuery({
     source: dataSource,
+    withReferences: false,
   });
 
   useEffect(() => {

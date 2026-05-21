@@ -6,9 +6,22 @@
  * different dash pattern and opacity so colour-blind users can still tell them apart.
  */
 
-import type { ReferenceSeries, ChartType } from '@shared/api/contracts';
+import type { ReferenceSeries, ReferencesBlock, ChartType } from '@shared/api/contracts';
 
 export type ReferenceKind = ReferenceSeries['kind'];
+
+/** Flatten the server's three-keyed ReferencesBlock into an ordered array
+ *  (cohort, then provincie, then land). Used by every consumer of /api/data/query
+ *  and /api/data/timeseries — kept here as the single source of truth so future
+ *  reference kinds only need to be registered in one place. */
+export function blockToArray(block: ReferencesBlock | undefined): ReferenceSeries[] {
+  if (!block) return [];
+  const out: ReferenceSeries[] = [];
+  if (block.cohort) out.push(block.cohort);
+  if (block.provincie) out.push(block.provincie);
+  if (block.land) out.push(block.land);
+  return out;
+}
 
 export interface ReferenceStyle {
   stroke: string;

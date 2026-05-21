@@ -2,16 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { queryTimeSeries } from '../services/api/data';
 import { useFilters } from '../contexts/FilterContext';
 import { usePresentations } from '../contexts/PresentationContext';
-import type { DataPoint, ReferenceSeries, ReferencesBlock } from '@shared/api/contracts';
-
-function blockToArray(block: ReferencesBlock | undefined): ReferenceSeries[] {
-  if (!block) return [];
-  const out: ReferenceSeries[] = [];
-  if (block.cohort) out.push(block.cohort);
-  if (block.provincie) out.push(block.provincie);
-  if (block.land) out.push(block.land);
-  return out;
-}
+import { blockToArray } from '../utils/referenceSeries';
+import type { DataPoint, ReferenceSeries } from '@shared/api/contracts';
 
 interface UseTimeSeriesOptions {
   source: string;
@@ -73,6 +65,7 @@ export function useTimeSeriesQuery({
         dimension,
         dimensionValue,
         ...(refsParam ? { references: refsParam } : {}),
+        ...(refsParam && refVis?.cohortType ? { cohortType: refVis.cohortType } : {}),
       });
 
       const points: DataPoint[] = response.data.map(d => ({
@@ -99,7 +92,7 @@ export function useTimeSeriesQuery({
     } finally {
       setIsLoading(false);
     }
-  }, [source, filters.geoCode, dimension, dimensionValue, enabled, refsParam]);
+  }, [source, filters.geoCode, dimension, dimensionValue, enabled, refsParam, refVis?.cohortType]);
 
   useEffect(() => {
     fetchData();
